@@ -1,0 +1,335 @@
+//! CopyObject API
+//!
+//! 既存のオブジェクトをコピーする。
+//! MetadataDirective を REPLACE に設定するとメタデータを置換できる。
+//!
+//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html>
+
+use crate::client::S3Client;
+use crate::error::Error;
+use crate::types::CopyObjectOutput;
+
+use super::{S3Request, build_signed_request, check_body_error, parse_error_response, required};
+
+pub struct CopyObjectFluentBuilder<'a> {
+    client: &'a S3Client,
+    bucket: Option<String>,
+    key: Option<String>,
+    copy_source: Option<String>,
+    metadata_directive: Option<String>,
+    content_type: Option<String>,
+    content_encoding: Option<String>,
+    content_disposition: Option<String>,
+    content_language: Option<String>,
+    cache_control: Option<String>,
+    expires: Option<String>,
+    /// コピー先のサーバサイド暗号化 (AES256 または aws:kms)
+    server_side_encryption: Option<String>,
+    /// コピー先の SSE-KMS キー ID
+    ssekms_key_id: Option<String>,
+    /// コピー先の SSE-C アルゴリズム (AES256)
+    sse_customer_algorithm: Option<String>,
+    /// コピー先の SSE-C キー (Base64)
+    sse_customer_key: Option<String>,
+    /// コピー元の SSE-C アルゴリズム (AES256)
+    copy_source_sse_customer_algorithm: Option<String>,
+    /// コピー元の SSE-C キー (Base64)
+    copy_source_sse_customer_key: Option<String>,
+    /// ACL (private, public-read 等)
+    acl: Option<String>,
+    /// カスタムメタデータ (x-amz-meta-*)
+    metadata: Vec<(String, String)>,
+    /// ストレージクラス (STANDARD, STANDARD_IA 等)
+    storage_class: Option<String>,
+    /// チェックサムアルゴリズム
+    checksum_algorithm: Option<String>,
+}
+
+impl<'a> CopyObjectFluentBuilder<'a> {
+    pub(crate) fn new(client: &'a S3Client) -> Self {
+        Self {
+            client,
+            bucket: None,
+            key: None,
+            copy_source: None,
+            metadata_directive: None,
+            content_type: None,
+            content_encoding: None,
+            content_disposition: None,
+            content_language: None,
+            cache_control: None,
+            expires: None,
+            server_side_encryption: None,
+            ssekms_key_id: None,
+            sse_customer_algorithm: None,
+            sse_customer_key: None,
+            acl: None,
+            metadata: Vec::new(),
+            storage_class: None,
+            copy_source_sse_customer_algorithm: None,
+            copy_source_sse_customer_key: None,
+            checksum_algorithm: None,
+        }
+    }
+
+    pub fn bucket(mut self, bucket: impl Into<String>) -> Self {
+        self.bucket = Some(bucket.into());
+        self
+    }
+
+    pub fn key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// コピー元を "bucket/key" 形式で指定する
+    ///
+    /// エンコードせずそのまま x-amz-copy-source ヘッダーに設定する。
+    /// キーに特殊文字が含まれる場合は、利用者側で URL エンコード済みの値を渡すこと。
+    pub fn copy_source(mut self, copy_source: impl Into<String>) -> Self {
+        self.copy_source = Some(copy_source.into());
+        self
+    }
+
+    /// メタデータディレクティブ ("COPY" または "REPLACE")
+    ///
+    /// "REPLACE" を指定するとコピー先のメタデータをこのリクエストで指定した値に置き換える
+    /// デフォルトは "COPY" (コピー元のメタデータをそのまま引き継ぐ)
+    pub fn metadata_directive(mut self, metadata_directive: impl Into<String>) -> Self {
+        self.metadata_directive = Some(metadata_directive.into());
+        self
+    }
+
+    pub fn content_type(mut self, content_type: impl Into<String>) -> Self {
+        self.content_type = Some(content_type.into());
+        self
+    }
+
+    pub fn content_encoding(mut self, content_encoding: impl Into<String>) -> Self {
+        self.content_encoding = Some(content_encoding.into());
+        self
+    }
+
+    pub fn content_disposition(mut self, content_disposition: impl Into<String>) -> Self {
+        self.content_disposition = Some(content_disposition.into());
+        self
+    }
+
+    pub fn content_language(mut self, content_language: impl Into<String>) -> Self {
+        self.content_language = Some(content_language.into());
+        self
+    }
+
+    pub fn cache_control(mut self, cache_control: impl Into<String>) -> Self {
+        self.cache_control = Some(cache_control.into());
+        self
+    }
+
+    pub fn expires(mut self, expires: impl Into<String>) -> Self {
+        self.expires = Some(expires.into());
+        self
+    }
+
+    /// コピー先のサーバサイド暗号化を指定する (AES256 または aws:kms)
+    pub fn server_side_encryption(mut self, sse: impl Into<String>) -> Self {
+        self.server_side_encryption = Some(sse.into());
+        self
+    }
+
+    /// コピー先の SSE-KMS キー ID を指定する
+    pub fn ssekms_key_id(mut self, key_id: impl Into<String>) -> Self {
+        self.ssekms_key_id = Some(key_id.into());
+        self
+    }
+
+    /// コピー先の SSE-C アルゴリズムを指定する (AES256)
+    pub fn sse_customer_algorithm(mut self, algorithm: impl Into<String>) -> Self {
+        self.sse_customer_algorithm = Some(algorithm.into());
+        self
+    }
+
+    /// コピー先の SSE-C キーを指定する (Base64 エンコード)
+    ///
+    /// MD5 はキーから自動計算される。
+    pub fn sse_customer_key(mut self, key: impl Into<String>) -> Self {
+        self.sse_customer_key = Some(key.into());
+        self
+    }
+
+    /// コピー元の SSE-C アルゴリズムを指定する (AES256)
+    pub fn copy_source_sse_customer_algorithm(mut self, algorithm: impl Into<String>) -> Self {
+        self.copy_source_sse_customer_algorithm = Some(algorithm.into());
+        self
+    }
+
+    /// コピー元の SSE-C キーを指定する (Base64 エンコード)
+    ///
+    /// MD5 はキーから自動計算される。
+    pub fn copy_source_sse_customer_key(mut self, key: impl Into<String>) -> Self {
+        self.copy_source_sse_customer_key = Some(key.into());
+        self
+    }
+
+    /// ACL を指定する (private, public-read, public-read-write 等)
+    pub fn acl(mut self, acl: impl Into<String>) -> Self {
+        self.acl = Some(acl.into());
+        self
+    }
+
+    /// カスタムメタデータを追加する (x-amz-meta-{key}: {value})
+    pub fn metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.push((key.into(), value.into()));
+        self
+    }
+
+    /// ストレージクラスを指定する (STANDARD, STANDARD_IA, GLACIER 等)
+    pub fn storage_class(mut self, storage_class: impl Into<String>) -> Self {
+        self.storage_class = Some(storage_class.into());
+        self
+    }
+
+    /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
+    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
+        self.checksum_algorithm = Some(algorithm.into());
+        self
+    }
+
+    pub fn build_request(&self) -> Result<S3Request, Error> {
+        let bucket = required(self.bucket.as_deref(), "bucket")?;
+        let key = required(self.key.as_deref(), "key")?;
+        let copy_source = required(self.copy_source.as_deref(), "copy_source")?;
+
+        // メタデータ系フィールドが設定されている場合、metadata_directive が REPLACE でなければエラー
+        let has_metadata_override = self.content_type.is_some()
+            || self.content_encoding.is_some()
+            || self.content_disposition.is_some()
+            || self.content_language.is_some()
+            || self.cache_control.is_some()
+            || self.expires.is_some()
+            || !self.metadata.is_empty();
+        if has_metadata_override && self.metadata_directive.as_deref() != Some("REPLACE") {
+            return Err(Error::InvalidInput(
+                "metadata_directive must be \"REPLACE\" when metadata fields are set".to_string(),
+            ));
+        }
+
+        // AWS SDK は copy_source をそのままヘッダーに設定する
+        // 利用者がエンコード済みの値を渡す前提
+        let copy_source_header = format!("/{copy_source}");
+        let mut extra_headers = vec![("x-amz-copy-source", copy_source_header.as_str())];
+
+        if let Some(ref v) = self.acl {
+            extra_headers.push(("x-amz-acl", v.as_str()));
+        }
+        if let Some(ref v) = self.storage_class {
+            extra_headers.push(("x-amz-storage-class", v.as_str()));
+        }
+        if let Some(ref v) = self.metadata_directive {
+            extra_headers.push(("x-amz-metadata-directive", v.as_str()));
+        }
+        if let Some(ref v) = self.content_type {
+            extra_headers.push(("content-type", v.as_str()));
+        }
+        if let Some(ref v) = self.content_encoding {
+            extra_headers.push(("content-encoding", v.as_str()));
+        }
+        if let Some(ref v) = self.content_disposition {
+            extra_headers.push(("content-disposition", v.as_str()));
+        }
+        if let Some(ref v) = self.content_language {
+            extra_headers.push(("content-language", v.as_str()));
+        }
+        if let Some(ref v) = self.cache_control {
+            extra_headers.push(("cache-control", v.as_str()));
+        }
+        if let Some(ref v) = self.expires {
+            extra_headers.push(("expires", v.as_str()));
+        }
+        if let Some(ref v) = self.server_side_encryption {
+            extra_headers.push(("x-amz-server-side-encryption", v.as_str()));
+        }
+        if let Some(ref v) = self.ssekms_key_id {
+            extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
+        }
+        if let Some(ref v) = self.sse_customer_algorithm {
+            extra_headers.push((
+                "x-amz-server-side-encryption-customer-algorithm",
+                v.as_str(),
+            ));
+        }
+        // コピー先の SSE-C キーが指定されている場合、MD5 を自動計算する
+        let computed_key_md5;
+        if let Some(ref v) = self.sse_customer_key {
+            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
+            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
+            extra_headers.push((
+                "x-amz-server-side-encryption-customer-key-md5",
+                &computed_key_md5,
+            ));
+        }
+        if let Some(ref v) = self.copy_source_sse_customer_algorithm {
+            extra_headers.push((
+                "x-amz-copy-source-server-side-encryption-customer-algorithm",
+                v.as_str(),
+            ));
+        }
+        // コピー元の SSE-C キーが指定されている場合、MD5 を自動計算する
+        let computed_copy_source_key_md5;
+        if let Some(ref v) = self.copy_source_sse_customer_key {
+            extra_headers.push((
+                "x-amz-copy-source-server-side-encryption-customer-key",
+                v.as_str(),
+            ));
+            computed_copy_source_key_md5 = super::compute_sse_c_key_md5(v)?;
+            extra_headers.push((
+                "x-amz-copy-source-server-side-encryption-customer-key-md5",
+                &computed_copy_source_key_md5,
+            ));
+        }
+
+        if let Some(ref v) = self.checksum_algorithm {
+            // CopyObject ではボディがないためヘッダーのみ指定する
+            let _: crate::checksum::ChecksumAlgorithm = v.parse()?;
+            extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
+        }
+
+        let meta_headers: Vec<(String, &str)> = self
+            .metadata
+            .iter()
+            .map(|(k, v)| (format!("x-amz-meta-{k}"), v.as_str()))
+            .collect();
+        for (name, value) in &meta_headers {
+            extra_headers.push((name.as_str(), *value));
+        }
+
+        Ok(build_signed_request(
+            &self.client.config_ref(),
+            "PUT",
+            bucket,
+            key,
+            &extra_headers,
+            b"",
+            None,
+        ))
+    }
+
+    pub fn parse_response(response: &super::S3Response) -> Result<CopyObjectOutput, Error> {
+        if !response.is_success() {
+            return Err(parse_error_response(response));
+        }
+
+        // S3 は 200 OK でもボディに <Error> を返すことがある
+        check_body_error(response)?;
+
+        let body_text = std::str::from_utf8(&response.body).ok();
+
+        Ok(CopyObjectOutput {
+            e_tag: body_text.and_then(|t| crate::xml::extract_element(t, "ETag")),
+            last_modified: body_text.and_then(|t| crate::xml::extract_element(t, "LastModified")),
+            version_id: response.get_header("x-amz-version-id").map(String::from),
+            copy_source_version_id: response
+                .get_header("x-amz-copy-source-version-id")
+                .map(String::from),
+        })
+    }
+}

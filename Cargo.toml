@@ -1,0 +1,51 @@
+[package]
+name = "shiguredo_s3"
+version = "2026.0.0"
+edition = "2024"
+rust-version = "1.88"
+authors = ["Shiguredo Inc."]
+license = "Apache-2.0"
+description = "Sans I/O Amazon S3 client library for Rust"
+homepage = "https://github.com/shiguredo/s3-rs"
+repository = "https://github.com/shiguredo/s3-rs"
+readme = "README.md"
+include = ["/src/**", "/LICENSE", "/README.md"]
+
+[features]
+# 署名計算 (SHA-256 / HMAC-SHA256) とチェックサム計算 (SHA-256 / SHA-1) の暗号ライブラリを選択する
+# - rust-crypto (デフォルト): pure Rust の sha2 / sha1 / hmac クレートを使用する
+# - aws-lc-rs: aws-lc-rs を使用する (SHA-256 / HMAC-SHA256 / SHA-1 を全てカバー)
+#   rustls で aws-lc-rs を使用する場合は暗号ライブラリを統一するためにこちらを指定すること
+default = ["rust-crypto"]
+rust-crypto = ["dep:sha2", "dep:hmac", "dep:sha1"]
+aws-lc-rs = ["dep:aws-lc-rs"]
+
+[dependencies]
+# 署名計算とチェックサム計算 (feature で切り替え)
+# - 署名: SHA-256, HMAC-SHA256
+# - チェックサム: SHA-256, SHA-1
+aws-lc-rs = { version = "1", optional = true }
+sha2 = { version = "0.10", optional = true }
+sha1 = { version = "0.10", optional = true }
+hmac = { version = "0.12", optional = true }
+# チェックサム計算 (CRC32, CRC32C, CRC64NVME)
+crc-fast = "1"
+# Content-MD5 / SSE-C key MD5 計算
+md-5 = "0.10"
+base64 = "0.22"
+# XML パース
+xml = "1.2"
+
+[dev-dependencies]
+shiguredo_http11 = "2026.1.0"
+tokio = { version = "1", features = [
+    "net",
+    "io-util",
+    "rt-multi-thread",
+    "macros",
+] }
+testcontainers = { version = "0.27", features = ["http_wait_plain"] }
+
+[workspace]
+members = ["examples/s3cli"]
+exclude = []

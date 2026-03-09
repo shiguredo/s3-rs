@@ -1,0 +1,255 @@
+use crate::api::{
+    AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
+    CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
+    DeleteBucketFluentBuilder, DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
+    DeleteObjectFluentBuilder, DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder,
+    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
+    GetObjectFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
+    HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
+    ListObjectsV2FluentBuilder, ListPartsFluentBuilder, PutBucketPolicyFluentBuilder,
+    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
+    PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
+};
+use crate::credential::Credential;
+use crate::error::Error;
+
+/// S3 クライアントの設定
+#[derive(Debug, Clone)]
+pub struct S3Config {
+    /// AWS リージョン (例: "ap-northeast-1")
+    pub(crate) region: String,
+    /// AWS クレデンシャル
+    pub(crate) credential: Credential,
+    /// カスタムエンドポイント (None の場合は AWS デフォルトを使用する)
+    pub(crate) endpoint: Option<String>,
+    /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
+    pub(crate) use_path_style: bool,
+    /// TLS 証明書の検証を無視する (テスト環境向け)
+    pub(crate) ignore_cert_check: bool,
+}
+
+impl S3Config {
+    /// S3ConfigBuilder を返す
+    pub fn builder() -> S3ConfigBuilder {
+        S3ConfigBuilder::default()
+    }
+
+    /// リージョンを返す
+    pub fn region(&self) -> &str {
+        &self.region
+    }
+
+    /// クレデンシャルを返す
+    pub fn credential(&self) -> &Credential {
+        &self.credential
+    }
+
+    /// エンドポイントを返す
+    pub fn endpoint(&self) -> Option<&str> {
+        self.endpoint.as_deref()
+    }
+
+    /// パススタイルアクセスを使用するかを返す
+    pub fn use_path_style(&self) -> bool {
+        self.use_path_style
+    }
+
+    /// TLS 証明書の検証を無視するかを返す
+    pub fn ignore_cert_check(&self) -> bool {
+        self.ignore_cert_check
+    }
+}
+
+/// S3Config のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct S3ConfigBuilder {
+    region: Option<String>,
+    credential: Option<Credential>,
+    endpoint: Option<String>,
+    use_path_style: bool,
+    ignore_cert_check: bool,
+}
+
+impl S3ConfigBuilder {
+    /// AWS リージョンを設定する (必須)
+    pub fn region(mut self, region: impl Into<String>) -> Self {
+        self.region = Some(region.into());
+        self
+    }
+
+    /// AWS クレデンシャルを設定する (必須)
+    pub fn credential(mut self, credential: Credential) -> Self {
+        self.credential = Some(credential);
+        self
+    }
+
+    /// カスタムエンドポイントを設定する
+    pub fn endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.endpoint = Some(endpoint.into());
+        self
+    }
+
+    /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
+    pub fn use_path_style(mut self, use_path_style: bool) -> Self {
+        self.use_path_style = use_path_style;
+        self
+    }
+
+    /// TLS 証明書の検証を無視する (テスト環境向け)
+    pub fn ignore_cert_check(mut self, ignore_cert_check: bool) -> Self {
+        self.ignore_cert_check = ignore_cert_check;
+        self
+    }
+
+    /// S3Config を構築する
+    ///
+    /// region と credential が未設定の場合はエラーを返す
+    pub fn build(self) -> Result<S3Config, Error> {
+        let region = self
+            .region
+            .ok_or_else(|| Error::InvalidInput("region is required".to_string()))?;
+        let credential = self
+            .credential
+            .ok_or_else(|| Error::InvalidInput("credential is required".to_string()))?;
+
+        Ok(S3Config {
+            region,
+            credential,
+            endpoint: self.endpoint,
+            use_path_style: self.use_path_style,
+            ignore_cert_check: self.ignore_cert_check,
+        })
+    }
+}
+
+/// S3 クライアント (Sans I/O)
+///
+/// 設定を保持し、各 API の Fluent Builder を生成する。
+/// I/O は行わない。
+#[derive(Debug, Clone)]
+pub struct S3Client {
+    pub(crate) config: S3Config,
+}
+
+impl S3Client {
+    /// 新しい S3 クライアントを作成する
+    pub fn new(config: S3Config) -> Self {
+        Self { config }
+    }
+
+    // -------------------------------------------------------
+    // Fluent Builder ファクトリメソッド
+    // -------------------------------------------------------
+
+    pub fn get_object(&self) -> GetObjectFluentBuilder<'_> {
+        GetObjectFluentBuilder::new(self)
+    }
+
+    pub fn head_object(&self) -> HeadObjectFluentBuilder<'_> {
+        HeadObjectFluentBuilder::new(self)
+    }
+
+    pub fn put_object(&self) -> PutObjectFluentBuilder<'_> {
+        PutObjectFluentBuilder::new(self)
+    }
+
+    pub fn delete_object(&self) -> DeleteObjectFluentBuilder<'_> {
+        DeleteObjectFluentBuilder::new(self)
+    }
+
+    pub fn create_multipart_upload(&self) -> CreateMultipartUploadFluentBuilder<'_> {
+        CreateMultipartUploadFluentBuilder::new(self)
+    }
+
+    pub fn upload_part(&self) -> UploadPartFluentBuilder<'_> {
+        UploadPartFluentBuilder::new(self)
+    }
+
+    pub fn complete_multipart_upload(&self) -> CompleteMultipartUploadFluentBuilder<'_> {
+        CompleteMultipartUploadFluentBuilder::new(self)
+    }
+
+    pub fn abort_multipart_upload(&self) -> AbortMultipartUploadFluentBuilder<'_> {
+        AbortMultipartUploadFluentBuilder::new(self)
+    }
+
+    pub fn list_objects_v2(&self) -> ListObjectsV2FluentBuilder<'_> {
+        ListObjectsV2FluentBuilder::new(self)
+    }
+
+    pub fn copy_object(&self) -> CopyObjectFluentBuilder<'_> {
+        CopyObjectFluentBuilder::new(self)
+    }
+
+    pub fn delete_objects(&self) -> DeleteObjectsFluentBuilder<'_> {
+        DeleteObjectsFluentBuilder::new(self)
+    }
+
+    pub fn head_bucket(&self) -> HeadBucketFluentBuilder<'_> {
+        HeadBucketFluentBuilder::new(self)
+    }
+
+    pub fn create_bucket(&self) -> CreateBucketFluentBuilder<'_> {
+        CreateBucketFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket(&self) -> DeleteBucketFluentBuilder<'_> {
+        DeleteBucketFluentBuilder::new(self)
+    }
+
+    pub fn list_buckets(&self) -> ListBucketsFluentBuilder<'_> {
+        ListBucketsFluentBuilder::new(self)
+    }
+
+    pub fn list_parts(&self) -> ListPartsFluentBuilder<'_> {
+        ListPartsFluentBuilder::new(self)
+    }
+
+    pub fn list_multipart_uploads(&self) -> ListMultipartUploadsFluentBuilder<'_> {
+        ListMultipartUploadsFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_versioning(&self) -> GetBucketVersioningFluentBuilder<'_> {
+        GetBucketVersioningFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_versioning(&self) -> PutBucketVersioningFluentBuilder<'_> {
+        PutBucketVersioningFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_tagging(&self) -> GetBucketTaggingFluentBuilder<'_> {
+        GetBucketTaggingFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_tagging(&self) -> PutBucketTaggingFluentBuilder<'_> {
+        PutBucketTaggingFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_tagging(&self) -> DeleteBucketTaggingFluentBuilder<'_> {
+        DeleteBucketTaggingFluentBuilder::new(self)
+    }
+
+    pub fn get_public_access_block(&self) -> GetPublicAccessBlockFluentBuilder<'_> {
+        GetPublicAccessBlockFluentBuilder::new(self)
+    }
+
+    pub fn put_public_access_block(&self) -> PutPublicAccessBlockFluentBuilder<'_> {
+        PutPublicAccessBlockFluentBuilder::new(self)
+    }
+
+    pub fn delete_public_access_block(&self) -> DeletePublicAccessBlockFluentBuilder<'_> {
+        DeletePublicAccessBlockFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_policy(&self) -> GetBucketPolicyFluentBuilder<'_> {
+        GetBucketPolicyFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_policy(&self) -> PutBucketPolicyFluentBuilder<'_> {
+        PutBucketPolicyFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_policy(&self) -> DeleteBucketPolicyFluentBuilder<'_> {
+        DeleteBucketPolicyFluentBuilder::new(self)
+    }
+}
