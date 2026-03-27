@@ -76,6 +76,8 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 
 ## Fluent Builder API (aws-sdk-rust スタイル)
 
+### オブジェクト操作
+
 | オペレーション | メソッド |
 |---|---|
 | GetObject | `client.get_object()` |
@@ -85,14 +87,45 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 | DeleteObjects | `client.delete_objects()` |
 | CopyObject | `client.copy_object()` |
 | ListObjectsV2 | `client.list_objects_v2()` |
+
+### バケット操作
+
+| オペレーション | メソッド |
+|---|---|
 | HeadBucket | `client.head_bucket()` |
 | CreateBucket | `client.create_bucket()` |
 | DeleteBucket | `client.delete_bucket()` |
 | ListBuckets | `client.list_buckets()` |
+
+### マルチパートアップロード
+
+| オペレーション | メソッド |
+|---|---|
 | CreateMultipartUpload | `client.create_multipart_upload()` |
 | UploadPart | `client.upload_part()` |
 | CompleteMultipartUpload | `client.complete_multipart_upload()` |
 | AbortMultipartUpload | `client.abort_multipart_upload()` |
+| ListParts | `client.list_parts()` |
+| ListMultipartUploads | `client.list_multipart_uploads()` |
+
+### バケット設定
+
+| オペレーション | メソッド |
+|---|---|
+| GetBucketVersioning | `client.get_bucket_versioning()` |
+| PutBucketVersioning | `client.put_bucket_versioning()` |
+| GetBucketTagging | `client.get_bucket_tagging()` |
+| PutBucketTagging | `client.put_bucket_tagging()` |
+| DeleteBucketTagging | `client.delete_bucket_tagging()` |
+| GetBucketPolicy | `client.get_bucket_policy()` |
+| PutBucketPolicy | `client.put_bucket_policy()` |
+| DeleteBucketPolicy | `client.delete_bucket_policy()` |
+| GetPublicAccessBlock | `client.get_public_access_block()` |
+| PutPublicAccessBlock | `client.put_public_access_block()` |
+| DeletePublicAccessBlock | `client.delete_public_access_block()` |
+| GetBucketLifecycleConfiguration | `client.get_bucket_lifecycle_configuration()` |
+| PutBucketLifecycleConfiguration | `client.put_bucket_lifecycle_configuration()` |
+| DeleteBucketLifecycleConfiguration | `client.delete_bucket_lifecycle_configuration()` |
 
 メソッド名や引数の渡し方を [aws-sdk-rust](https://github.com/awslabs/aws-sdk-rust) スタイルにしています。aws-sdk-rust へ移行する際に違和感なく移行できることを目的としています。
 
