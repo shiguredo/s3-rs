@@ -1,4 +1,4 @@
-//! DeleteBucketLifecycleConfiguration API
+//! DeleteBucketLifecycle API
 //!
 //! バケットのライフサイクル設定を削除する。
 //!
@@ -6,16 +6,16 @@
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::DeleteBucketLifecycleConfigurationOutput;
+use crate::types::DeleteBucketLifecycleOutput;
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
-pub struct DeleteBucketLifecycleConfigurationFluentBuilder<'a> {
+pub struct DeleteBucketLifecycleFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
 }
 
-impl<'a> DeleteBucketLifecycleConfigurationFluentBuilder<'a> {
+impl<'a> DeleteBucketLifecycleFluentBuilder<'a> {
     pub(crate) fn new(client: &'a S3Client) -> Self {
         Self {
             client,
@@ -43,10 +43,10 @@ impl<'a> DeleteBucketLifecycleConfigurationFluentBuilder<'a> {
 
     pub fn parse_response(
         response: &super::S3Response,
-    ) -> Result<DeleteBucketLifecycleConfigurationOutput, Error> {
+    ) -> Result<DeleteBucketLifecycleOutput, Error> {
         if !response.is_success() {
             return Err(parse_error_response(response));
         }
-        Ok(DeleteBucketLifecycleConfigurationOutput {})
+        Ok(DeleteBucketLifecycleOutput {})
     }
 }

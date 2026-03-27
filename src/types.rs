@@ -400,7 +400,7 @@ pub struct PutBucketLifecycleConfigurationOutput {}
 
 /// DeleteBucketLifecycleConfiguration の結果
 #[derive(Debug)]
-pub struct DeleteBucketLifecycleConfigurationOutput {}
+pub struct DeleteBucketLifecycleOutput {}
 
 /// ライフサイクルルール
 #[derive(Debug, Clone)]

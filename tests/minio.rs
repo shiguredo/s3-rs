@@ -2800,7 +2800,7 @@ async fn test_put_object_storage_class() {
 /// ## 検証項目
 /// - PutBucketLifecycleConfiguration でルールを設定できる
 /// - GetBucketLifecycleConfiguration で設定したルールを取得できる
-/// - DeleteBucketLifecycleConfiguration でルールを削除できる
+/// - DeleteBucketLifecycle でルールを削除できる
 /// - 削除後に Get するとエラーになる
 #[tokio::test]
 async fn test_bucket_lifecycle_configuration() {
@@ -2872,13 +2872,13 @@ async fn test_bucket_lifecycle_configuration() {
 
     // ライフサイクル設定を削除する
     let request = client
-        .delete_bucket_lifecycle_configuration()
+        .delete_bucket_lifecycle()
         .bucket(bucket)
         .build_request()
         .unwrap();
     let _output = send(
         request,
-        shiguredo_s3::api::DeleteBucketLifecycleConfigurationFluentBuilder::parse_response,
+        shiguredo_s3::api::DeleteBucketLifecycleFluentBuilder::parse_response,
     )
     .await;
 

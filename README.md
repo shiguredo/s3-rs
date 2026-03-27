@@ -125,7 +125,7 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 | DeletePublicAccessBlock | `client.delete_public_access_block()` |
 | GetBucketLifecycleConfiguration | `client.get_bucket_lifecycle_configuration()` |
 | PutBucketLifecycleConfiguration | `client.put_bucket_lifecycle_configuration()` |
-| DeleteBucketLifecycleConfiguration | `client.delete_bucket_lifecycle_configuration()` |
+| DeleteBucketLifecycle | `client.delete_bucket_lifecycle()` |
 
 メソッド名や引数の渡し方を [aws-sdk-rust](https://github.com/awslabs/aws-sdk-rust) スタイルにしています。aws-sdk-rust へ移行する際に違和感なく移行できることを目的としています。
 
