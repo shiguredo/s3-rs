@@ -1307,3 +1307,102 @@ async fn test_bucket_policy() {
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
 }
+
+/// バケットライフサイクル設定の Put / Get / Delete を検証する
+///
+/// ## 検証項目
+/// - PutBucketLifecycleConfiguration でルールを設定できる
+/// - GetBucketLifecycleConfiguration で設定したルールを取得できる
+/// - DeleteBucketLifecycleConfiguration でルールを削除できる
+/// - 削除後に Get するとエラーになる
+#[tokio::test]
+async fn test_bucket_lifecycle_configuration() {
+    let (_container, port) = start_rustfs().await;
+    let client = build_client(port);
+    let bucket = "test-lifecycle-config";
+
+    // バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // ライフサイクルルールを設定する
+    let rule = shiguredo_s3::types::LifecycleRule {
+        id: Some("expire-after-30-days".to_string()),
+        status: shiguredo_s3::types::ExpirationStatus::Enabled,
+        filter: Some(shiguredo_s3::types::LifecycleRuleFilter {
+            prefix: Some("logs/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(shiguredo_s3::types::LifecycleExpiration {
+            days: Some(30),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: None,
+    };
+
+    let request = client
+        .put_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .rule(rule)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::PutBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 設定したルールを取得する
+    let request = client
+        .get_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    assert_eq!(output.rules.len(), 1);
+    assert_eq!(output.rules[0].id.as_deref(), Some("expire-after-30-days"));
+    assert_eq!(
+        output.rules[0].status,
+        shiguredo_s3::types::ExpirationStatus::Enabled
+    );
+    assert_eq!(output.rules[0].expiration.as_ref().unwrap().days, Some(30));
+
+    // ライフサイクル設定を削除する
+    let request = client
+        .delete_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::DeleteBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 削除後に Get するとエラーになることを確認する
+    let request = client
+        .get_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    let result =
+        shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response(&response);
+    assert!(result.is_err(), "lifecycle should not exist after delete");
+}

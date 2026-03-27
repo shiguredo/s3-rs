@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::error::Error;
+
 /// HTTP 日時 (IMF-fixdate 形式)
 ///
 /// RFC 9110 Section 5.6.7 で定義される IMF-fixdate 形式の日時。
@@ -380,4 +382,154 @@ pub struct MultipartUpload {
     pub key: Option<String>,
     pub initiated: Option<String>,
     pub storage_class: Option<String>,
+}
+
+// -------------------------------------------------------
+// ライフサイクル設定
+// -------------------------------------------------------
+
+/// GetBucketLifecycleConfiguration の結果
+#[derive(Debug)]
+pub struct GetBucketLifecycleConfigurationOutput {
+    pub rules: Vec<LifecycleRule>,
+}
+
+/// PutBucketLifecycleConfiguration の結果
+#[derive(Debug)]
+pub struct PutBucketLifecycleConfigurationOutput {}
+
+/// DeleteBucketLifecycleConfiguration の結果
+#[derive(Debug)]
+pub struct DeleteBucketLifecycleConfigurationOutput {}
+
+/// ライフサイクルルール
+#[derive(Debug, Clone)]
+pub struct LifecycleRule {
+    /// ルール ID (最大 255 文字)
+    pub id: Option<String>,
+    /// ルールの有効/無効
+    pub status: ExpirationStatus,
+    /// ルール適用フィルタ
+    pub filter: Option<LifecycleRuleFilter>,
+    /// オブジェクトの失効設定
+    pub expiration: Option<LifecycleExpiration>,
+    /// ストレージクラス移行設定
+    pub transitions: Option<Vec<Transition>>,
+    /// 非カレントバージョンの移行設定
+    pub noncurrent_version_transitions: Option<Vec<NoncurrentVersionTransition>>,
+    /// 非カレントバージョンの失効設定
+    pub noncurrent_version_expiration: Option<NoncurrentVersionExpiration>,
+    /// 不完全マルチパートアップロードの自動中止設定
+    pub abort_incomplete_multipart_upload: Option<AbortIncompleteMultipartUpload>,
+}
+
+/// ライフサイクルルールの有効/無効
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpirationStatus {
+    Enabled,
+    Disabled,
+}
+
+impl ExpirationStatus {
+    /// S3 API の文字列表現を返す
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Enabled => "Enabled",
+            Self::Disabled => "Disabled",
+        }
+    }
+}
+
+impl std::str::FromStr for ExpirationStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Enabled" => Ok(Self::Enabled),
+            "Disabled" => Ok(Self::Disabled),
+            _ => Err(Error::InvalidResponse(format!(
+                "unknown ExpirationStatus: {s}"
+            ))),
+        }
+    }
+}
+
+/// ライフサイクルルールのフィルタ
+///
+/// フィルタが空の場合はすべてのオブジェクトに適用される。
+/// 複数条件を組み合わせるには `and` を使用する。
+#[derive(Debug, Clone, Default)]
+pub struct LifecycleRuleFilter {
+    /// プレフィックスフィルタ
+    pub prefix: Option<String>,
+    /// タグフィルタ
+    pub tag: Option<Tag>,
+    /// 最小オブジェクトサイズ (バイト)
+    pub object_size_greater_than: Option<i64>,
+    /// 最大オブジェクトサイズ (バイト)
+    pub object_size_less_than: Option<i64>,
+    /// AND 条件
+    pub and: Option<LifecycleRuleAndOperator>,
+}
+
+/// ライフサイクルルールの AND 条件
+#[derive(Debug, Clone, Default)]
+pub struct LifecycleRuleAndOperator {
+    /// プレフィックス
+    pub prefix: Option<String>,
+    /// タグのリスト
+    pub tags: Option<Vec<Tag>>,
+    /// 最小オブジェクトサイズ (バイト)
+    pub object_size_greater_than: Option<i64>,
+    /// 最大オブジェクトサイズ (バイト)
+    pub object_size_less_than: Option<i64>,
+}
+
+/// オブジェクトの失効設定
+#[derive(Debug, Clone, Default)]
+pub struct LifecycleExpiration {
+    /// 失効日 (ISO 8601 形式)
+    pub date: Option<String>,
+    /// 作成後の経過日数
+    pub days: Option<i32>,
+    /// 期限切れオブジェクト削除マーカーを削除するか
+    pub expired_object_delete_marker: Option<bool>,
+}
+
+/// ストレージクラス移行設定
+#[derive(Debug, Clone, Default)]
+pub struct Transition {
+    /// 移行日 (ISO 8601 形式)
+    pub date: Option<String>,
+    /// 作成後の経過日数
+    pub days: Option<i32>,
+    /// 移行先ストレージクラス
+    pub storage_class: Option<String>,
+}
+
+/// 非カレントバージョンの移行設定
+#[derive(Debug, Clone, Default)]
+pub struct NoncurrentVersionTransition {
+    /// 非カレント状態の経過日数
+    pub noncurrent_days: Option<i32>,
+    /// 移行先ストレージクラス
+    pub storage_class: Option<String>,
+    /// 保持する非カレントバージョン数 (最大 100)
+    pub newer_noncurrent_versions: Option<i32>,
+}
+
+/// 非カレントバージョンの失効設定
+#[derive(Debug, Clone, Default)]
+pub struct NoncurrentVersionExpiration {
+    /// 非カレント状態の経過日数
+    pub noncurrent_days: Option<i32>,
+    /// 保持する非カレントバージョン数 (最大 100)
+    pub newer_noncurrent_versions: Option<i32>,
+}
+
+/// 不完全マルチパートアップロードの自動中止設定
+#[derive(Debug, Clone, Default)]
+pub struct AbortIncompleteMultipartUpload {
+    /// 初期化後の経過日数
+    pub days_after_initiation: Option<i32>,
 }

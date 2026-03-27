@@ -1,14 +1,16 @@
 use crate::api::{
     AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
     CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
-    DeleteBucketFluentBuilder, DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
-    DeleteObjectFluentBuilder, DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder,
-    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
-    GetObjectFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
-    HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
-    ListObjectsV2FluentBuilder, ListPartsFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
-    PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
+    DeleteBucketFluentBuilder, DeleteBucketLifecycleConfigurationFluentBuilder,
+    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder,
+    DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder,
+    GetBucketLifecycleConfigurationFluentBuilder, GetBucketPolicyFluentBuilder,
+    GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectFluentBuilder,
+    GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder, HeadObjectFluentBuilder,
+    ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder, ListObjectsV2FluentBuilder,
+    ListPartsFluentBuilder, PutBucketLifecycleConfigurationFluentBuilder,
+    PutBucketPolicyFluentBuilder, PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder,
+    PutObjectFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
 };
 use crate::credential::Credential;
 use crate::error::Error;
@@ -251,5 +253,23 @@ impl S3Client {
 
     pub fn delete_bucket_policy(&self) -> DeleteBucketPolicyFluentBuilder<'_> {
         DeleteBucketPolicyFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_lifecycle_configuration(
+        &self,
+    ) -> GetBucketLifecycleConfigurationFluentBuilder<'_> {
+        GetBucketLifecycleConfigurationFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_lifecycle_configuration(
+        &self,
+    ) -> PutBucketLifecycleConfigurationFluentBuilder<'_> {
+        PutBucketLifecycleConfigurationFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_lifecycle_configuration(
+        &self,
+    ) -> DeleteBucketLifecycleConfigurationFluentBuilder<'_> {
+        DeleteBucketLifecycleConfigurationFluentBuilder::new(self)
     }
 }
