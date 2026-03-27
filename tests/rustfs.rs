@@ -20,18 +20,20 @@
 
 use shiguredo_http11::ResponseDecoder;
 use shiguredo_s3::api::{
-    DeleteBucketEncryptionFluentBuilder, DeleteBucketPolicyFluentBuilder,
-    DeleteBucketTaggingFluentBuilder, DeleteObjectTaggingFluentBuilder,
-    DeletePublicAccessBlockFluentBuilder, GetBucketPolicyFluentBuilder,
-    GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
+    DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
+    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
+    DeleteObjectTaggingFluentBuilder, DeletePublicAccessBlockFluentBuilder,
+    GetBucketCorsFluentBuilder, GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder,
+    GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
     GetPublicAccessBlockFluentBuilder, ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder,
-    PutBucketEncryptionFluentBuilder, PutBucketPolicyFluentBuilder, PutBucketTaggingFluentBuilder,
-    PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
+    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder, PutBucketPolicyFluentBuilder,
+    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
     PutPublicAccessBlockFluentBuilder,
 };
 use shiguredo_s3::types::{
-    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
-    ServerSideEncryptionConfiguration, ServerSideEncryptionRule, Tag, Tagging,
+    CompletedMultipartUpload, CompletedPart, CorsConfiguration, CorsRule, ObjectIdentifier,
+    ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
+    Tag, Tagging,
 };
 use shiguredo_s3::{Credential, S3Client, S3Config, S3Request, S3Response};
 use testcontainers::core::wait::HttpWaitStrategy;
@@ -1603,6 +1605,91 @@ async fn test_bucket_encryption() {
     assert!(
         response.status_code == 400 || response.status_code == 404,
         "expected 400 or 404, got {}",
+        response.status_code
+    );
+}
+
+/// バケット CORS 設定の Put → Get → Delete のラウンドトリップを検証する
+#[tokio::test]
+async fn test_bucket_cors() {
+    let (_container, port) = start_rustfs().await;
+    let client = build_client(port);
+    let bucket = "test-bucket-cors";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // CORS 設定を行う
+    let request = client
+        .put_bucket_cors()
+        .bucket(bucket)
+        .cors_configuration(
+            CorsConfiguration::builder()
+                .cors_rules(
+                    CorsRule::builder()
+                        .allowed_methods("GET")
+                        .allowed_methods("PUT")
+                        .allowed_origins("https://example.com")
+                        .allowed_headers("*")
+                        .expose_headers("x-amz-request-id")
+                        .max_age_seconds(3600)
+                        .build(),
+                )
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    send(request, PutBucketCorsFluentBuilder::parse_response).await;
+
+    // CORS 設定を取得して検証する
+    let request = client
+        .get_bucket_cors()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(request, GetBucketCorsFluentBuilder::parse_response).await;
+    let rules = output.cors_rules.unwrap();
+    assert_eq!(rules.len(), 1);
+    let rule = &rules[0];
+    assert_eq!(rule.allowed_methods, vec!["GET", "PUT"]);
+    assert_eq!(rule.allowed_origins, vec!["https://example.com"]);
+    assert_eq!(
+        rule.allowed_headers.as_ref().unwrap(),
+        &vec!["*".to_string()]
+    );
+    assert_eq!(
+        rule.expose_headers.as_ref().unwrap(),
+        &vec!["x-amz-request-id".to_string()]
+    );
+    assert_eq!(rule.max_age_seconds, Some(3600));
+
+    // CORS 設定を削除する
+    let request = client
+        .delete_bucket_cors()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(request, DeleteBucketCorsFluentBuilder::parse_response).await;
+
+    // 削除後は GetBucketCors でエラーが返ることを確認する
+    let request = client
+        .get_bucket_cors()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    assert!(
+        response.status_code == 404 || response.status_code == 400,
+        "expected 404 or 400, got {}",
         response.status_code
     );
 }
