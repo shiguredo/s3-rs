@@ -6,7 +6,7 @@
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::{PutObjectTaggingOutput, Tag};
+use crate::types::{PutObjectTaggingOutput, Tag, Tagging};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
@@ -15,8 +15,9 @@ pub struct PutObjectTaggingFluentBuilder<'a> {
     bucket: Option<String>,
     key: Option<String>,
     version_id: Option<String>,
-    tags: Vec<Tag>,
+    tagging: Option<Tagging>,
     checksum_algorithm: Option<String>,
+    expected_bucket_owner: Option<String>,
 }
 
 impl<'a> PutObjectTaggingFluentBuilder<'a> {
@@ -26,8 +27,9 @@ impl<'a> PutObjectTaggingFluentBuilder<'a> {
             bucket: None,
             key: None,
             version_id: None,
-            tags: Vec::new(),
+            tagging: None,
             checksum_algorithm: None,
+            expected_bucket_owner: None,
         }
     }
 
@@ -47,9 +49,9 @@ impl<'a> PutObjectTaggingFluentBuilder<'a> {
         self
     }
 
-    /// タグを追加する
-    pub fn tag(mut self, tag: Tag) -> Self {
-        self.tags.push(tag);
+    /// タグセットを設定する
+    pub fn tagging(mut self, tagging: Tagging) -> Self {
+        self.tagging = Some(tagging);
         self
     }
 
@@ -59,16 +61,30 @@ impl<'a> PutObjectTaggingFluentBuilder<'a> {
         self
     }
 
+    /// 期待されるバケット所有者のアカウント ID を指定する
+    pub fn expected_bucket_owner(mut self, expected_bucket_owner: impl Into<String>) -> Self {
+        self.expected_bucket_owner = Some(expected_bucket_owner.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
+        let tagging = self
+            .tagging
+            .as_ref()
+            .ok_or_else(|| Error::InvalidInput("tagging is required".to_string()))?;
 
-        let xml_body = build_tagging_xml(&self.tags);
+        let xml_body = build_tagging_xml(&tagging.tag_set);
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
             ("content-md5", content_md5.as_str()),
         ];
+
+        if let Some(ref owner) = self.expected_bucket_owner {
+            extra_headers.push(("x-amz-expected-bucket-owner", owner.as_str()));
+        }
 
         let computed_checksum;
         if let Some(ref algo_str) = self.checksum_algorithm {

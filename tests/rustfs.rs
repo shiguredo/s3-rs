@@ -28,7 +28,9 @@ use shiguredo_s3::api::{
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
     PutPublicAccessBlockFluentBuilder,
 };
-use shiguredo_s3::types::{CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag};
+use shiguredo_s3::types::{
+    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag, Tagging,
+};
 use shiguredo_s3::{Credential, S3Client, S3Config, S3Request, S3Response};
 use testcontainers::core::wait::HttpWaitStrategy;
 use testcontainers::core::{IntoContainerPort, WaitFor};
@@ -1061,14 +1063,18 @@ async fn test_bucket_tagging() {
     let request = client
         .put_bucket_tagging()
         .bucket(bucket)
-        .tag(Tag {
-            key: "env".to_string(),
-            value: "test".to_string(),
-        })
-        .tag(Tag {
-            key: "project".to_string(),
-            value: "s3-rs".to_string(),
-        })
+        .tagging(
+            Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "test".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "project".to_string(),
+                    value: "s3-rs".to_string(),
+                })
+                .build(),
+        )
         .build_request()
         .unwrap();
     send(request, PutBucketTaggingFluentBuilder::parse_response).await;
@@ -1163,14 +1169,18 @@ async fn test_object_tagging() {
         .put_object_tagging()
         .bucket(bucket)
         .key("test.txt")
-        .tag(Tag {
-            key: "env".to_string(),
-            value: "staging".to_string(),
-        })
-        .tag(Tag {
-            key: "team".to_string(),
-            value: "backend".to_string(),
-        })
+        .tagging(
+            Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "staging".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "team".to_string(),
+                    value: "backend".to_string(),
+                })
+                .build(),
+        )
         .build_request()
         .unwrap();
     send(request, PutObjectTaggingFluentBuilder::parse_response).await;

@@ -15,6 +15,7 @@ pub struct GetObjectTaggingFluentBuilder<'a> {
     bucket: Option<String>,
     key: Option<String>,
     version_id: Option<String>,
+    expected_bucket_owner: Option<String>,
 }
 
 impl<'a> GetObjectTaggingFluentBuilder<'a> {
@@ -24,6 +25,7 @@ impl<'a> GetObjectTaggingFluentBuilder<'a> {
             bucket: None,
             key: None,
             version_id: None,
+            expected_bucket_owner: None,
         }
     }
 
@@ -43,9 +45,20 @@ impl<'a> GetObjectTaggingFluentBuilder<'a> {
         self
     }
 
+    /// 期待されるバケット所有者のアカウント ID を指定する
+    pub fn expected_bucket_owner(mut self, expected_bucket_owner: impl Into<String>) -> Self {
+        self.expected_bucket_owner = Some(expected_bucket_owner.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
+
+        let mut extra_headers: Vec<(&str, &str)> = Vec::new();
+        if let Some(ref owner) = self.expected_bucket_owner {
+            extra_headers.push(("x-amz-expected-bucket-owner", owner.as_str()));
+        }
 
         let mut query_params: Vec<(&str, &str)> = vec![("tagging", "")];
         if let Some(ref vid) = self.version_id {
@@ -57,7 +70,7 @@ impl<'a> GetObjectTaggingFluentBuilder<'a> {
             "GET",
             bucket,
             key,
-            &[],
+            &extra_headers,
             b"",
             Some(&query_params),
         ))
