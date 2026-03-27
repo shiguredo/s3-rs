@@ -296,6 +296,49 @@ pub struct Tag {
     pub value: String,
 }
 
+/// タグセット
+///
+/// PutBucketTagging / PutObjectTagging で使用する。
+/// aws-sdk-rust の `Tagging` 型に対応する。
+#[derive(Debug, Clone)]
+pub struct Tagging {
+    pub tag_set: Vec<Tag>,
+}
+
+impl Tagging {
+    /// Tagging を構築するビルダーを返す
+    pub fn builder() -> TaggingBuilder {
+        TaggingBuilder::default()
+    }
+}
+
+/// Tagging のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct TaggingBuilder {
+    tag_set: Vec<Tag>,
+}
+
+impl TaggingBuilder {
+    /// タグを追加する
+    pub fn tag_set(mut self, tag: Tag) -> Self {
+        self.tag_set.push(tag);
+        self
+    }
+
+    /// タグセットを一括設定する
+    pub fn set_tag_set(mut self, tag_set: Vec<Tag>) -> Self {
+        self.tag_set = tag_set;
+        self
+    }
+
+    /// Tagging を構築する
+    pub fn build(self) -> Tagging {
+        Tagging {
+            tag_set: self.tag_set,
+        }
+    }
+}
+
 /// PutBucketTagging の結果
 #[derive(Debug)]
 pub struct PutBucketTaggingOutput {}
@@ -303,6 +346,25 @@ pub struct PutBucketTaggingOutput {}
 /// DeleteBucketTagging の結果
 #[derive(Debug)]
 pub struct DeleteBucketTaggingOutput {}
+
+/// GetObjectTagging の結果
+#[derive(Debug)]
+pub struct GetObjectTaggingOutput {
+    pub version_id: Option<String>,
+    pub tag_set: Vec<Tag>,
+}
+
+/// PutObjectTagging の結果
+#[derive(Debug)]
+pub struct PutObjectTaggingOutput {
+    pub version_id: Option<String>,
+}
+
+/// DeleteObjectTagging の結果
+#[derive(Debug)]
+pub struct DeleteObjectTaggingOutput {
+    pub version_id: Option<String>,
+}
 
 /// GetPublicAccessBlock の結果
 #[derive(Debug)]

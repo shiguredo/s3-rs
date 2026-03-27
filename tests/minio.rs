@@ -17,11 +17,14 @@
 use shiguredo_http11::ResponseDecoder;
 use shiguredo_s3::api::{
     DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
-    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
+    DeleteObjectTaggingFluentBuilder, GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder,
+    GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
     ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder,
+    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
 };
-use shiguredo_s3::types::{CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag};
+use shiguredo_s3::types::{
+    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag, Tagging,
+};
 use shiguredo_s3::{
     Credential, HttpDate, PresignedRequest, S3Client, S3Config, S3Request, S3Response,
 };
@@ -1114,14 +1117,18 @@ async fn test_bucket_tagging() {
     let request = client
         .put_bucket_tagging()
         .bucket(bucket)
-        .tag(Tag {
-            key: "env".to_string(),
-            value: "test".to_string(),
-        })
-        .tag(Tag {
-            key: "project".to_string(),
-            value: "s3-rs".to_string(),
-        })
+        .tagging(
+            Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "test".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "project".to_string(),
+                    value: "s3-rs".to_string(),
+                })
+                .build(),
+        )
         .build_request()
         .unwrap();
     send(request, PutBucketTaggingFluentBuilder::parse_response).await;
@@ -1166,6 +1173,145 @@ async fn test_bucket_tagging() {
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
+}
+
+/// オブジェクトタグの設定・取得・削除のラウンドトリップを検証する
+#[tokio::test]
+async fn test_object_tagging() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-object-tagging";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // テスト用オブジェクトを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key("test.txt")
+        .body(b"hello".to_vec())
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // タグ未設定の状態では空のタグセットが返ることを確認する
+    let request = client
+        .get_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .build_request()
+        .unwrap();
+    let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
+    assert!(output.tag_set.is_empty());
+
+    // 2 つのタグを設定する
+    let request = client
+        .put_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .tagging(
+            Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "staging".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "team".to_string(),
+                    value: "backend".to_string(),
+                })
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    send(request, PutObjectTaggingFluentBuilder::parse_response).await;
+
+    // タグを取得して設定した内容が含まれることを確認する
+    let request = client
+        .get_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .build_request()
+        .unwrap();
+    let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
+    assert_eq!(output.tag_set.len(), 2);
+    assert!(
+        output
+            .tag_set
+            .iter()
+            .any(|t| t.key == "env" && t.value == "staging")
+    );
+    assert!(
+        output
+            .tag_set
+            .iter()
+            .any(|t| t.key == "team" && t.value == "backend")
+    );
+
+    // タグを上書きする (既存のタグは全て置き換わる)
+    let request = client
+        .put_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .tagging(
+            Tagging::builder()
+                .tag_set(Tag {
+                    key: "priority".to_string(),
+                    value: "high".to_string(),
+                })
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    send(request, PutObjectTaggingFluentBuilder::parse_response).await;
+
+    // 上書き後は新しいタグのみが返ることを確認する
+    let request = client
+        .get_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .build_request()
+        .unwrap();
+    let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
+    assert_eq!(output.tag_set.len(), 1);
+    assert!(
+        output
+            .tag_set
+            .iter()
+            .any(|t| t.key == "priority" && t.value == "high")
+    );
+
+    // タグを全削除する
+    let request = client
+        .delete_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .build_request()
+        .unwrap();
+    send(request, DeleteObjectTaggingFluentBuilder::parse_response).await;
+
+    // 削除後は空のタグセットが返ることを確認する
+    let request = client
+        .get_object_tagging()
+        .bucket(bucket)
+        .key("test.txt")
+        .build_request()
+        .unwrap();
+    let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
+    assert!(output.tag_set.is_empty());
 }
 
 /// Presigned URL による PutObject / GetObject / HeadObject / DeleteObject のラウンドトリップを検証する

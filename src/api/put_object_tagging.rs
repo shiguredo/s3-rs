@@ -1,28 +1,32 @@
-//! PutBucketTagging API
+//! PutObjectTagging API
 //!
-//! バケットにタグを設定する。既存のタグは全て上書きされる。
+//! オブジェクトにタグを設定する。既存のタグは全て上書きされる。
 //!
-//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketTagging.html>
+//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectTagging.html>
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::{PutBucketTaggingOutput, Tag, Tagging};
+use crate::types::{PutObjectTaggingOutput, Tag, Tagging};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
-pub struct PutBucketTaggingFluentBuilder<'a> {
+pub struct PutObjectTaggingFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
+    key: Option<String>,
+    version_id: Option<String>,
     tagging: Option<Tagging>,
     checksum_algorithm: Option<String>,
     expected_bucket_owner: Option<String>,
 }
 
-impl<'a> PutBucketTaggingFluentBuilder<'a> {
+impl<'a> PutObjectTaggingFluentBuilder<'a> {
     pub(crate) fn new(client: &'a S3Client) -> Self {
         Self {
             client,
             bucket: None,
+            key: None,
+            version_id: None,
             tagging: None,
             checksum_algorithm: None,
             expected_bucket_owner: None,
@@ -31,6 +35,17 @@ impl<'a> PutBucketTaggingFluentBuilder<'a> {
 
     pub fn bucket(mut self, bucket: impl Into<String>) -> Self {
         self.bucket = Some(bucket.into());
+        self
+    }
+
+    pub fn key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// オブジェクトのバージョン ID を指定する
+    pub fn version_id(mut self, version_id: impl Into<String>) -> Self {
+        self.version_id = Some(version_id.into());
         self
     }
 
@@ -54,6 +69,7 @@ impl<'a> PutBucketTaggingFluentBuilder<'a> {
 
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
+        let key = required(self.key.as_deref(), "key")?;
         let tagging = self
             .tagging
             .as_ref()
@@ -78,22 +94,29 @@ impl<'a> PutBucketTaggingFluentBuilder<'a> {
             extra_headers.push((algorithm.header_name(), &computed_checksum));
         }
 
+        let mut query_params: Vec<(&str, &str)> = vec![("tagging", "")];
+        if let Some(ref vid) = self.version_id {
+            query_params.push(("versionId", vid.as_str()));
+        }
+
         Ok(build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
-            "",
+            key,
             &extra_headers,
             xml_body.as_bytes(),
-            Some(&[("tagging", "")]),
+            Some(&query_params),
         ))
     }
 
-    pub fn parse_response(response: &super::S3Response) -> Result<PutBucketTaggingOutput, Error> {
+    pub fn parse_response(response: &super::S3Response) -> Result<PutObjectTaggingOutput, Error> {
         if !response.is_success() {
             return Err(parse_error_response(response));
         }
-        Ok(PutBucketTaggingOutput {})
+        Ok(PutObjectTaggingOutput {
+            version_id: response.get_header("x-amz-version-id").map(String::from),
+        })
     }
 }
 

@@ -13,6 +13,7 @@ use super::{S3Request, build_signed_request, parse_error_response, required};
 pub struct DeleteBucketTaggingFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
+    expected_bucket_owner: Option<String>,
 }
 
 impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
@@ -20,6 +21,7 @@ impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
         Self {
             client,
             bucket: None,
+            expected_bucket_owner: None,
         }
     }
 
@@ -28,14 +30,26 @@ impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
         self
     }
 
+    /// 期待されるバケット所有者のアカウント ID を指定する
+    pub fn expected_bucket_owner(mut self, expected_bucket_owner: impl Into<String>) -> Self {
+        self.expected_bucket_owner = Some(expected_bucket_owner.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
+
+        let mut extra_headers: Vec<(&str, &str)> = Vec::new();
+        if let Some(ref owner) = self.expected_bucket_owner {
+            extra_headers.push(("x-amz-expected-bucket-owner", owner.as_str()));
+        }
+
         Ok(build_signed_request(
             &self.client.config_ref(),
             "DELETE",
             bucket,
             "",
-            &[],
+            &extra_headers,
             b"",
             Some(&[("tagging", "")]),
         ))

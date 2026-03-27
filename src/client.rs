@@ -2,15 +2,16 @@ use crate::api::{
     AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
     CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
     DeleteBucketFluentBuilder, DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
-    DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectsFluentBuilder,
-    DeletePublicAccessBlockFluentBuilder, GetBucketLifecycleConfigurationFluentBuilder,
-    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
-    GetObjectFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
+    DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectTaggingFluentBuilder,
+    DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder,
+    GetBucketLifecycleConfigurationFluentBuilder, GetBucketPolicyFluentBuilder,
+    GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectFluentBuilder,
+    GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
     HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
     ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
-    PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
+    PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
 };
 use crate::credential::Credential;
 use crate::error::Error;
@@ -229,6 +230,18 @@ impl S3Client {
 
     pub fn delete_bucket_tagging(&self) -> DeleteBucketTaggingFluentBuilder<'_> {
         DeleteBucketTaggingFluentBuilder::new(self)
+    }
+
+    pub fn get_object_tagging(&self) -> GetObjectTaggingFluentBuilder<'_> {
+        GetObjectTaggingFluentBuilder::new(self)
+    }
+
+    pub fn put_object_tagging(&self) -> PutObjectTaggingFluentBuilder<'_> {
+        PutObjectTaggingFluentBuilder::new(self)
+    }
+
+    pub fn delete_object_tagging(&self) -> DeleteObjectTaggingFluentBuilder<'_> {
+        DeleteObjectTaggingFluentBuilder::new(self)
     }
 
     pub fn get_public_access_block(&self) -> GetPublicAccessBlockFluentBuilder<'_> {
