@@ -24,8 +24,9 @@ use shiguredo_s3::api::{
     PutObjectTaggingFluentBuilder,
 };
 use shiguredo_s3::types::{
-    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
-    ServerSideEncryptionConfiguration, ServerSideEncryptionRule, Tag, Tagging,
+    CompletedMultipartUpload, CompletedPart, CorsConfiguration, CorsRule, ObjectIdentifier,
+    ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
+    Tag, Tagging,
 };
 
 use shiguredo_s3::{
@@ -3288,4 +3289,43 @@ async fn test_bucket_encryption() {
     let response = execute(request).await;
     // MinIO は削除後 404 を返す
     assert_eq!(response.status_code, 404);
+}
+
+/// MinIO は CORS API を未実装 (501) であることを検証する
+#[tokio::test]
+async fn test_bucket_cors_not_supported() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-bucket-cors";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // PutBucketCors が 501 を返すことを確認する
+    let request = client
+        .put_bucket_cors()
+        .bucket(bucket)
+        .cors_configuration(
+            CorsConfiguration::builder()
+                .cors_rules(
+                    CorsRule::builder()
+                        .allowed_methods("GET")
+                        .allowed_origins("*")
+                        .build(),
+                )
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 501);
 }
