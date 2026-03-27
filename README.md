@@ -269,6 +269,77 @@ let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response(&s3_response)?;
 ```
 
+### BucketVersioning
+
+```rust
+// バージョニングを有効にする
+let s3_request = client.put_bucket_versioning()
+    .bucket("my-bucket")
+    .status("Enabled")
+    .build_request()?;
+let s3_response = execute(s3_request).await?;
+let output = shiguredo_s3::api::PutBucketVersioningFluentBuilder::parse_response(&s3_response)?;
+
+// バージョニング設定を取得する
+let s3_request = client.get_bucket_versioning()
+    .bucket("my-bucket")
+    .build_request()?;
+let s3_response = execute(s3_request).await?;
+let output = shiguredo_s3::api::GetBucketVersioningFluentBuilder::parse_response(&s3_response)?;
+println!("status: {:?}", output.status); // Some("Enabled")
+```
+
+### BucketLifecycleConfiguration
+
+```rust
+use shiguredo_s3::types::{
+    ExpirationStatus, LifecycleExpiration, LifecycleRule, LifecycleRuleFilter,
+    AbortIncompleteMultipartUpload,
+};
+
+// 30 日後にオブジェクトを削除し、7 日後に不完全なマルチパートアップロードを中止するルールを設定する
+let s3_request = client.put_bucket_lifecycle_configuration()
+    .bucket("my-bucket")
+    .rule(LifecycleRule {
+        id: Some("expire-30-days".to_string()),
+        status: ExpirationStatus::Enabled,
+        filter: Some(LifecycleRuleFilter {
+            prefix: Some("logs/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(LifecycleExpiration {
+            days: Some(30),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: Some(AbortIncompleteMultipartUpload {
+            days_after_initiation: Some(7),
+        }),
+    })
+    .build_request()?;
+let s3_response = execute(s3_request).await?;
+let output = shiguredo_s3::api::PutBucketLifecycleConfigurationFluentBuilder::parse_response(&s3_response)?;
+
+// ライフサイクル設定を取得する
+let s3_request = client.get_bucket_lifecycle_configuration()
+    .bucket("my-bucket")
+    .build_request()?;
+let s3_response = execute(s3_request).await?;
+let output = shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response(&s3_response)?;
+for rule in &output.rules {
+    println!("rule: {:?}", rule.id);
+}
+
+// ライフサイクル設定を削除する
+let s3_request = client.delete_bucket_lifecycle()
+    .bucket("my-bucket")
+    .build_request()?;
+let s3_response = execute(s3_request).await?;
+let output = shiguredo_s3::api::DeleteBucketLifecycleFluentBuilder::parse_response(&s3_response)?;
+```
+
 ### Presigned リクエスト
 
 ```rust
