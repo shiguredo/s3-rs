@@ -1,6 +1,7 @@
 # バケット CORS API を追加する
 
 Created: 2026-03-27
+Completed: 2026-03-27
 Model: Opus 4.6
 
 ## 概要
@@ -53,6 +54,13 @@ S3 標準 API であり、Cloudflare R2 でもサポートされている。
 - https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketCors.html
 - https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketCors.html
 - https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketCors.html
+
+## 解決方法
+
+- `src/xml.rs` の `ChildElements` に `get_all` メソッドを追加し、同名要素の複数取得に対応した
+- `src/types.rs` に `CorsRule`, `CorsRuleBuilder`, `CorsConfiguration`, `CorsConfigurationBuilder` と各 Output 型を追加した
+- `src/api/get_bucket_cors.rs`, `src/api/put_bucket_cors.rs`, `src/api/delete_bucket_cors.rs` を新規作成した
+- aws-sdk-rust 互換のフィールド名・型を採用した
 
 ## 優先度
 
