@@ -304,6 +304,25 @@ pub struct PutBucketTaggingOutput {}
 #[derive(Debug)]
 pub struct DeleteBucketTaggingOutput {}
 
+/// GetObjectTagging の結果
+#[derive(Debug)]
+pub struct GetObjectTaggingOutput {
+    pub version_id: Option<String>,
+    pub tag_set: Vec<Tag>,
+}
+
+/// PutObjectTagging の結果
+#[derive(Debug)]
+pub struct PutObjectTaggingOutput {
+    pub version_id: Option<String>,
+}
+
+/// DeleteObjectTagging の結果
+#[derive(Debug)]
+pub struct DeleteObjectTaggingOutput {
+    pub version_id: Option<String>,
+}
+
 /// GetPublicAccessBlock の結果
 #[derive(Debug)]
 pub struct GetPublicAccessBlockOutput {

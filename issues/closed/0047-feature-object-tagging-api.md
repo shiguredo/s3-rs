@@ -1,6 +1,7 @@
 # オブジェクトタグ API (PutObjectTagging / GetObjectTagging / DeleteObjectTagging) を追加する
 
 Created: 2026-03-27
+Completed: 2026-03-27
 Model: Opus 4.6
 
 ## 概要
@@ -91,3 +92,16 @@ Output:
 ## 優先度
 
 高
+
+## 解決方法
+
+バケットタグ API の実装パターンを踏襲し、以下のファイルを追加・変更した:
+
+- `src/api/put_object_tagging.rs`: PutObjectTagging API の実装
+- `src/api/get_object_tagging.rs`: GetObjectTagging API の実装
+- `src/api/delete_object_tagging.rs`: DeleteObjectTagging API の実装
+- `src/types.rs`: Output 型 3 つを追加
+- `src/api/mod.rs`: モジュール登録と pub use
+- `src/client.rs`: ファクトリメソッド 3 つを追加
+- `tests/minio.rs`: MinIO 統合テストを追加
+- `tests/rustfs.rs`: RustFS 統合テストを追加

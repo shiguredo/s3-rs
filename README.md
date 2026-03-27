@@ -87,6 +87,9 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 | DeleteObjects | `client.delete_objects()` |
 | CopyObject | `client.copy_object()` |
 | ListObjectsV2 | `client.list_objects_v2()` |
+| GetObjectTagging | `client.get_object_tagging()` |
+| PutObjectTagging | `client.put_object_tagging()` |
+| DeleteObjectTagging | `client.delete_object_tagging()` |
 
 ### バケット操作
 
