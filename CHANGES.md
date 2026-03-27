@@ -10,6 +10,3 @@
   - バグ修正
 
 ## develop
-
-- [ADD] オブジェクトタグ API (PutObjectTagging / GetObjectTagging / DeleteObjectTagging) を追加する
-  - @voluntas
