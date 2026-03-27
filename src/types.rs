@@ -447,6 +447,164 @@ pub struct MultipartUpload {
 }
 
 // -------------------------------------------------------
+// 暗号化設定
+// -------------------------------------------------------
+
+/// サーバサイド暗号化のデフォルト設定
+///
+/// aws-sdk-rust の `ServerSideEncryptionByDefault` 型に対応する。
+#[derive(Debug, Clone)]
+pub struct ServerSideEncryptionByDefault {
+    /// 暗号化アルゴリズム (AES256, aws:kms, aws:kms:dsse)
+    pub sse_algorithm: String,
+    /// KMS マスターキー ID (SSE-KMS の場合)
+    pub kms_master_key_id: Option<String>,
+}
+
+impl ServerSideEncryptionByDefault {
+    /// ServerSideEncryptionByDefault を構築するビルダーを返す
+    pub fn builder() -> ServerSideEncryptionByDefaultBuilder {
+        ServerSideEncryptionByDefaultBuilder::default()
+    }
+}
+
+/// ServerSideEncryptionByDefault のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct ServerSideEncryptionByDefaultBuilder {
+    sse_algorithm: Option<String>,
+    kms_master_key_id: Option<String>,
+}
+
+impl ServerSideEncryptionByDefaultBuilder {
+    /// 暗号化アルゴリズムを設定する (AES256, aws:kms, aws:kms:dsse)
+    pub fn sse_algorithm(mut self, algorithm: impl Into<String>) -> Self {
+        self.sse_algorithm = Some(algorithm.into());
+        self
+    }
+
+    /// KMS マスターキー ID を設定する
+    pub fn kms_master_key_id(mut self, key_id: impl Into<String>) -> Self {
+        self.kms_master_key_id = Some(key_id.into());
+        self
+    }
+
+    /// ServerSideEncryptionByDefault を構築する
+    ///
+    /// sse_algorithm が未設定の場合はデフォルトで空文字列になる。
+    pub fn build(self) -> ServerSideEncryptionByDefault {
+        ServerSideEncryptionByDefault {
+            sse_algorithm: self.sse_algorithm.unwrap_or_default(),
+            kms_master_key_id: self.kms_master_key_id,
+        }
+    }
+}
+
+/// サーバサイド暗号化ルール
+///
+/// aws-sdk-rust の `ServerSideEncryptionRule` 型に対応する。
+#[derive(Debug, Clone)]
+pub struct ServerSideEncryptionRule {
+    /// デフォルト暗号化の適用設定
+    pub apply_server_side_encryption_by_default: Option<ServerSideEncryptionByDefault>,
+    /// S3 Bucket Key の有効/無効
+    pub bucket_key_enabled: Option<bool>,
+}
+
+impl ServerSideEncryptionRule {
+    /// ServerSideEncryptionRule を構築するビルダーを返す
+    pub fn builder() -> ServerSideEncryptionRuleBuilder {
+        ServerSideEncryptionRuleBuilder::default()
+    }
+}
+
+/// ServerSideEncryptionRule のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct ServerSideEncryptionRuleBuilder {
+    apply_server_side_encryption_by_default: Option<ServerSideEncryptionByDefault>,
+    bucket_key_enabled: Option<bool>,
+}
+
+impl ServerSideEncryptionRuleBuilder {
+    /// デフォルト暗号化の適用設定を指定する
+    pub fn apply_server_side_encryption_by_default(
+        mut self,
+        value: ServerSideEncryptionByDefault,
+    ) -> Self {
+        self.apply_server_side_encryption_by_default = Some(value);
+        self
+    }
+
+    /// S3 Bucket Key の有効/無効を指定する
+    pub fn bucket_key_enabled(mut self, enabled: bool) -> Self {
+        self.bucket_key_enabled = Some(enabled);
+        self
+    }
+
+    /// ServerSideEncryptionRule を構築する
+    pub fn build(self) -> ServerSideEncryptionRule {
+        ServerSideEncryptionRule {
+            apply_server_side_encryption_by_default: self.apply_server_side_encryption_by_default,
+            bucket_key_enabled: self.bucket_key_enabled,
+        }
+    }
+}
+
+/// サーバサイド暗号化設定
+///
+/// PutBucketEncryption で使用する。
+/// aws-sdk-rust の `ServerSideEncryptionConfiguration` 型に対応する。
+#[derive(Debug, Clone)]
+pub struct ServerSideEncryptionConfiguration {
+    pub rules: Vec<ServerSideEncryptionRule>,
+}
+
+impl ServerSideEncryptionConfiguration {
+    /// ServerSideEncryptionConfiguration を構築するビルダーを返す
+    pub fn builder() -> ServerSideEncryptionConfigurationBuilder {
+        ServerSideEncryptionConfigurationBuilder::default()
+    }
+}
+
+/// ServerSideEncryptionConfiguration のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct ServerSideEncryptionConfigurationBuilder {
+    rules: Vec<ServerSideEncryptionRule>,
+}
+
+impl ServerSideEncryptionConfigurationBuilder {
+    /// 暗号化ルールを追加する
+    pub fn rules(mut self, rule: ServerSideEncryptionRule) -> Self {
+        self.rules.push(rule);
+        self
+    }
+
+    /// 暗号化ルールを一括設定する
+    pub fn set_rules(mut self, rules: Vec<ServerSideEncryptionRule>) -> Self {
+        self.rules = rules;
+        self
+    }
+
+    /// ServerSideEncryptionConfiguration を構築する
+    pub fn build(self) -> ServerSideEncryptionConfiguration {
+        ServerSideEncryptionConfiguration { rules: self.rules }
+    }
+}
+
+/// GetBucketEncryption の結果
+#[derive(Debug)]
+pub struct GetBucketEncryptionOutput {
+    pub server_side_encryption_configuration: Option<ServerSideEncryptionConfiguration>,
+}
+
+/// PutBucketEncryption の結果
+#[derive(Debug)]
+pub struct PutBucketEncryptionOutput {}
+
+/// DeleteBucketEncryption の結果
+#[derive(Debug)]
+pub struct DeleteBucketEncryptionOutput {}
+
+// -------------------------------------------------------
 // CORS 設定
 // -------------------------------------------------------
 

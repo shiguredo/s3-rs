@@ -1,15 +1,16 @@
 use crate::api::{
     AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
     CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
-    DeleteBucketCorsFluentBuilder, DeleteBucketFluentBuilder, DeleteBucketLifecycleFluentBuilder,
-    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder,
-    DeleteObjectTaggingFluentBuilder, DeleteObjectsFluentBuilder,
-    DeletePublicAccessBlockFluentBuilder, GetBucketCorsFluentBuilder,
-    GetBucketLifecycleConfigurationFluentBuilder, GetBucketPolicyFluentBuilder,
-    GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectFluentBuilder,
-    GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
-    HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
-    ListObjectsV2FluentBuilder, ListPartsFluentBuilder, PutBucketCorsFluentBuilder,
+    DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder, DeleteBucketFluentBuilder,
+    DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
+    DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectTaggingFluentBuilder,
+    DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder, GetBucketCorsFluentBuilder,
+    GetBucketEncryptionFluentBuilder, GetBucketLifecycleConfigurationFluentBuilder,
+    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
+    GetObjectFluentBuilder, GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder,
+    HeadBucketFluentBuilder, HeadObjectFluentBuilder, ListBucketsFluentBuilder,
+    ListMultipartUploadsFluentBuilder, ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
+    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
     PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
@@ -243,6 +244,18 @@ impl S3Client {
 
     pub fn delete_bucket_cors(&self) -> DeleteBucketCorsFluentBuilder<'_> {
         DeleteBucketCorsFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_encryption(&self) -> GetBucketEncryptionFluentBuilder<'_> {
+        GetBucketEncryptionFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_encryption(&self) -> PutBucketEncryptionFluentBuilder<'_> {
+        PutBucketEncryptionFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_encryption(&self) -> DeleteBucketEncryptionFluentBuilder<'_> {
+        DeleteBucketEncryptionFluentBuilder::new(self)
     }
 
     pub fn get_object_tagging(&self) -> GetObjectTaggingFluentBuilder<'_> {
