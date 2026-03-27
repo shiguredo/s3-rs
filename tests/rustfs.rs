@@ -20,16 +20,18 @@
 
 use shiguredo_http11::ResponseDecoder;
 use shiguredo_s3::api::{
-    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
-    DeleteObjectTaggingFluentBuilder, DeletePublicAccessBlockFluentBuilder,
-    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
-    GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder,
-    ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
+    DeleteBucketEncryptionFluentBuilder, DeleteBucketPolicyFluentBuilder,
+    DeleteBucketTaggingFluentBuilder, DeleteObjectTaggingFluentBuilder,
+    DeletePublicAccessBlockFluentBuilder, GetBucketPolicyFluentBuilder,
+    GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
+    GetPublicAccessBlockFluentBuilder, ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder,
+    PutBucketEncryptionFluentBuilder, PutBucketPolicyFluentBuilder, PutBucketTaggingFluentBuilder,
+    PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
     PutPublicAccessBlockFluentBuilder,
 };
 use shiguredo_s3::types::{
-    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag, Tagging,
+    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
+    ServerSideEncryptionConfiguration, ServerSideEncryptionRule, Tag, Tagging,
 };
 use shiguredo_s3::{Credential, S3Client, S3Config, S3Request, S3Response};
 use testcontainers::core::wait::HttpWaitStrategy;
@@ -1518,4 +1520,89 @@ async fn test_bucket_lifecycle_configuration() {
     let result =
         shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response(&response);
     assert!(result.is_err(), "lifecycle should not exist after delete");
+}
+
+/// バケット暗号化設定の Put → Get → Delete のラウンドトリップを検証する
+#[tokio::test]
+async fn test_bucket_encryption() {
+    let (_container, port) = start_rustfs().await;
+    let client = build_client(port);
+    let bucket = "test-bucket-encryption";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // SSE-S3 (AES256) を設定する
+    let request = client
+        .put_bucket_encryption()
+        .bucket(bucket)
+        .server_side_encryption_configuration(
+            ServerSideEncryptionConfiguration::builder()
+                .rules(
+                    ServerSideEncryptionRule::builder()
+                        .apply_server_side_encryption_by_default(
+                            ServerSideEncryptionByDefault::builder()
+                                .sse_algorithm("AES256")
+                                .build(),
+                        )
+                        .bucket_key_enabled(false)
+                        .build(),
+                )
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    send(request, PutBucketEncryptionFluentBuilder::parse_response).await;
+
+    // 暗号化設定を取得して AES256 が返ることを確認する
+    let request = client
+        .get_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetBucketEncryptionFluentBuilder::parse_response,
+    )
+    .await;
+    let config = output.server_side_encryption_configuration.unwrap();
+    assert_eq!(config.rules.len(), 1);
+    let rule = &config.rules[0];
+    let by_default = rule
+        .apply_server_side_encryption_by_default
+        .as_ref()
+        .unwrap();
+    assert_eq!(by_default.sse_algorithm, "AES256");
+    assert!(by_default.kms_master_key_id.is_none());
+
+    // 暗号化設定を削除する
+    let request = client
+        .delete_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(request, DeleteBucketEncryptionFluentBuilder::parse_response).await;
+
+    // 削除後は暗号化設定が存在しないことを確認する
+    let request = client
+        .get_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    // RustFS は削除後 400 を返す (MinIO は 404)
+    assert!(
+        response.status_code == 400 || response.status_code == 404,
+        "expected 400 or 404, got {}",
+        response.status_code
+    );
 }

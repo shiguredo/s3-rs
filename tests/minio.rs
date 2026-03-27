@@ -16,15 +16,18 @@
 
 use shiguredo_http11::ResponseDecoder;
 use shiguredo_s3::api::{
-    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
-    DeleteObjectTaggingFluentBuilder, GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder,
-    GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
-    ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
+    DeleteBucketEncryptionFluentBuilder, DeleteBucketPolicyFluentBuilder,
+    DeleteBucketTaggingFluentBuilder, DeleteObjectTaggingFluentBuilder,
+    GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
+    GetObjectTaggingFluentBuilder, ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder,
+    PutBucketPolicyFluentBuilder, PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder,
+    PutObjectTaggingFluentBuilder,
 };
 use shiguredo_s3::types::{
-    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, Tag, Tagging,
+    CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
+    ServerSideEncryptionConfiguration, ServerSideEncryptionRule, Tag, Tagging,
 };
+
 use shiguredo_s3::{
     Credential, HttpDate, PresignedRequest, S3Client, S3Config, S3Request, S3Response,
 };
@@ -3172,4 +3175,117 @@ async fn test_bucket_lifecycle_configuration_multiple_rules() {
         .unwrap();
     assert_eq!(r3.status, shiguredo_s3::types::ExpirationStatus::Disabled);
     assert_eq!(r3.expiration.as_ref().unwrap().days, Some(365));
+}
+
+/// KMS 有効の MinIO コンテナを起動して (コンテナ, ホストポート) を返す
+///
+/// MINIO_KMS_SECRET_KEY 環境変数で暗号化キーを設定する。
+/// これにより PutBucketEncryption (SSE-S3) が利用可能になる。
+async fn start_minio_with_kms() -> (ContainerAsync<GenericImage>, u16) {
+    let container = GenericImage::new("minio/minio", "latest")
+        .with_exposed_port(9000.tcp())
+        .with_wait_for(WaitFor::message_on_either_std("API:"))
+        .with_env_var("MINIO_ROOT_USER", ACCESS_KEY)
+        .with_env_var("MINIO_ROOT_PASSWORD", SECRET_KEY)
+        // MinIO の組み込み KMS を有効にする (キー名:Base64 エンコードされた 32 バイトキー)
+        .with_env_var(
+            "MINIO_KMS_SECRET_KEY",
+            "my-key:zCgUDg0ck05YjBEM3UCTg2mkNIZFAwCdpFSMgoReYJk=",
+        )
+        .with_cmd(vec!["server", "/data"])
+        .start()
+        .await
+        .expect("failed to start MinIO container with KMS");
+
+    let port = container
+        .get_host_port_ipv4(9000)
+        .await
+        .expect("failed to get host port");
+
+    (container, port)
+}
+
+/// バケット暗号化設定の Put → Get → Delete のラウンドトリップを検証する
+#[tokio::test]
+async fn test_bucket_encryption() {
+    let (_container, port) = start_minio_with_kms().await;
+    let client = build_client(port);
+    let bucket = "test-bucket-encryption";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // SSE-S3 (AES256) を設定する
+    let request = client
+        .put_bucket_encryption()
+        .bucket(bucket)
+        .server_side_encryption_configuration(
+            ServerSideEncryptionConfiguration::builder()
+                .rules(
+                    ServerSideEncryptionRule::builder()
+                        .apply_server_side_encryption_by_default(
+                            ServerSideEncryptionByDefault::builder()
+                                .sse_algorithm("AES256")
+                                .build(),
+                        )
+                        .bucket_key_enabled(false)
+                        .build(),
+                )
+                .build(),
+        )
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutBucketEncryptionFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 暗号化設定を取得して AES256 が返ることを確認する
+    let request = client
+        .get_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetBucketEncryptionFluentBuilder::parse_response,
+    )
+    .await;
+    let config = output.server_side_encryption_configuration.unwrap();
+    assert_eq!(config.rules.len(), 1);
+    let rule = &config.rules[0];
+    let by_default = rule
+        .apply_server_side_encryption_by_default
+        .as_ref()
+        .unwrap();
+    assert_eq!(by_default.sse_algorithm, "AES256");
+    assert!(by_default.kms_master_key_id.is_none());
+
+    // 暗号化設定を削除する
+    let request = client
+        .delete_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(request, DeleteBucketEncryptionFluentBuilder::parse_response).await;
+
+    // 削除後は暗号化設定が存在しないことを確認する
+    let request = client
+        .get_bucket_encryption()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    // MinIO は削除後 404 を返す
+    assert_eq!(response.status_code, 404);
 }
