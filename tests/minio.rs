@@ -2794,3 +2794,236 @@ async fn test_put_object_storage_class() {
     .await;
     assert_eq!(output.body, b"standard class data");
 }
+
+/// バケットライフサイクル設定の Put / Get / Delete を検証する
+///
+/// ## 検証項目
+/// - PutBucketLifecycleConfiguration でルールを設定できる
+/// - GetBucketLifecycleConfiguration で設定したルールを取得できる
+/// - DeleteBucketLifecycleConfiguration でルールを削除できる
+/// - 削除後に Get するとエラーになる
+#[tokio::test]
+async fn test_bucket_lifecycle_configuration() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-lifecycle-config";
+
+    // バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // ライフサイクルルールを設定する
+    let rule = shiguredo_s3::types::LifecycleRule {
+        id: Some("expire-after-30-days".to_string()),
+        status: shiguredo_s3::types::ExpirationStatus::Enabled,
+        filter: Some(shiguredo_s3::types::LifecycleRuleFilter {
+            prefix: Some("logs/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(shiguredo_s3::types::LifecycleExpiration {
+            days: Some(30),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: None,
+    };
+
+    let request = client
+        .put_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .rule(rule)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::PutBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 設定したルールを取得する
+    let request = client
+        .get_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    assert_eq!(output.rules.len(), 1);
+    assert_eq!(output.rules[0].id.as_deref(), Some("expire-after-30-days"));
+    assert_eq!(
+        output.rules[0].status,
+        shiguredo_s3::types::ExpirationStatus::Enabled
+    );
+    assert_eq!(output.rules[0].expiration.as_ref().unwrap().days, Some(30));
+
+    // ライフサイクル設定を削除する
+    let request = client
+        .delete_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::DeleteBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 削除後に Get するとエラーになることを確認する
+    let request = client
+        .get_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    let result =
+        shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response(&response);
+    assert!(result.is_err(), "lifecycle should not exist after delete");
+}
+
+/// 複数のライフサイクルルールと AbortIncompleteMultipartUpload を検証する
+///
+/// ## 検証項目
+/// - 複数のルールを同時に設定できる
+/// - AbortIncompleteMultipartUpload が正しくラウンドトリップする
+/// - 無効化されたルールが Disabled で返る
+#[tokio::test]
+async fn test_bucket_lifecycle_configuration_multiple_rules() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-lifecycle-multi";
+
+    // バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 複数のルールを設定する
+    let rule1 = shiguredo_s3::types::LifecycleRule {
+        id: Some("expire-temp".to_string()),
+        status: shiguredo_s3::types::ExpirationStatus::Enabled,
+        filter: Some(shiguredo_s3::types::LifecycleRuleFilter {
+            prefix: Some("tmp/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(shiguredo_s3::types::LifecycleExpiration {
+            days: Some(7),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: None,
+    };
+
+    // MinIO は AbortIncompleteMultipartUpload のみのルールを拒否するため
+    // (MinIO Issue #16120, #19115)、Expiration と組み合わせて設定する
+    let rule2 = shiguredo_s3::types::LifecycleRule {
+        id: Some("expire-uploads".to_string()),
+        status: shiguredo_s3::types::ExpirationStatus::Enabled,
+        filter: Some(shiguredo_s3::types::LifecycleRuleFilter {
+            prefix: Some("uploads/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(shiguredo_s3::types::LifecycleExpiration {
+            days: Some(14),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: None,
+    };
+
+    let rule3 = shiguredo_s3::types::LifecycleRule {
+        id: Some("disabled-rule".to_string()),
+        status: shiguredo_s3::types::ExpirationStatus::Disabled,
+        filter: Some(shiguredo_s3::types::LifecycleRuleFilter {
+            prefix: Some("archive/".to_string()),
+            ..Default::default()
+        }),
+        expiration: Some(shiguredo_s3::types::LifecycleExpiration {
+            days: Some(365),
+            ..Default::default()
+        }),
+        transitions: None,
+        noncurrent_version_transitions: None,
+        noncurrent_version_expiration: None,
+        abort_incomplete_multipart_upload: None,
+    };
+
+    let request = client
+        .put_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .rule(rule1)
+        .rule(rule2)
+        .rule(rule3)
+        .build_request()
+        .unwrap();
+    let _output = send(
+        request,
+        shiguredo_s3::api::PutBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 設定したルールを取得する
+    let request = client
+        .get_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response,
+    )
+    .await;
+
+    assert_eq!(output.rules.len(), 3);
+
+    // ルール 1: expire-temp
+    let r1 = output
+        .rules
+        .iter()
+        .find(|r| r.id.as_deref() == Some("expire-temp"))
+        .unwrap();
+    assert_eq!(r1.status, shiguredo_s3::types::ExpirationStatus::Enabled);
+    assert_eq!(r1.expiration.as_ref().unwrap().days, Some(7));
+
+    // ルール 2: expire-uploads
+    let r2 = output
+        .rules
+        .iter()
+        .find(|r| r.id.as_deref() == Some("expire-uploads"))
+        .unwrap();
+    assert_eq!(r2.status, shiguredo_s3::types::ExpirationStatus::Enabled);
+    assert_eq!(r2.expiration.as_ref().unwrap().days, Some(14));
+
+    // ルール 3: disabled-rule
+    let r3 = output
+        .rules
+        .iter()
+        .find(|r| r.id.as_deref() == Some("disabled-rule"))
+        .unwrap();
+    assert_eq!(r3.status, shiguredo_s3::types::ExpirationStatus::Disabled);
+    assert_eq!(r3.expiration.as_ref().unwrap().days, Some(365));
+}

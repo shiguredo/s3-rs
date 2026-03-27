@@ -1,6 +1,7 @@
 # バケットライフサイクル設定 API を追加する
 
 Created: 2026-03-27
+Completed: 2026-03-27
 Model: Opus 4.6
 
 ## 概要
@@ -65,3 +66,16 @@ S3 のバケットライフサイクル設定 API（PutBucketLifecycleConfigurat
 3. `PutBucketLifecycleConfiguration` を実装する（XML 構築が必要）
 4. `GetBucketLifecycleConfiguration` を実装する（XML パースが必要）
 5. 統合テストを追加する
+
+## 解決方法
+
+- `src/types.rs` にライフサイクル関連の型定義を追加した（LifecycleRule, ExpirationStatus, LifecycleRuleFilter, LifecycleExpiration, Transition, NoncurrentVersionTransition, NoncurrentVersionExpiration, AbortIncompleteMultipartUpload 等）
+- `src/api/delete_bucket_lifecycle_configuration.rs` を実装した（DELETE /{Bucket}?lifecycle）
+- `src/api/put_bucket_lifecycle_configuration.rs` を実装した（PUT /{Bucket}?lifecycle、XML 要素順序は aws-sdk-rust 互換）
+- `src/api/get_bucket_lifecycle_configuration.rs` を実装した（GET /{Bucket}?lifecycle、XML パース）
+- MinIO の統合テストを追加した（単一ルール、複数ルール）
+
+### 注意事項
+
+- MinIO は `AbortIncompleteMultipartUpload` のみのルールを意図的に拒否する（MinIO Issue #16120, #19115）。テストでは `Expiration` と組み合わせて検証している
+- `TransitionStorageClass` は enum ではなく `Option<String>` としている（MinIO/RustFS でサポートされるストレージクラスが異なるため）

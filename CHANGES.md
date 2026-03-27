@@ -10,3 +10,6 @@
   - バグ修正
 
 ## develop
+
+- [ADD] PutBucketLifecycleConfiguration / GetBucketLifecycleConfiguration / DeleteBucketLifecycleConfiguration API を追加する
+  - @voluntas
