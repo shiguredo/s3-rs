@@ -1913,7 +1913,7 @@ checksum = "50203212be42844ef00003e05fe57f0b19a80b33d9d35745c48efc01e5d2fb63"
 
 [[package]]
 name = "shiguredo_s3"
-version = "2026.1.0-canary.1"
+version = "2026.1.0-canary.2"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
