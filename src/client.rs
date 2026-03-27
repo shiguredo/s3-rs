@@ -1,14 +1,15 @@
 use crate::api::{
     AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
     CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
-    DeleteBucketFluentBuilder, DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
-    DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectTaggingFluentBuilder,
-    DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder,
+    DeleteBucketCorsFluentBuilder, DeleteBucketFluentBuilder, DeleteBucketLifecycleFluentBuilder,
+    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder,
+    DeleteObjectTaggingFluentBuilder, DeleteObjectsFluentBuilder,
+    DeletePublicAccessBlockFluentBuilder, GetBucketCorsFluentBuilder,
     GetBucketLifecycleConfigurationFluentBuilder, GetBucketPolicyFluentBuilder,
     GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder, GetObjectFluentBuilder,
     GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
     HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
-    ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
+    ListObjectsV2FluentBuilder, ListPartsFluentBuilder, PutBucketCorsFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
     PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
@@ -230,6 +231,18 @@ impl S3Client {
 
     pub fn delete_bucket_tagging(&self) -> DeleteBucketTaggingFluentBuilder<'_> {
         DeleteBucketTaggingFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_cors(&self) -> GetBucketCorsFluentBuilder<'_> {
+        GetBucketCorsFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_cors(&self) -> PutBucketCorsFluentBuilder<'_> {
+        PutBucketCorsFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_cors(&self) -> DeleteBucketCorsFluentBuilder<'_> {
+        DeleteBucketCorsFluentBuilder::new(self)
     }
 
     pub fn get_object_tagging(&self) -> GetObjectTaggingFluentBuilder<'_> {

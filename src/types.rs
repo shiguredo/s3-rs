@@ -447,6 +447,183 @@ pub struct MultipartUpload {
 }
 
 // -------------------------------------------------------
+// CORS 設定
+// -------------------------------------------------------
+
+/// CORS ルール
+///
+/// aws-sdk-rust の `CorsRule` 型に対応する。
+/// `allowed_methods` と `allowed_origins` は必須フィールド。
+#[derive(Debug, Clone)]
+pub struct CorsRule {
+    /// ルール ID (最大 255 文字)
+    pub id: Option<String>,
+    /// 許可するリクエストヘッダー
+    pub allowed_headers: Option<Vec<String>>,
+    /// 許可する HTTP メソッド (GET, PUT, HEAD, POST, DELETE)
+    pub allowed_methods: Vec<String>,
+    /// 許可するオリジン
+    pub allowed_origins: Vec<String>,
+    /// クライアントに公開するレスポンスヘッダー
+    pub expose_headers: Option<Vec<String>>,
+    /// プリフライトレスポンスのキャッシュ秒数
+    pub max_age_seconds: Option<i32>,
+}
+
+impl CorsRule {
+    /// CorsRule を構築するビルダーを返す
+    pub fn builder() -> CorsRuleBuilder {
+        CorsRuleBuilder::default()
+    }
+}
+
+/// CorsRule のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct CorsRuleBuilder {
+    id: Option<String>,
+    allowed_headers: Option<Vec<String>>,
+    allowed_methods: Vec<String>,
+    allowed_origins: Vec<String>,
+    expose_headers: Option<Vec<String>>,
+    max_age_seconds: Option<i32>,
+}
+
+impl CorsRuleBuilder {
+    /// ルール ID を設定する
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
+
+    /// 許可するリクエストヘッダーを追加する
+    pub fn allowed_headers(mut self, header: impl Into<String>) -> Self {
+        self.allowed_headers
+            .get_or_insert_with(Vec::new)
+            .push(header.into());
+        self
+    }
+
+    /// 許可するリクエストヘッダーを一括設定する
+    pub fn set_allowed_headers(mut self, headers: Option<Vec<String>>) -> Self {
+        self.allowed_headers = headers;
+        self
+    }
+
+    /// 許可する HTTP メソッドを追加する
+    pub fn allowed_methods(mut self, method: impl Into<String>) -> Self {
+        self.allowed_methods.push(method.into());
+        self
+    }
+
+    /// 許可する HTTP メソッドを一括設定する
+    pub fn set_allowed_methods(mut self, methods: Vec<String>) -> Self {
+        self.allowed_methods = methods;
+        self
+    }
+
+    /// 許可するオリジンを追加する
+    pub fn allowed_origins(mut self, origin: impl Into<String>) -> Self {
+        self.allowed_origins.push(origin.into());
+        self
+    }
+
+    /// 許可するオリジンを一括設定する
+    pub fn set_allowed_origins(mut self, origins: Vec<String>) -> Self {
+        self.allowed_origins = origins;
+        self
+    }
+
+    /// クライアントに公開するレスポンスヘッダーを追加する
+    pub fn expose_headers(mut self, header: impl Into<String>) -> Self {
+        self.expose_headers
+            .get_or_insert_with(Vec::new)
+            .push(header.into());
+        self
+    }
+
+    /// クライアントに公開するレスポンスヘッダーを一括設定する
+    pub fn set_expose_headers(mut self, headers: Option<Vec<String>>) -> Self {
+        self.expose_headers = headers;
+        self
+    }
+
+    /// プリフライトレスポンスのキャッシュ秒数を設定する
+    pub fn max_age_seconds(mut self, seconds: i32) -> Self {
+        self.max_age_seconds = Some(seconds);
+        self
+    }
+
+    /// CorsRule を構築する
+    pub fn build(self) -> CorsRule {
+        CorsRule {
+            id: self.id,
+            allowed_headers: self.allowed_headers,
+            allowed_methods: self.allowed_methods,
+            allowed_origins: self.allowed_origins,
+            expose_headers: self.expose_headers,
+            max_age_seconds: self.max_age_seconds,
+        }
+    }
+}
+
+/// CORS 設定
+///
+/// PutBucketCors で使用する。
+/// aws-sdk-rust の `CorsConfiguration` 型に対応する。
+#[derive(Debug, Clone)]
+pub struct CorsConfiguration {
+    pub cors_rules: Vec<CorsRule>,
+}
+
+impl CorsConfiguration {
+    /// CorsConfiguration を構築するビルダーを返す
+    pub fn builder() -> CorsConfigurationBuilder {
+        CorsConfigurationBuilder::default()
+    }
+}
+
+/// CorsConfiguration のビルダー
+#[derive(Debug, Clone, Default)]
+pub struct CorsConfigurationBuilder {
+    cors_rules: Vec<CorsRule>,
+}
+
+impl CorsConfigurationBuilder {
+    /// CORS ルールを追加する
+    pub fn cors_rules(mut self, rule: CorsRule) -> Self {
+        self.cors_rules.push(rule);
+        self
+    }
+
+    /// CORS ルールを一括設定する
+    pub fn set_cors_rules(mut self, rules: Vec<CorsRule>) -> Self {
+        self.cors_rules = rules;
+        self
+    }
+
+    /// CorsConfiguration を構築する
+    pub fn build(self) -> CorsConfiguration {
+        CorsConfiguration {
+            cors_rules: self.cors_rules,
+        }
+    }
+}
+
+/// GetBucketCors の結果
+#[derive(Debug)]
+pub struct GetBucketCorsOutput {
+    pub cors_rules: Option<Vec<CorsRule>>,
+}
+
+/// PutBucketCors の結果
+#[derive(Debug)]
+pub struct PutBucketCorsOutput {}
+
+/// DeleteBucketCors の結果
+#[derive(Debug)]
+pub struct DeleteBucketCorsOutput {}
+
+// -------------------------------------------------------
 // ライフサイクル設定
 // -------------------------------------------------------
 
