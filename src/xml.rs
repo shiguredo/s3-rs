@@ -57,6 +57,17 @@ impl ChildElements {
             .map(|(_, value)| value.as_str())
     }
 
+    /// タグ名でテキストを全て取得する
+    ///
+    /// 同名の子要素が複数出現する場合に使用する (例: CORS の AllowedMethod)
+    pub(crate) fn get_all(&self, tag: &str) -> Vec<&str> {
+        self.children
+            .iter()
+            .filter(|(name, _)| name == tag)
+            .map(|(_, value)| value.as_str())
+            .collect()
+    }
+
     /// タグ名でテキストを取得し、FromStr でパースする
     pub(crate) fn get_parsed<T: FromStr>(&self, tag: &str) -> Option<T> {
         self.get(tag).and_then(|v| v.parse().ok())
