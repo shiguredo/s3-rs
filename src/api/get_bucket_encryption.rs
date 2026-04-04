@@ -7,8 +7,7 @@
 use crate::client::S3Client;
 use crate::error::Error;
 use crate::types::{
-    GetBucketEncryptionOutput, ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration,
-    ServerSideEncryptionRule,
+    GetBucketEncryptionOutput, ServerSideEncryptionByDefault, ServerSideEncryptionRule,
 };
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
@@ -16,7 +15,6 @@ use super::{S3Request, build_signed_request, parse_error_response, required};
 pub struct GetBucketEncryptionFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
-    expected_bucket_owner: Option<String>,
 }
 
 impl<'a> GetBucketEncryptionFluentBuilder<'a> {
@@ -24,7 +22,6 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
         Self {
             client,
             bucket: None,
-            expected_bucket_owner: None,
         }
     }
 
@@ -33,26 +30,14 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
         self
     }
 
-    /// バケット所有者のアカウント ID を指定する (検証用)
-    pub fn expected_bucket_owner(mut self, expected_bucket_owner: impl Into<String>) -> Self {
-        self.expected_bucket_owner = Some(expected_bucket_owner.into());
-        self
-    }
-
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
-
-        let mut extra_headers: Vec<(&str, &str)> = Vec::new();
-        if let Some(ref v) = self.expected_bucket_owner {
-            extra_headers.push(("x-amz-expected-bucket-owner", v.as_str()));
-        }
-
         Ok(build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
             "",
-            &extra_headers,
+            &[],
             b"",
             Some(&[("encryption", "")]),
         ))
@@ -65,55 +50,90 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|e| Error::InvalidResponse(format!("invalid UTF-8 in response body: {e}")))?;
-
-        // XML 構造:
-        // <ServerSideEncryptionConfiguration>
-        //   <Rule>
-        //     <ApplyServerSideEncryptionByDefault>
-        //       <SSEAlgorithm>AES256</SSEAlgorithm>
-        //       <KMSMasterKeyID>...</KMSMasterKeyID>
-        //     </ApplyServerSideEncryptionByDefault>
-        //     <BucketKeyEnabled>true</BucketKeyEnabled>
-        //   </Rule>
-        // </ServerSideEncryptionConfiguration>
-        //
-        // for_each_element は直接の子要素 (depth=2) のみ取得するため、
-        // ApplyServerSideEncryptionByDefault 内の SSEAlgorithm には直接アクセスできない。
-        // Rule 単位でパースし、ネストした要素は extract_element で取得する。
-        let mut rules = Vec::new();
-        crate::xml::for_each_element(body_text, "Rule", |elem| {
-            let bucket_key_enabled: Option<bool> = elem.get_parsed("BucketKeyEnabled");
-
-            // ApplyServerSideEncryptionByDefault のテキストは空文字列だが、
-            // 存在の有無で SSEAlgorithm を含むかを判定する。
-            // extract_element はドキュメント全体から検索するため、
-            // Rule が複数ある場合には不正確になる可能性があるが、
-            // S3 の仕様上 Rule は通常 1 つのみ。
-            let sse_by_default = if crate::xml::extract_element(body_text, "SSEAlgorithm").is_some()
-            {
-                Some(ServerSideEncryptionByDefault {
-                    sse_algorithm: crate::xml::extract_element(body_text, "SSEAlgorithm")
-                        .unwrap_or_default(),
-                    kms_master_key_id: crate::xml::extract_element(body_text, "KMSMasterKeyID"),
-                })
-            } else {
-                None
-            };
-
-            rules.push(ServerSideEncryptionRule {
-                apply_server_side_encryption_by_default: sse_by_default,
-                bucket_key_enabled,
-            });
-        });
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketEncryptionOutput {
-            server_side_encryption_configuration: if rules.is_empty() {
-                None
-            } else {
-                Some(ServerSideEncryptionConfiguration { rules })
-            },
+            rules: extract_encryption_rules(body_text),
         })
     }
+}
+
+/// ServerSideEncryptionConfiguration から Rule を抽出する
+///
+/// Rule 内に ApplyServerSideEncryptionByDefault がネストされているため、
+/// for_each_element (直接の子要素のみ) では対応できない。EventReader で直接パースする。
+fn extract_encryption_rules(text: &str) -> Vec<ServerSideEncryptionRule> {
+    use xml::reader::{EventReader, XmlEvent};
+
+    let reader = EventReader::from_str(text);
+    let mut rules = Vec::new();
+    let mut inside_rule = false;
+    let mut inside_default = false;
+    let mut current_tag: Option<String> = None;
+    let mut current_text = String::new();
+
+    let mut sse_algorithm: Option<String> = None;
+    let mut kms_master_key_id: Option<String> = None;
+    let mut bucket_key_enabled: Option<bool> = None;
+
+    for event in reader {
+        match event {
+            Ok(XmlEvent::StartElement { name, .. }) if name.local_name == "Rule" => {
+                inside_rule = true;
+                sse_algorithm = None;
+                kms_master_key_id = None;
+                bucket_key_enabled = None;
+            }
+            Ok(XmlEvent::StartElement { name, .. })
+                if inside_rule && name.local_name == "ApplyServerSideEncryptionByDefault" =>
+            {
+                inside_default = true;
+            }
+            Ok(XmlEvent::StartElement { name, .. }) if inside_rule => {
+                current_tag = Some(name.local_name.clone());
+                current_text.clear();
+            }
+            Ok(XmlEvent::Characters(s)) if inside_rule && current_tag.is_some() => {
+                current_text.push_str(&s);
+            }
+            Ok(XmlEvent::EndElement { name }) if inside_rule => {
+                if name.local_name == "Rule" {
+                    let default = sse_algorithm
+                        .take()
+                        .map(|algo| ServerSideEncryptionByDefault {
+                            sse_algorithm: algo,
+                            kms_master_key_id: kms_master_key_id.take(),
+                        });
+                    rules.push(ServerSideEncryptionRule {
+                        apply_server_side_encryption_by_default: default,
+                        bucket_key_enabled: bucket_key_enabled.take(),
+                    });
+                    inside_rule = false;
+                    inside_default = false;
+                } else if name.local_name == "ApplyServerSideEncryptionByDefault" {
+                    inside_default = false;
+                } else if let Some(ref tag) = current_tag {
+                    if name.local_name == *tag {
+                        match tag.as_str() {
+                            "SSEAlgorithm" if inside_default => {
+                                sse_algorithm = Some(current_text.clone());
+                            }
+                            "KMSMasterKeyID" if inside_default => {
+                                kms_master_key_id = Some(current_text.clone());
+                            }
+                            "BucketKeyEnabled" => {
+                                bucket_key_enabled = Some(current_text == "true");
+                            }
+                            _ => {}
+                        }
+                    }
+                    current_tag = None;
+                }
+            }
+            Err(_) => return rules,
+            _ => {}
+        }
+    }
+
+    rules
 }

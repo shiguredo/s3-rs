@@ -517,6 +517,363 @@ pub struct PutBucketCorsOutput {}
 #[derive(Debug)]
 pub struct DeleteBucketCorsOutput {}
 
+/// Object Lock のリーガルホールド状態
+#[derive(Debug, Clone)]
+pub struct ObjectLockLegalHold {
+    /// "ON" または "OFF"
+    pub status: String,
+}
+
+/// Object Lock のリテンション
+#[derive(Debug, Clone)]
+pub struct ObjectLockRetention {
+    /// "GOVERNANCE" または "COMPLIANCE"
+    pub mode: String,
+    /// 保持期限 (ISO 8601 形式)
+    pub retain_until_date: String,
+}
+
+/// Object Lock のデフォルトリテンション
+#[derive(Debug, Clone)]
+pub struct DefaultRetention {
+    /// "GOVERNANCE" または "COMPLIANCE"
+    pub mode: Option<String>,
+    /// 保持日数
+    pub days: Option<i32>,
+    /// 保持年数
+    pub years: Option<i32>,
+}
+
+/// Object Lock ルール
+#[derive(Debug, Clone)]
+pub struct ObjectLockRule {
+    pub default_retention: Option<DefaultRetention>,
+}
+
+/// Object Lock 設定
+#[derive(Debug, Clone)]
+pub struct ObjectLockConfiguration {
+    /// "Enabled"
+    pub object_lock_enabled: Option<String>,
+    pub rule: Option<ObjectLockRule>,
+}
+
+/// GetObjectLegalHold の結果
+#[derive(Debug)]
+pub struct GetObjectLegalHoldOutput {
+    pub legal_hold: Option<ObjectLockLegalHold>,
+}
+
+/// PutObjectLegalHold の結果
+#[derive(Debug)]
+pub struct PutObjectLegalHoldOutput {}
+
+/// GetObjectRetention の結果
+#[derive(Debug)]
+pub struct GetObjectRetentionOutput {
+    pub retention: Option<ObjectLockRetention>,
+}
+
+/// PutObjectRetention の結果
+#[derive(Debug)]
+pub struct PutObjectRetentionOutput {}
+
+/// GetObjectLockConfiguration の結果
+#[derive(Debug)]
+pub struct GetObjectLockConfigurationOutput {
+    pub object_lock_configuration: Option<ObjectLockConfiguration>,
+}
+
+/// PutObjectLockConfiguration の結果
+#[derive(Debug)]
+pub struct PutObjectLockConfigurationOutput {}
+
+/// Object Ownership ルール
+#[derive(Debug, Clone)]
+pub struct OwnershipControlsRule {
+    /// "BucketOwnerEnforced", "BucketOwnerPreferred", "ObjectWriter"
+    pub object_ownership: String,
+}
+
+/// GetBucketOwnershipControls の結果
+#[derive(Debug)]
+pub struct GetBucketOwnershipControlsOutput {
+    pub rules: Vec<OwnershipControlsRule>,
+}
+
+/// PutBucketOwnershipControls の結果
+#[derive(Debug)]
+pub struct PutBucketOwnershipControlsOutput {}
+
+/// DeleteBucketOwnershipControls の結果
+#[derive(Debug)]
+pub struct DeleteBucketOwnershipControlsOutput {}
+
+/// インデックスドキュメント
+#[derive(Debug, Clone)]
+pub struct IndexDocument {
+    pub suffix: String,
+}
+
+/// エラードキュメント
+#[derive(Debug, Clone)]
+pub struct ErrorDocument {
+    pub key: String,
+}
+
+/// 全リクエストのリダイレクト先
+#[derive(Debug, Clone)]
+pub struct RedirectAllRequestsTo {
+    pub host_name: String,
+    pub protocol: Option<String>,
+}
+
+/// ルーティングルールの条件
+#[derive(Debug, Clone)]
+pub struct RoutingRuleCondition {
+    pub http_error_code_returned_equals: Option<String>,
+    pub key_prefix_equals: Option<String>,
+}
+
+/// ルーティングルールのリダイレクト先
+#[derive(Debug, Clone)]
+pub struct RoutingRuleRedirect {
+    pub host_name: Option<String>,
+    pub http_redirect_code: Option<String>,
+    pub protocol: Option<String>,
+    pub replace_key_prefix_with: Option<String>,
+    pub replace_key_with: Option<String>,
+}
+
+/// ルーティングルール
+#[derive(Debug, Clone)]
+pub struct RoutingRule {
+    pub condition: Option<RoutingRuleCondition>,
+    pub redirect: Option<RoutingRuleRedirect>,
+}
+
+/// GetBucketWebsite の結果
+#[derive(Debug)]
+pub struct GetBucketWebsiteOutput {
+    pub index_document: Option<IndexDocument>,
+    pub error_document: Option<ErrorDocument>,
+    pub redirect_all_requests_to: Option<RedirectAllRequestsTo>,
+    pub routing_rules: Vec<RoutingRule>,
+}
+
+/// PutBucketWebsite の結果
+#[derive(Debug)]
+pub struct PutBucketWebsiteOutput {}
+
+/// DeleteBucketWebsite の結果
+#[derive(Debug)]
+pub struct DeleteBucketWebsiteOutput {}
+
+/// 通知設定フィルタルール
+#[derive(Debug, Clone)]
+pub struct FilterRule {
+    /// フィルタ名 ("prefix" または "suffix")
+    pub name: String,
+    /// フィルタ値
+    pub value: String,
+}
+
+/// S3 キーフィルタ
+#[derive(Debug, Clone)]
+pub struct S3KeyFilter {
+    pub filter_rules: Vec<FilterRule>,
+}
+
+/// 通知設定フィルタ
+#[derive(Debug, Clone)]
+pub struct NotificationConfigurationFilter {
+    pub key: Option<S3KeyFilter>,
+}
+
+/// SNS トピック通知設定
+#[derive(Debug, Clone)]
+pub struct TopicConfiguration {
+    pub id: Option<String>,
+    pub topic_arn: String,
+    pub events: Vec<String>,
+    pub filter: Option<NotificationConfigurationFilter>,
+}
+
+/// SQS キュー通知設定
+#[derive(Debug, Clone)]
+pub struct QueueConfiguration {
+    pub id: Option<String>,
+    pub queue_arn: String,
+    pub events: Vec<String>,
+    pub filter: Option<NotificationConfigurationFilter>,
+}
+
+/// Lambda 関数通知設定
+#[derive(Debug, Clone)]
+pub struct LambdaFunctionConfiguration {
+    pub id: Option<String>,
+    pub lambda_function_arn: String,
+    pub events: Vec<String>,
+    pub filter: Option<NotificationConfigurationFilter>,
+}
+
+/// EventBridge 通知設定
+#[derive(Debug, Clone)]
+pub struct EventBridgeConfiguration {}
+
+/// GetBucketNotificationConfiguration の結果
+#[derive(Debug)]
+pub struct GetBucketNotificationConfigurationOutput {
+    pub topic_configurations: Vec<TopicConfiguration>,
+    pub queue_configurations: Vec<QueueConfiguration>,
+    pub lambda_function_configurations: Vec<LambdaFunctionConfiguration>,
+    pub event_bridge_configuration: Option<EventBridgeConfiguration>,
+}
+
+/// PutBucketNotificationConfiguration の結果
+#[derive(Debug)]
+pub struct PutBucketNotificationConfigurationOutput {}
+
+/// ライフサイクルルール
+#[derive(Debug, Clone)]
+pub struct LifecycleRule {
+    /// ルール ID
+    pub id: Option<String>,
+    /// フィルタ条件
+    pub filter: Option<LifecycleRuleFilter>,
+    /// ルールの有効/無効 ("Enabled" / "Disabled")
+    pub status: String,
+    /// オブジェクトの有効期限
+    pub expiration: Option<LifecycleExpiration>,
+    /// ストレージクラス遷移 (複数指定可能)
+    pub transitions: Vec<LifecycleTransition>,
+    /// 非現行バージョンの有効期限
+    pub noncurrent_version_expiration: Option<NoncurrentVersionExpiration>,
+    /// 非現行バージョンのストレージクラス遷移 (複数指定可能)
+    pub noncurrent_version_transitions: Vec<NoncurrentVersionTransition>,
+    /// 不完全なマルチパートアップロードの自動中止
+    pub abort_incomplete_multipart_upload: Option<AbortIncompleteMultipartUpload>,
+}
+
+/// ライフサイクルルールのフィルタ
+///
+/// 単一条件の場合は `prefix`, `tag`, `object_size_greater_than`, `object_size_less_than` のいずれかを設定する。
+/// 複数条件を AND で組み合わせる場合は `and` を設定する。
+#[derive(Debug, Clone)]
+pub struct LifecycleRuleFilter {
+    pub prefix: Option<String>,
+    pub tag: Option<Tag>,
+    pub object_size_greater_than: Option<i64>,
+    pub object_size_less_than: Option<i64>,
+    pub and: Option<LifecycleRuleAndOperator>,
+}
+
+/// ライフサイクルルールの AND 演算子
+#[derive(Debug, Clone)]
+pub struct LifecycleRuleAndOperator {
+    pub prefix: Option<String>,
+    pub tags: Vec<Tag>,
+    pub object_size_greater_than: Option<i64>,
+    pub object_size_less_than: Option<i64>,
+}
+
+/// オブジェクトの有効期限
+#[derive(Debug, Clone)]
+pub struct LifecycleExpiration {
+    /// 作成からの日数
+    pub days: Option<i32>,
+    /// 有効期限日 (ISO 8601 形式)
+    pub date: Option<String>,
+    /// 期限切れ削除マーカーの自動削除
+    pub expired_object_delete_marker: Option<bool>,
+}
+
+/// ストレージクラス遷移
+#[derive(Debug, Clone)]
+pub struct LifecycleTransition {
+    /// 作成からの日数
+    pub days: Option<i32>,
+    /// 遷移日 (ISO 8601 形式)
+    pub date: Option<String>,
+    /// 遷移先ストレージクラス
+    pub storage_class: Option<String>,
+}
+
+/// 非現行バージョンの有効期限
+#[derive(Debug, Clone)]
+pub struct NoncurrentVersionExpiration {
+    /// 非現行になってからの日数
+    pub noncurrent_days: Option<i32>,
+    /// 保持する非現行バージョン数
+    pub newer_noncurrent_versions: Option<i32>,
+}
+
+/// 非現行バージョンのストレージクラス遷移
+#[derive(Debug, Clone)]
+pub struct NoncurrentVersionTransition {
+    /// 非現行になってからの日数
+    pub noncurrent_days: Option<i32>,
+    /// 遷移先ストレージクラス
+    pub storage_class: Option<String>,
+    /// 保持する非現行バージョン数
+    pub newer_noncurrent_versions: Option<i32>,
+}
+
+/// 不完全なマルチパートアップロードの自動中止
+#[derive(Debug, Clone)]
+pub struct AbortIncompleteMultipartUpload {
+    /// 開始からの日数
+    pub days_after_initiation: Option<i32>,
+}
+
+/// GetBucketLifecycleConfiguration の結果
+#[derive(Debug)]
+pub struct GetBucketLifecycleConfigurationOutput {
+    pub rules: Vec<LifecycleRule>,
+    /// 遷移対象のデフォルト最小オブジェクトサイズ
+    pub transition_default_minimum_object_size: Option<String>,
+}
+
+/// PutBucketLifecycleConfiguration の結果
+#[derive(Debug)]
+pub struct PutBucketLifecycleConfigurationOutput {}
+
+/// DeleteBucketLifecycle の結果
+#[derive(Debug)]
+pub struct DeleteBucketLifecycleOutput {}
+
+/// サーバーサイド暗号化のデフォルト設定
+#[derive(Debug, Clone)]
+pub struct ServerSideEncryptionByDefault {
+    /// SSE アルゴリズム ("AES256", "aws:kms", "aws:kms:dsse")
+    pub sse_algorithm: String,
+    /// KMS キー ID (SSE-KMS 使用時)
+    pub kms_master_key_id: Option<String>,
+}
+
+/// サーバーサイド暗号化ルール
+#[derive(Debug, Clone)]
+pub struct ServerSideEncryptionRule {
+    /// デフォルトの暗号化設定
+    pub apply_server_side_encryption_by_default: Option<ServerSideEncryptionByDefault>,
+    /// S3 Bucket Key の有効化
+    pub bucket_key_enabled: Option<bool>,
+}
+
+/// GetBucketEncryption の結果
+#[derive(Debug)]
+pub struct GetBucketEncryptionOutput {
+    pub rules: Vec<ServerSideEncryptionRule>,
+}
+
+/// PutBucketEncryption の結果
+#[derive(Debug)]
+pub struct PutBucketEncryptionOutput {}
+
+/// DeleteBucketEncryption の結果
+#[derive(Debug)]
+pub struct DeleteBucketEncryptionOutput {}
+
 /// GetObjectTagging の結果
 #[derive(Debug)]
 pub struct GetObjectTaggingOutput {

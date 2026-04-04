@@ -11,6 +11,18 @@
 
 ## develop
 
+- [ADD] GetObjectLegalHold / PutObjectLegalHold / GetObjectRetention / PutObjectRetention / GetObjectLockConfiguration / PutObjectLockConfiguration API を追加する
+  - @voluntas
+- [ADD] GetBucketOwnershipControls / PutBucketOwnershipControls / DeleteBucketOwnershipControls API を追加する
+  - @voluntas
+- [ADD] GetBucketWebsite / PutBucketWebsite / DeleteBucketWebsite API を追加する
+  - @voluntas
+- [ADD] GetBucketNotificationConfiguration / PutBucketNotificationConfiguration API を追加する
+  - @voluntas
+- [ADD] GetBucketLifecycleConfiguration / PutBucketLifecycleConfiguration / DeleteBucketLifecycle API を追加する
+  - @voluntas
+- [ADD] GetBucketEncryption / PutBucketEncryption / DeleteBucketEncryption API を追加する
+  - @voluntas
 - [ADD] GetBucketCors / PutBucketCors / DeleteBucketCors API を追加する
   - @voluntas
 - [ADD] ListObjectVersions API を追加する

@@ -1,21 +1,21 @@
-//! DeleteBucketEncryption API
+//! DeleteBucketWebsite API
 //!
-//! バケットのデフォルト暗号化設定を削除する。
+//! バケットのウェブサイト設定を削除する。
 //!
-//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketEncryption.html>
+//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketWebsite.html>
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::DeleteBucketEncryptionOutput;
+use crate::types::DeleteBucketWebsiteOutput;
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
-pub struct DeleteBucketEncryptionFluentBuilder<'a> {
+pub struct DeleteBucketWebsiteFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
 }
 
-impl<'a> DeleteBucketEncryptionFluentBuilder<'a> {
+impl<'a> DeleteBucketWebsiteFluentBuilder<'a> {
     pub(crate) fn new(client: &'a S3Client) -> Self {
         Self {
             client,
@@ -37,16 +37,16 @@ impl<'a> DeleteBucketEncryptionFluentBuilder<'a> {
             "",
             &[],
             b"",
-            Some(&[("encryption", "")]),
+            Some(&[("website", "")]),
         ))
     }
 
     pub fn parse_response(
         response: &super::S3Response,
-    ) -> Result<DeleteBucketEncryptionOutput, Error> {
+    ) -> Result<DeleteBucketWebsiteOutput, Error> {
         if !response.is_success() {
             return Err(parse_error_response(response));
         }
-        Ok(DeleteBucketEncryptionOutput {})
+        Ok(DeleteBucketWebsiteOutput {})
     }
 }

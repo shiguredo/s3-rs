@@ -2,17 +2,24 @@ use crate::api::{
     AbortMultipartUploadFluentBuilder, CompleteMultipartUploadFluentBuilder,
     CopyObjectFluentBuilder, CreateBucketFluentBuilder, CreateMultipartUploadFluentBuilder,
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder, DeleteBucketFluentBuilder,
-    DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
-    DeleteBucketTaggingFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectTaggingFluentBuilder,
+    DeleteBucketLifecycleFluentBuilder, DeleteBucketOwnershipControlsFluentBuilder,
+    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
+    DeleteBucketWebsiteFluentBuilder, DeleteObjectFluentBuilder, DeleteObjectTaggingFluentBuilder,
     DeleteObjectsFluentBuilder, DeletePublicAccessBlockFluentBuilder, GetBucketCorsFluentBuilder,
     GetBucketEncryptionFluentBuilder, GetBucketLifecycleConfigurationFluentBuilder,
+    GetBucketNotificationConfigurationFluentBuilder, GetBucketOwnershipControlsFluentBuilder,
     GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
-    GetObjectFluentBuilder, GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder,
-    HeadBucketFluentBuilder, HeadObjectFluentBuilder, ListBucketsFluentBuilder,
-    ListMultipartUploadsFluentBuilder, ListObjectVersionsFluentBuilder, ListObjectsV2FluentBuilder,
-    ListPartsFluentBuilder, PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
-    PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
+    GetBucketWebsiteFluentBuilder, GetObjectFluentBuilder, GetObjectLegalHoldFluentBuilder,
+    GetObjectLockConfigurationFluentBuilder, GetObjectRetentionFluentBuilder,
+    GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
+    HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
+    ListObjectVersionsFluentBuilder, ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
+    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
+    PutBucketLifecycleConfigurationFluentBuilder, PutBucketNotificationConfigurationFluentBuilder,
+    PutBucketOwnershipControlsFluentBuilder, PutBucketPolicyFluentBuilder,
+    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutBucketWebsiteFluentBuilder,
+    PutObjectFluentBuilder, PutObjectLegalHoldFluentBuilder,
+    PutObjectLockConfigurationFluentBuilder, PutObjectRetentionFluentBuilder,
     PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartCopyFluentBuilder,
     UploadPartFluentBuilder,
 };
@@ -243,30 +250,6 @@ impl S3Client {
         DeleteBucketTaggingFluentBuilder::new(self)
     }
 
-    pub fn get_bucket_cors(&self) -> GetBucketCorsFluentBuilder<'_> {
-        GetBucketCorsFluentBuilder::new(self)
-    }
-
-    pub fn put_bucket_cors(&self) -> PutBucketCorsFluentBuilder<'_> {
-        PutBucketCorsFluentBuilder::new(self)
-    }
-
-    pub fn delete_bucket_cors(&self) -> DeleteBucketCorsFluentBuilder<'_> {
-        DeleteBucketCorsFluentBuilder::new(self)
-    }
-
-    pub fn get_bucket_encryption(&self) -> GetBucketEncryptionFluentBuilder<'_> {
-        GetBucketEncryptionFluentBuilder::new(self)
-    }
-
-    pub fn put_bucket_encryption(&self) -> PutBucketEncryptionFluentBuilder<'_> {
-        PutBucketEncryptionFluentBuilder::new(self)
-    }
-
-    pub fn delete_bucket_encryption(&self) -> DeleteBucketEncryptionFluentBuilder<'_> {
-        DeleteBucketEncryptionFluentBuilder::new(self)
-    }
-
     pub fn get_object_tagging(&self) -> GetObjectTaggingFluentBuilder<'_> {
         GetObjectTaggingFluentBuilder::new(self)
     }
@@ -315,6 +298,18 @@ impl S3Client {
         DeleteBucketCorsFluentBuilder::new(self)
     }
 
+    pub fn get_bucket_encryption(&self) -> GetBucketEncryptionFluentBuilder<'_> {
+        GetBucketEncryptionFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_encryption(&self) -> PutBucketEncryptionFluentBuilder<'_> {
+        PutBucketEncryptionFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_encryption(&self) -> DeleteBucketEncryptionFluentBuilder<'_> {
+        DeleteBucketEncryptionFluentBuilder::new(self)
+    }
+
     pub fn get_bucket_lifecycle_configuration(
         &self,
     ) -> GetBucketLifecycleConfigurationFluentBuilder<'_> {
@@ -329,5 +324,67 @@ impl S3Client {
 
     pub fn delete_bucket_lifecycle(&self) -> DeleteBucketLifecycleFluentBuilder<'_> {
         DeleteBucketLifecycleFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_notification_configuration(
+        &self,
+    ) -> GetBucketNotificationConfigurationFluentBuilder<'_> {
+        GetBucketNotificationConfigurationFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_notification_configuration(
+        &self,
+    ) -> PutBucketNotificationConfigurationFluentBuilder<'_> {
+        PutBucketNotificationConfigurationFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_website(&self) -> GetBucketWebsiteFluentBuilder<'_> {
+        GetBucketWebsiteFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_website(&self) -> PutBucketWebsiteFluentBuilder<'_> {
+        PutBucketWebsiteFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_website(&self) -> DeleteBucketWebsiteFluentBuilder<'_> {
+        DeleteBucketWebsiteFluentBuilder::new(self)
+    }
+
+    pub fn get_bucket_ownership_controls(&self) -> GetBucketOwnershipControlsFluentBuilder<'_> {
+        GetBucketOwnershipControlsFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_ownership_controls(&self) -> PutBucketOwnershipControlsFluentBuilder<'_> {
+        PutBucketOwnershipControlsFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_ownership_controls(
+        &self,
+    ) -> DeleteBucketOwnershipControlsFluentBuilder<'_> {
+        DeleteBucketOwnershipControlsFluentBuilder::new(self)
+    }
+
+    pub fn get_object_legal_hold(&self) -> GetObjectLegalHoldFluentBuilder<'_> {
+        GetObjectLegalHoldFluentBuilder::new(self)
+    }
+
+    pub fn put_object_legal_hold(&self) -> PutObjectLegalHoldFluentBuilder<'_> {
+        PutObjectLegalHoldFluentBuilder::new(self)
+    }
+
+    pub fn get_object_retention(&self) -> GetObjectRetentionFluentBuilder<'_> {
+        GetObjectRetentionFluentBuilder::new(self)
+    }
+
+    pub fn put_object_retention(&self) -> PutObjectRetentionFluentBuilder<'_> {
+        PutObjectRetentionFluentBuilder::new(self)
+    }
+
+    pub fn get_object_lock_configuration(&self) -> GetObjectLockConfigurationFluentBuilder<'_> {
+        GetObjectLockConfigurationFluentBuilder::new(self)
+    }
+
+    pub fn put_object_lock_configuration(&self) -> PutObjectLockConfigurationFluentBuilder<'_> {
+        PutObjectLockConfigurationFluentBuilder::new(self)
     }
 }

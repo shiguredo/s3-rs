@@ -7,9 +7,9 @@
 use crate::client::S3Client;
 use crate::error::Error;
 use crate::types::{
-    AbortIncompleteMultipartUpload, ExpirationStatus, GetBucketLifecycleConfigurationOutput,
-    LifecycleExpiration, LifecycleRule, LifecycleRuleAndOperator, LifecycleRuleFilter,
-    NoncurrentVersionExpiration, NoncurrentVersionTransition, Tag, Transition,
+    AbortIncompleteMultipartUpload, GetBucketLifecycleConfigurationOutput, LifecycleExpiration,
+    LifecycleRule, LifecycleRuleAndOperator, LifecycleRuleFilter, LifecycleTransition,
+    NoncurrentVersionExpiration, NoncurrentVersionTransition, Tag,
 };
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
@@ -52,240 +52,411 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
+        let transition_default_minimum_object_size = response
+            .get_header("x-amz-transition-default-minimum-object-size")
+            .map(String::from);
 
         Ok(GetBucketLifecycleConfigurationOutput {
             rules: extract_lifecycle_rules(body_text),
+            transition_default_minimum_object_size,
         })
     }
 }
 
-/// LifecycleConfiguration XML からルールを抽出する
+/// LifecycleConfiguration から Rule をパースする
 ///
-/// S3 のレスポンスは以下の構造:
-/// ```xml
-/// <LifecycleConfiguration>
-///   <Rule>
-///     <ID>rule-id</ID>
-///     <Status>Enabled</Status>
-///     <Filter><Prefix>documents/</Prefix></Filter>
-///     <Expiration><Days>365</Days></Expiration>
-///     ...
-///   </Rule>
-/// </LifecycleConfiguration>
-/// ```
-///
-/// `for_each_element` は直接の子要素のみを取得するため、
-/// ネストされた要素 (Filter, Expiration 等) は個別にパースする必要がある。
-/// Rule 要素全体の XML を切り出してサブパースを行う。
-fn extract_lifecycle_rules(xml_str: &str) -> Vec<LifecycleRule> {
+/// Rule 内にネストされた要素 (Filter, Expiration, Transition 等) があるため
+/// EventReader で直接パースする。
+fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
+    use xml::reader::{EventReader, XmlEvent};
+
+    let reader = EventReader::from_str(text);
     let mut rules = Vec::new();
 
-    // Rule 要素の位置を特定して個別にパースする
-    let mut search_from = 0;
-    while let Some(start) = xml_str[search_from..].find("<Rule>") {
-        let abs_start = search_from + start;
-        if let Some(end_offset) = xml_str[abs_start..].find("</Rule>") {
-            let rule_xml = &xml_str[abs_start..abs_start + end_offset + "</Rule>".len()];
-            if let Some(rule) = parse_rule(rule_xml) {
-                rules.push(rule);
+    // パーサー状態
+    #[derive(PartialEq)]
+    enum Context {
+        None,
+        Rule,
+        Filter,
+        FilterAnd,
+        FilterTag,
+        FilterAndTag,
+        Expiration,
+        Transition,
+        NoncurrentVersionExpiration,
+        NoncurrentVersionTransition,
+        AbortIncompleteMultipartUpload,
+    }
+
+    let mut ctx = Context::None;
+    let mut current_tag: Option<String> = None;
+    let mut current_text = String::new();
+
+    // Rule フィールド
+    let mut id: Option<String> = None;
+    let mut status = String::new();
+    let mut filter: Option<LifecycleRuleFilter> = None;
+    let mut expiration: Option<LifecycleExpiration> = None;
+    let mut transitions: Vec<LifecycleTransition> = Vec::new();
+    let mut nv_expiration: Option<NoncurrentVersionExpiration> = None;
+    let mut nv_transitions: Vec<NoncurrentVersionTransition> = Vec::new();
+    let mut abort_incomplete: Option<AbortIncompleteMultipartUpload> = None;
+
+    // Filter フィールド
+    let mut filter_prefix: Option<String> = None;
+    let mut filter_tag: Option<Tag> = None;
+    let mut filter_size_gt: Option<i64> = None;
+    let mut filter_size_lt: Option<i64> = None;
+    let mut filter_and: Option<LifecycleRuleAndOperator> = None;
+
+    // FilterAnd フィールド
+    let mut and_prefix: Option<String> = None;
+    let mut and_tags: Vec<Tag> = Vec::new();
+    let mut and_size_gt: Option<i64> = None;
+    let mut and_size_lt: Option<i64> = None;
+
+    // Tag フィールド
+    let mut tag_key = String::new();
+    let mut tag_value = String::new();
+
+    // Expiration フィールド
+    let mut exp_days: Option<i32> = None;
+    let mut exp_date: Option<String> = None;
+    let mut exp_delete_marker: Option<bool> = None;
+
+    // Transition フィールド
+    let mut trans_days: Option<i32> = None;
+    let mut trans_date: Option<String> = None;
+    let mut trans_storage_class: Option<String> = None;
+
+    // NoncurrentVersionExpiration フィールド
+    let mut nv_exp_days: Option<i32> = None;
+    let mut nv_exp_newer: Option<i32> = None;
+
+    // NoncurrentVersionTransition フィールド
+    let mut nv_trans_days: Option<i32> = None;
+    let mut nv_trans_storage_class: Option<String> = None;
+    let mut nv_trans_newer: Option<i32> = None;
+
+    // AbortIncompleteMultipartUpload フィールド
+    let mut abort_days: Option<i32> = None;
+
+    for event in reader {
+        match event {
+            Ok(XmlEvent::StartElement { name, .. }) => {
+                let tag_name = &name.local_name;
+                match ctx {
+                    Context::None if tag_name == "Rule" => {
+                        ctx = Context::Rule;
+                        id = None;
+                        status.clear();
+                        filter = None;
+                        expiration = None;
+                        transitions.clear();
+                        nv_expiration = None;
+                        nv_transitions.clear();
+                        abort_incomplete = None;
+                    }
+                    Context::Rule => match tag_name.as_str() {
+                        "Filter" => {
+                            ctx = Context::Filter;
+                            filter_prefix = None;
+                            filter_tag = None;
+                            filter_size_gt = None;
+                            filter_size_lt = None;
+                            filter_and = None;
+                        }
+                        "Expiration" => {
+                            ctx = Context::Expiration;
+                            exp_days = None;
+                            exp_date = None;
+                            exp_delete_marker = None;
+                        }
+                        "Transition" => {
+                            ctx = Context::Transition;
+                            trans_days = None;
+                            trans_date = None;
+                            trans_storage_class = None;
+                        }
+                        "NoncurrentVersionExpiration" => {
+                            ctx = Context::NoncurrentVersionExpiration;
+                            nv_exp_days = None;
+                            nv_exp_newer = None;
+                        }
+                        "NoncurrentVersionTransition" => {
+                            ctx = Context::NoncurrentVersionTransition;
+                            nv_trans_days = None;
+                            nv_trans_storage_class = None;
+                            nv_trans_newer = None;
+                        }
+                        "AbortIncompleteMultipartUpload" => {
+                            ctx = Context::AbortIncompleteMultipartUpload;
+                            abort_days = None;
+                        }
+                        _ => {
+                            current_tag = Some(tag_name.clone());
+                            current_text.clear();
+                        }
+                    },
+                    Context::Filter if tag_name == "And" => {
+                        ctx = Context::FilterAnd;
+                        and_prefix = None;
+                        and_tags.clear();
+                        and_size_gt = None;
+                        and_size_lt = None;
+                    }
+                    Context::Filter if tag_name == "Tag" => {
+                        ctx = Context::FilterTag;
+                        tag_key.clear();
+                        tag_value.clear();
+                    }
+                    Context::FilterAnd if tag_name == "Tag" => {
+                        ctx = Context::FilterAndTag;
+                        tag_key.clear();
+                        tag_value.clear();
+                    }
+                    _ => {
+                        current_tag = Some(tag_name.clone());
+                        current_text.clear();
+                    }
+                }
             }
-            search_from = abs_start + end_offset + "</Rule>".len();
-        } else {
-            break;
+            Ok(XmlEvent::Characters(s)) if current_tag.is_some() => {
+                current_text.push_str(&s);
+            }
+            Ok(XmlEvent::EndElement { name }) => {
+                let tag_name = &name.local_name;
+                match ctx {
+                    Context::Rule if tag_name == "Rule" => {
+                        rules.push(LifecycleRule {
+                            id: id.take(),
+                            filter: filter.take(),
+                            status: status.clone(),
+                            expiration: expiration.take(),
+                            transitions: transitions.clone(),
+                            noncurrent_version_expiration: nv_expiration.take(),
+                            noncurrent_version_transitions: nv_transitions.clone(),
+                            abort_incomplete_multipart_upload: abort_incomplete.take(),
+                        });
+                        ctx = Context::None;
+                    }
+                    Context::Rule => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "ID" => id = Some(current_text.clone()),
+                                "Status" => status = current_text.clone(),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::Filter if tag_name == "Filter" => {
+                        filter = Some(LifecycleRuleFilter {
+                            prefix: filter_prefix.take(),
+                            tag: filter_tag.take(),
+                            object_size_greater_than: filter_size_gt.take(),
+                            object_size_less_than: filter_size_lt.take(),
+                            and: filter_and.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::Filter => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Prefix" => filter_prefix = Some(current_text.clone()),
+                                "ObjectSizeGreaterThan" => {
+                                    filter_size_gt = current_text.parse().ok()
+                                }
+                                "ObjectSizeLessThan" => filter_size_lt = current_text.parse().ok(),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::FilterTag if tag_name == "Tag" => {
+                        filter_tag = Some(Tag {
+                            key: tag_key.clone(),
+                            value: tag_value.clone(),
+                        });
+                        ctx = Context::Filter;
+                    }
+                    Context::FilterTag => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Key" => tag_key = current_text.clone(),
+                                "Value" => tag_value = current_text.clone(),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::FilterAnd if tag_name == "And" => {
+                        filter_and = Some(LifecycleRuleAndOperator {
+                            prefix: and_prefix.take(),
+                            tags: and_tags.clone(),
+                            object_size_greater_than: and_size_gt.take(),
+                            object_size_less_than: and_size_lt.take(),
+                        });
+                        ctx = Context::Filter;
+                    }
+                    Context::FilterAnd => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Prefix" => and_prefix = Some(current_text.clone()),
+                                "ObjectSizeGreaterThan" => and_size_gt = current_text.parse().ok(),
+                                "ObjectSizeLessThan" => and_size_lt = current_text.parse().ok(),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::FilterAndTag if tag_name == "Tag" => {
+                        and_tags.push(Tag {
+                            key: tag_key.clone(),
+                            value: tag_value.clone(),
+                        });
+                        ctx = Context::FilterAnd;
+                    }
+                    Context::FilterAndTag => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Key" => tag_key = current_text.clone(),
+                                "Value" => tag_value = current_text.clone(),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::Expiration if tag_name == "Expiration" => {
+                        expiration = Some(LifecycleExpiration {
+                            days: exp_days.take(),
+                            date: exp_date.take(),
+                            expired_object_delete_marker: exp_delete_marker.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::Expiration => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Days" => exp_days = current_text.parse().ok(),
+                                "Date" => exp_date = Some(current_text.clone()),
+                                "ExpiredObjectDeleteMarker" => {
+                                    exp_delete_marker = Some(current_text == "true")
+                                }
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::Transition if tag_name == "Transition" => {
+                        transitions.push(LifecycleTransition {
+                            days: trans_days.take(),
+                            date: trans_date.take(),
+                            storage_class: trans_storage_class.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::Transition => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "Days" => trans_days = current_text.parse().ok(),
+                                "Date" => trans_date = Some(current_text.clone()),
+                                "StorageClass" => trans_storage_class = Some(current_text.clone()),
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::NoncurrentVersionExpiration
+                        if tag_name == "NoncurrentVersionExpiration" =>
+                    {
+                        nv_expiration = Some(NoncurrentVersionExpiration {
+                            noncurrent_days: nv_exp_days.take(),
+                            newer_noncurrent_versions: nv_exp_newer.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::NoncurrentVersionExpiration => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "NoncurrentDays" => nv_exp_days = current_text.parse().ok(),
+                                "NewerNoncurrentVersions" => {
+                                    nv_exp_newer = current_text.parse().ok()
+                                }
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::NoncurrentVersionTransition
+                        if tag_name == "NoncurrentVersionTransition" =>
+                    {
+                        nv_transitions.push(NoncurrentVersionTransition {
+                            noncurrent_days: nv_trans_days.take(),
+                            storage_class: nv_trans_storage_class.take(),
+                            newer_noncurrent_versions: nv_trans_newer.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::NoncurrentVersionTransition => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                        {
+                            match tag.as_str() {
+                                "NoncurrentDays" => nv_trans_days = current_text.parse().ok(),
+                                "StorageClass" => {
+                                    nv_trans_storage_class = Some(current_text.clone())
+                                }
+                                "NewerNoncurrentVersions" => {
+                                    nv_trans_newer = current_text.parse().ok()
+                                }
+                                _ => {}
+                            }
+                        }
+                        current_tag = None;
+                    }
+                    Context::AbortIncompleteMultipartUpload
+                        if tag_name == "AbortIncompleteMultipartUpload" =>
+                    {
+                        abort_incomplete = Some(AbortIncompleteMultipartUpload {
+                            days_after_initiation: abort_days.take(),
+                        });
+                        ctx = Context::Rule;
+                    }
+                    Context::AbortIncompleteMultipartUpload => {
+                        if let Some(ref tag) = current_tag
+                            && *tag == *tag_name
+                            && tag == "DaysAfterInitiation"
+                        {
+                            abort_days = current_text.parse().ok();
+                        }
+                        current_tag = None;
+                    }
+                    _ => {}
+                }
+            }
+            Err(_) => return rules,
+            _ => {}
         }
     }
 
     rules
-}
-
-fn parse_rule(rule_xml: &str) -> Option<LifecycleRule> {
-    let id = crate::xml::extract_element(rule_xml, "ID");
-    let status_str = crate::xml::extract_element(rule_xml, "Status")?;
-    let status: ExpirationStatus = status_str.parse().ok()?;
-
-    let filter = parse_filter(rule_xml);
-    let expiration = parse_expiration(rule_xml);
-    let transitions = parse_transitions(rule_xml);
-    let nv_transitions = parse_noncurrent_version_transitions(rule_xml);
-    let nv_expiration = parse_noncurrent_version_expiration(rule_xml);
-    let abort = parse_abort_incomplete_multipart_upload(rule_xml);
-
-    Some(LifecycleRule {
-        id,
-        status,
-        filter,
-        expiration,
-        transitions: if transitions.is_empty() {
-            None
-        } else {
-            Some(transitions)
-        },
-        noncurrent_version_transitions: if nv_transitions.is_empty() {
-            None
-        } else {
-            Some(nv_transitions)
-        },
-        noncurrent_version_expiration: nv_expiration,
-        abort_incomplete_multipart_upload: abort,
-    })
-}
-
-fn parse_filter(rule_xml: &str) -> Option<LifecycleRuleFilter> {
-    let filter_start = rule_xml.find("<Filter>")?;
-    let filter_end = rule_xml.find("</Filter>")?;
-    let filter_xml = &rule_xml[filter_start..filter_end + "</Filter>".len()];
-
-    let mut filter = LifecycleRuleFilter::default();
-
-    // And 要素があるかチェックする
-    if let Some(and_start) = filter_xml.find("<And>")
-        && let Some(and_end) = filter_xml.find("</And>")
-    {
-        let and_xml = &filter_xml[and_start..and_end + "</And>".len()];
-        filter.and = Some(parse_and_operator(and_xml));
-        return Some(filter);
-    }
-
-    filter.prefix = crate::xml::extract_element(filter_xml, "Prefix");
-
-    // Tag 要素のパース
-    if filter_xml.contains("<Tag>") {
-        let tag_key = crate::xml::extract_element(filter_xml, "Key");
-        let tag_value = crate::xml::extract_element(filter_xml, "Value");
-        if let (Some(key), Some(value)) = (tag_key, tag_value) {
-            filter.tag = Some(Tag { key, value });
-        }
-    }
-
-    filter.object_size_greater_than =
-        crate::xml::extract_element(filter_xml, "ObjectSizeGreaterThan")
-            .and_then(|v| v.parse().ok());
-    filter.object_size_less_than =
-        crate::xml::extract_element(filter_xml, "ObjectSizeLessThan").and_then(|v| v.parse().ok());
-
-    Some(filter)
-}
-
-fn parse_and_operator(and_xml: &str) -> LifecycleRuleAndOperator {
-    let mut and = LifecycleRuleAndOperator {
-        prefix: crate::xml::extract_element(and_xml, "Prefix"),
-        ..Default::default()
-    };
-
-    // タグのパース
-    let mut tags = Vec::new();
-    crate::xml::for_each_element(and_xml, "Tag", |elem| {
-        if let (Some(key), Some(value)) = (elem.get("Key"), elem.get("Value")) {
-            tags.push(Tag {
-                key: key.to_string(),
-                value: value.to_string(),
-            });
-        }
-    });
-    if !tags.is_empty() {
-        and.tags = Some(tags);
-    }
-
-    and.object_size_greater_than =
-        crate::xml::extract_element(and_xml, "ObjectSizeGreaterThan").and_then(|v| v.parse().ok());
-    and.object_size_less_than =
-        crate::xml::extract_element(and_xml, "ObjectSizeLessThan").and_then(|v| v.parse().ok());
-
-    and
-}
-
-fn parse_expiration(rule_xml: &str) -> Option<LifecycleExpiration> {
-    let exp_start = rule_xml.find("<Expiration>")?;
-    let exp_end = rule_xml.find("</Expiration>")?;
-    let exp_xml = &rule_xml[exp_start..exp_end + "</Expiration>".len()];
-
-    Some(LifecycleExpiration {
-        date: crate::xml::extract_element(exp_xml, "Date"),
-        days: crate::xml::extract_element(exp_xml, "Days").and_then(|v| v.parse().ok()),
-        expired_object_delete_marker: crate::xml::extract_element(
-            exp_xml,
-            "ExpiredObjectDeleteMarker",
-        )
-        .and_then(|v| v.parse().ok()),
-    })
-}
-
-fn parse_transitions(rule_xml: &str) -> Vec<Transition> {
-    let mut transitions = Vec::new();
-    let mut search_from = 0;
-
-    while let Some(start) = rule_xml[search_from..].find("<Transition>") {
-        let abs_start = search_from + start;
-        if let Some(end_offset) = rule_xml[abs_start..].find("</Transition>") {
-            let t_xml = &rule_xml[abs_start..abs_start + end_offset + "</Transition>".len()];
-            transitions.push(Transition {
-                date: crate::xml::extract_element(t_xml, "Date"),
-                days: crate::xml::extract_element(t_xml, "Days").and_then(|v| v.parse().ok()),
-                storage_class: crate::xml::extract_element(t_xml, "StorageClass"),
-            });
-            search_from = abs_start + end_offset + "</Transition>".len();
-        } else {
-            break;
-        }
-    }
-
-    transitions
-}
-
-fn parse_noncurrent_version_transitions(rule_xml: &str) -> Vec<NoncurrentVersionTransition> {
-    let mut transitions = Vec::new();
-    let mut search_from = 0;
-
-    while let Some(start) = rule_xml[search_from..].find("<NoncurrentVersionTransition>") {
-        let abs_start = search_from + start;
-        let tag_end = "</NoncurrentVersionTransition>";
-        if let Some(end_offset) = rule_xml[abs_start..].find(tag_end) {
-            let t_xml = &rule_xml[abs_start..abs_start + end_offset + tag_end.len()];
-            transitions.push(NoncurrentVersionTransition {
-                noncurrent_days: crate::xml::extract_element(t_xml, "NoncurrentDays")
-                    .and_then(|v| v.parse().ok()),
-                storage_class: crate::xml::extract_element(t_xml, "StorageClass"),
-                newer_noncurrent_versions: crate::xml::extract_element(
-                    t_xml,
-                    "NewerNoncurrentVersions",
-                )
-                .and_then(|v| v.parse().ok()),
-            });
-            search_from = abs_start + end_offset + tag_end.len();
-        } else {
-            break;
-        }
-    }
-
-    transitions
-}
-
-fn parse_noncurrent_version_expiration(rule_xml: &str) -> Option<NoncurrentVersionExpiration> {
-    let tag_start = rule_xml.find("<NoncurrentVersionExpiration>")?;
-    let tag_end = "</NoncurrentVersionExpiration>";
-    let end = rule_xml.find(tag_end)?;
-    let nve_xml = &rule_xml[tag_start..end + tag_end.len()];
-
-    Some(NoncurrentVersionExpiration {
-        noncurrent_days: crate::xml::extract_element(nve_xml, "NoncurrentDays")
-            .and_then(|v| v.parse().ok()),
-        newer_noncurrent_versions: crate::xml::extract_element(nve_xml, "NewerNoncurrentVersions")
-            .and_then(|v| v.parse().ok()),
-    })
-}
-
-fn parse_abort_incomplete_multipart_upload(
-    rule_xml: &str,
-) -> Option<AbortIncompleteMultipartUpload> {
-    let tag_start = rule_xml.find("<AbortIncompleteMultipartUpload>")?;
-    let tag_end = "</AbortIncompleteMultipartUpload>";
-    let end = rule_xml.find(tag_end)?;
-    let abort_xml = &rule_xml[tag_start..end + tag_end.len()];
-
-    Some(AbortIncompleteMultipartUpload {
-        days_after_initiation: crate::xml::extract_element(abort_xml, "DaysAfterInitiation")
-            .and_then(|v| v.parse().ok()),
-    })
 }
