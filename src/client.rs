@@ -303,6 +303,18 @@ impl S3Client {
         DeleteBucketPolicyFluentBuilder::new(self)
     }
 
+    pub fn get_bucket_cors(&self) -> GetBucketCorsFluentBuilder<'_> {
+        GetBucketCorsFluentBuilder::new(self)
+    }
+
+    pub fn put_bucket_cors(&self) -> PutBucketCorsFluentBuilder<'_> {
+        PutBucketCorsFluentBuilder::new(self)
+    }
+
+    pub fn delete_bucket_cors(&self) -> DeleteBucketCorsFluentBuilder<'_> {
+        DeleteBucketCorsFluentBuilder::new(self)
+    }
+
     pub fn get_bucket_lifecycle_configuration(
         &self,
     ) -> GetBucketLifecycleConfigurationFluentBuilder<'_> {

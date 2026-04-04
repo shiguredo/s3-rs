@@ -493,6 +493,30 @@ pub struct PutBucketTaggingOutput {}
 #[derive(Debug)]
 pub struct DeleteBucketTaggingOutput {}
 
+/// CORS ルール
+#[derive(Debug, Clone)]
+pub struct CorsRule {
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub allowed_headers: Vec<String>,
+    pub max_age_seconds: Option<i32>,
+    pub expose_headers: Vec<String>,
+}
+
+/// GetBucketCors の結果
+#[derive(Debug)]
+pub struct GetBucketCorsOutput {
+    pub cors_rules: Vec<CorsRule>,
+}
+
+/// PutBucketCors の結果
+#[derive(Debug)]
+pub struct PutBucketCorsOutput {}
+
+/// DeleteBucketCors の結果
+#[derive(Debug)]
+pub struct DeleteBucketCorsOutput {}
+
 /// GetObjectTagging の結果
 #[derive(Debug)]
 pub struct GetObjectTaggingOutput {

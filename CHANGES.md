@@ -11,6 +11,8 @@
 
 ## develop
 
+- [ADD] GetBucketCors / PutBucketCors / DeleteBucketCors API を追加する
+  - @voluntas
 - [ADD] ListObjectVersions API を追加する
   - @voluntas
 - [ADD] UploadPartCopy API を追加する

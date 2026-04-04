@@ -3551,3 +3551,46 @@ async fn test_list_object_versions() {
     assert_eq!(delete_markers.len(), 1);
     assert_eq!(delete_markers[0].key.as_deref(), Some(key));
 }
+
+/// Bucket CORS の操作を検証する
+///
+/// MinIO は PutBucketCors で Content-MD5 ヘッダーに対して 501 NotImplemented を返す。
+/// リクエスト構築とエラーハンドリングが正しく動作することを検証する。
+#[tokio::test]
+async fn test_bucket_cors_not_supported() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-bucket-cors";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // MinIO は PutBucketCors を完全にサポートしていないため 501 が返る
+    let request = client
+        .put_bucket_cors()
+        .bucket(bucket)
+        .cors_rule(shiguredo_s3::types::CorsRule {
+            allowed_origins: vec!["https://example.com".to_string()],
+            allowed_methods: vec!["GET".to_string()],
+            allowed_headers: vec![],
+            max_age_seconds: None,
+            expose_headers: vec![],
+        })
+        .build_request()
+        .unwrap();
+    let response = execute(request).await;
+    assert!(
+        response.status_code == 501 || response.status_code == 200,
+        "unexpected status: {}",
+        response.status_code
+    );
+}

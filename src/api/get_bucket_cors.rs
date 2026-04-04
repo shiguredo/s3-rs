@@ -1,6 +1,6 @@
 //! GetBucketCors API
 //!
-//! バケットの CORS 設定を取得する。
+//! バケットに設定された CORS ルールを取得する。
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketCors.html>
 
@@ -13,7 +13,6 @@ use super::{S3Request, build_signed_request, parse_error_response, required};
 pub struct GetBucketCorsFluentBuilder<'a> {
     client: &'a S3Client,
     bucket: Option<String>,
-    expected_bucket_owner: Option<String>,
 }
 
 impl<'a> GetBucketCorsFluentBuilder<'a> {
@@ -21,7 +20,6 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
         Self {
             client,
             bucket: None,
-            expected_bucket_owner: None,
         }
     }
 
@@ -30,26 +28,14 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
         self
     }
 
-    /// バケット所有者のアカウント ID を指定する (検証用)
-    pub fn expected_bucket_owner(mut self, expected_bucket_owner: impl Into<String>) -> Self {
-        self.expected_bucket_owner = Some(expected_bucket_owner.into());
-        self
-    }
-
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
-
-        let mut extra_headers: Vec<(&str, &str)> = Vec::new();
-        if let Some(ref v) = self.expected_bucket_owner {
-            extra_headers.push(("x-amz-expected-bucket-owner", v.as_str()));
-        }
-
         Ok(build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
             "",
-            &extra_headers,
+            &[],
             b"",
             Some(&[("cors", "")]),
         ))
@@ -60,45 +46,79 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|e| Error::InvalidResponse(format!("invalid UTF-8 in response body: {e}")))?;
-
-        let mut rules = Vec::new();
-        crate::xml::for_each_element(body_text, "CORSRule", |elem| {
-            rules.push(CorsRule {
-                id: elem.get("ID").map(String::from),
-                allowed_headers: {
-                    let v: Vec<String> = elem
-                        .get_all("AllowedHeader")
-                        .into_iter()
-                        .map(String::from)
-                        .collect();
-                    if v.is_empty() { None } else { Some(v) }
-                },
-                allowed_methods: elem
-                    .get_all("AllowedMethod")
-                    .into_iter()
-                    .map(String::from)
-                    .collect(),
-                allowed_origins: elem
-                    .get_all("AllowedOrigin")
-                    .into_iter()
-                    .map(String::from)
-                    .collect(),
-                expose_headers: {
-                    let v: Vec<String> = elem
-                        .get_all("ExposeHeader")
-                        .into_iter()
-                        .map(String::from)
-                        .collect();
-                    if v.is_empty() { None } else { Some(v) }
-                },
-                max_age_seconds: elem.get_parsed("MaxAgeSeconds"),
-            });
-        });
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketCorsOutput {
-            cors_rules: if rules.is_empty() { None } else { Some(rules) },
+            cors_rules: extract_cors_rules(body_text),
         })
     }
+}
+
+/// CORSRule を XML からパースする
+///
+/// CORSRule 内の AllowedOrigin, AllowedMethod, AllowedHeader, ExposeHeader は
+/// 同名タグが複数出現するため、for_each_element (最後の値のみ保持) は使えない。
+/// EventReader で直接パースする。
+fn extract_cors_rules(text: &str) -> Vec<CorsRule> {
+    use xml::reader::{EventReader, XmlEvent};
+
+    let reader = EventReader::from_str(text);
+    let mut rules = Vec::new();
+    let mut inside_rule = false;
+    let mut current_tag: Option<String> = None;
+    let mut current_text = String::new();
+
+    let mut allowed_origins = Vec::new();
+    let mut allowed_methods = Vec::new();
+    let mut allowed_headers = Vec::new();
+    let mut expose_headers = Vec::new();
+    let mut max_age_seconds: Option<i32> = None;
+
+    for event in reader {
+        match event {
+            Ok(XmlEvent::StartElement { name, .. }) if name.local_name == "CORSRule" => {
+                inside_rule = true;
+                allowed_origins.clear();
+                allowed_methods.clear();
+                allowed_headers.clear();
+                expose_headers.clear();
+                max_age_seconds = None;
+            }
+            Ok(XmlEvent::StartElement { name, .. }) if inside_rule => {
+                current_tag = Some(name.local_name.clone());
+                current_text.clear();
+            }
+            Ok(XmlEvent::Characters(s)) if inside_rule && current_tag.is_some() => {
+                current_text.push_str(&s);
+            }
+            Ok(XmlEvent::EndElement { name }) if inside_rule => {
+                if name.local_name == "CORSRule" {
+                    rules.push(CorsRule {
+                        allowed_origins: allowed_origins.clone(),
+                        allowed_methods: allowed_methods.clone(),
+                        allowed_headers: allowed_headers.clone(),
+                        max_age_seconds,
+                        expose_headers: expose_headers.clone(),
+                    });
+                    inside_rule = false;
+                } else if let Some(ref tag) = current_tag {
+                    if name.local_name == *tag {
+                        match tag.as_str() {
+                            "AllowedOrigin" => allowed_origins.push(current_text.clone()),
+                            "AllowedMethod" => allowed_methods.push(current_text.clone()),
+                            "AllowedHeader" => allowed_headers.push(current_text.clone()),
+                            "ExposeHeader" => expose_headers.push(current_text.clone()),
+                            "MaxAgeSeconds" => max_age_seconds = current_text.parse().ok(),
+                            _ => {}
+                        }
+                    }
+                    current_tag = None;
+                }
+            }
+            Err(_) => return rules,
+            _ => {}
+        }
+    }
+
+    rules
 }
