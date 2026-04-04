@@ -11,6 +11,8 @@
 
 ## develop
 
+- [ADD] ListObjectVersions API を追加する
+  - @voluntas
 - [ADD] UploadPartCopy API を追加する
   - @voluntas
 - [ADD] GetObject / HeadObject に `checksum_mode` パラメータを追加する

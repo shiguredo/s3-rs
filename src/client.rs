@@ -9,8 +9,8 @@ use crate::api::{
     GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder, GetBucketVersioningFluentBuilder,
     GetObjectFluentBuilder, GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder,
     HeadBucketFluentBuilder, HeadObjectFluentBuilder, ListBucketsFluentBuilder,
-    ListMultipartUploadsFluentBuilder, ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
-    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
+    ListMultipartUploadsFluentBuilder, ListObjectVersionsFluentBuilder, ListObjectsV2FluentBuilder,
+    ListPartsFluentBuilder, PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
     PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartCopyFluentBuilder,
@@ -185,6 +185,10 @@ impl S3Client {
 
     pub fn list_objects_v2(&self) -> ListObjectsV2FluentBuilder<'_> {
         ListObjectsV2FluentBuilder::new(self)
+    }
+
+    pub fn list_object_versions(&self) -> ListObjectVersionsFluentBuilder<'_> {
+        ListObjectVersionsFluentBuilder::new(self)
     }
 
     pub fn copy_object(&self) -> CopyObjectFluentBuilder<'_> {

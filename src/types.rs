@@ -312,6 +312,45 @@ pub struct ListObjectsV2Output {
     pub start_after: Option<String>,
 }
 
+/// ListObjectVersions の結果
+#[derive(Debug)]
+pub struct ListObjectVersionsOutput {
+    pub is_truncated: Option<bool>,
+    pub next_key_marker: Option<String>,
+    pub next_version_id_marker: Option<String>,
+    pub versions: Option<Vec<ObjectVersion>>,
+    pub delete_markers: Option<Vec<DeleteMarkerEntry>>,
+    pub common_prefixes: Option<Vec<CommonPrefix>>,
+    pub name: Option<String>,
+    pub prefix: Option<String>,
+    pub delimiter: Option<String>,
+    pub max_keys: Option<i32>,
+    pub key_marker: Option<String>,
+    pub version_id_marker: Option<String>,
+    pub encoding_type: Option<String>,
+}
+
+/// オブジェクトバージョンのメタデータ
+#[derive(Debug, Clone)]
+pub struct ObjectVersion {
+    pub key: Option<String>,
+    pub version_id: Option<String>,
+    pub is_latest: Option<bool>,
+    pub last_modified: Option<String>,
+    pub e_tag: Option<String>,
+    pub size: Option<i64>,
+    pub storage_class: Option<String>,
+}
+
+/// 削除マーカーのメタデータ
+#[derive(Debug, Clone)]
+pub struct DeleteMarkerEntry {
+    pub key: Option<String>,
+    pub version_id: Option<String>,
+    pub is_latest: Option<bool>,
+    pub last_modified: Option<String>,
+}
+
 /// S3 オブジェクトのメタデータ
 #[derive(Debug, Clone)]
 pub struct Object {

@@ -3456,3 +3456,98 @@ async fn test_upload_part_copy() {
     .await;
     assert_eq!(output.body, body);
 }
+
+/// ListObjectVersions でバージョン一覧を取得する
+///
+/// ## 検証項目
+/// - バージョニング有効バケットで複数バージョンが返る
+/// - 削除後に削除マーカーが返る
+#[tokio::test]
+async fn test_list_object_versions() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-list-object-versions";
+    let key = "versioned.txt";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // バージョニングを有効にする
+    let request = client
+        .put_bucket_versioning()
+        .bucket(bucket)
+        .status("Enabled")
+        .build_request()
+        .unwrap();
+    send(request, PutBucketVersioningFluentBuilder::parse_response).await;
+
+    // 2 つのバージョンを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"v1".to_vec())
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"v2".to_vec())
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを削除する (削除マーカーが作成される)
+    let request = client
+        .delete_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // ListObjectVersions で全バージョンと削除マーカーを取得する
+    let request = client
+        .list_object_versions()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectVersionsFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 2 つのバージョンが返る
+    let versions = output.versions.expect("versions should exist");
+    assert_eq!(versions.len(), 2);
+
+    // 削除マーカーが返る
+    let delete_markers = output.delete_markers.expect("delete_markers should exist");
+    assert_eq!(delete_markers.len(), 1);
+    assert_eq!(delete_markers[0].key.as_deref(), Some(key));
+}
