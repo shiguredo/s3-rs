@@ -6,7 +6,9 @@
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::{PutBucketEncryptionOutput, ServerSideEncryptionRule};
+use crate::types::{
+    PutBucketEncryptionOutput, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
+};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
@@ -35,6 +37,15 @@ impl<'a> PutBucketEncryptionFluentBuilder<'a> {
     /// 暗号化ルールを追加する
     pub fn rule(mut self, rule: ServerSideEncryptionRule) -> Self {
         self.rules.push(rule);
+        self
+    }
+
+    /// 暗号化設定を一括指定する
+    pub fn server_side_encryption_configuration(
+        mut self,
+        config: ServerSideEncryptionConfiguration,
+    ) -> Self {
+        self.rules = config.rules;
         self
     }
 

@@ -49,7 +49,7 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketCorsOutput {
-            cors_rules: extract_cors_rules(body_text),
+            cors_rules: Some(extract_cors_rules(body_text)),
         })
     }
 }
@@ -94,11 +94,20 @@ fn extract_cors_rules(text: &str) -> Vec<CorsRule> {
             Ok(XmlEvent::EndElement { name }) if inside_rule => {
                 if name.local_name == "CORSRule" {
                     rules.push(CorsRule {
+                        id: None,
                         allowed_origins: allowed_origins.clone(),
                         allowed_methods: allowed_methods.clone(),
-                        allowed_headers: allowed_headers.clone(),
+                        allowed_headers: if allowed_headers.is_empty() {
+                            None
+                        } else {
+                            Some(allowed_headers.clone())
+                        },
                         max_age_seconds,
-                        expose_headers: expose_headers.clone(),
+                        expose_headers: if expose_headers.is_empty() {
+                            None
+                        } else {
+                            Some(expose_headers.clone())
+                        },
                     });
                     inside_rule = false;
                 } else if let Some(ref tag) = current_tag {

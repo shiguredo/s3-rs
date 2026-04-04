@@ -7,9 +7,9 @@
 use crate::client::S3Client;
 use crate::error::Error;
 use crate::types::{
-    AbortIncompleteMultipartUpload, GetBucketLifecycleConfigurationOutput, LifecycleExpiration,
-    LifecycleRule, LifecycleRuleAndOperator, LifecycleRuleFilter, LifecycleTransition,
-    NoncurrentVersionExpiration, NoncurrentVersionTransition, Tag,
+    AbortIncompleteMultipartUpload, ExpirationStatus, GetBucketLifecycleConfigurationOutput,
+    LifecycleExpiration, LifecycleRule, LifecycleRuleAndOperator, LifecycleRuleFilter,
+    NoncurrentVersionExpiration, NoncurrentVersionTransition, Tag, Transition,
 };
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
@@ -53,13 +53,9 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
-        let transition_default_minimum_object_size = response
-            .get_header("x-amz-transition-default-minimum-object-size")
-            .map(String::from);
 
         Ok(GetBucketLifecycleConfigurationOutput {
             rules: extract_lifecycle_rules(body_text),
-            transition_default_minimum_object_size,
         })
     }
 }
@@ -99,7 +95,7 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
     let mut status = String::new();
     let mut filter: Option<LifecycleRuleFilter> = None;
     let mut expiration: Option<LifecycleExpiration> = None;
-    let mut transitions: Vec<LifecycleTransition> = Vec::new();
+    let mut transitions: Vec<Transition> = Vec::new();
     let mut nv_expiration: Option<NoncurrentVersionExpiration> = None;
     let mut nv_transitions: Vec<NoncurrentVersionTransition> = Vec::new();
     let mut abort_incomplete: Option<AbortIncompleteMultipartUpload> = None;
@@ -233,11 +229,21 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                         rules.push(LifecycleRule {
                             id: id.take(),
                             filter: filter.take(),
-                            status: status.clone(),
+                            status: status
+                                .parse::<ExpirationStatus>()
+                                .unwrap_or(ExpirationStatus::Enabled),
                             expiration: expiration.take(),
-                            transitions: transitions.clone(),
+                            transitions: if transitions.is_empty() {
+                                None
+                            } else {
+                                Some(transitions.clone())
+                            },
                             noncurrent_version_expiration: nv_expiration.take(),
-                            noncurrent_version_transitions: nv_transitions.clone(),
+                            noncurrent_version_transitions: if nv_transitions.is_empty() {
+                                None
+                            } else {
+                                Some(nv_transitions.clone())
+                            },
                             abort_incomplete_multipart_upload: abort_incomplete.take(),
                         });
                         ctx = Context::None;
@@ -301,7 +307,11 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                     Context::FilterAnd if tag_name == "And" => {
                         filter_and = Some(LifecycleRuleAndOperator {
                             prefix: and_prefix.take(),
-                            tags: and_tags.clone(),
+                            tags: if and_tags.is_empty() {
+                                None
+                            } else {
+                                Some(and_tags.clone())
+                            },
                             object_size_greater_than: and_size_gt.take(),
                             object_size_less_than: and_size_lt.take(),
                         });
@@ -363,7 +373,7 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                         current_tag = None;
                     }
                     Context::Transition if tag_name == "Transition" => {
-                        transitions.push(LifecycleTransition {
+                        transitions.push(Transition {
                             days: trans_days.take(),
                             date: trans_date.take(),
                             storage_class: trans_storage_class.take(),

@@ -6,7 +6,7 @@
 
 use crate::client::S3Client;
 use crate::error::Error;
-use crate::types::{CorsRule, PutBucketCorsOutput};
+use crate::types::{CorsConfiguration, CorsRule, PutBucketCorsOutput};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
@@ -35,6 +35,12 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
     /// CORS ルールを追加する
     pub fn cors_rule(mut self, rule: CorsRule) -> Self {
         self.cors_rules.push(rule);
+        self
+    }
+
+    /// CORS 設定を一括指定する
+    pub fn cors_configuration(mut self, config: CorsConfiguration) -> Self {
+        self.cors_rules = config.cors_rules;
         self
     }
 
@@ -92,14 +98,18 @@ fn build_cors_xml(rules: &[CorsRule]) -> String {
         for method in &rule.allowed_methods {
             w.element("AllowedMethod", method);
         }
-        for header in &rule.allowed_headers {
-            w.element("AllowedHeader", header);
+        if let Some(ref headers) = rule.allowed_headers {
+            for header in headers {
+                w.element("AllowedHeader", header);
+            }
         }
         if let Some(max_age) = rule.max_age_seconds {
             w.element("MaxAgeSeconds", &max_age.to_string());
         }
-        for header in &rule.expose_headers {
-            w.element("ExposeHeader", header);
+        if let Some(ref headers) = rule.expose_headers {
+            for header in headers {
+                w.element("ExposeHeader", header);
+            }
         }
         w.end();
     }

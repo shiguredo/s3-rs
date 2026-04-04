@@ -267,15 +267,15 @@ async fn test_bucket_lifecycle() {
                 object_size_less_than: None,
                 and: None,
             }),
-            status: "Enabled".to_string(),
+            status: shiguredo_s3::types::ExpirationStatus::Enabled,
             expiration: Some(shiguredo_s3::types::LifecycleExpiration {
                 days: Some(30),
                 date: None,
                 expired_object_delete_marker: None,
             }),
-            transitions: vec![],
+            transitions: None,
             noncurrent_version_expiration: None,
-            noncurrent_version_transitions: vec![],
+            noncurrent_version_transitions: None,
             abort_incomplete_multipart_upload: None,
         })
         .build_request()
@@ -300,7 +300,7 @@ async fn test_bucket_lifecycle() {
     assert_eq!(output.rules.len(), 1);
     let rule = &output.rules[0];
     assert_eq!(rule.id.as_deref(), Some("expire-logs"));
-    assert_eq!(rule.status, "Enabled");
+    assert_eq!(rule.status, shiguredo_s3::types::ExpirationStatus::Enabled);
     let exp = rule.expiration.as_ref().expect("expiration should exist");
     assert_eq!(exp.days, Some(30));
     let filter = rule.filter.as_ref().expect("filter should exist");
@@ -1135,14 +1135,18 @@ async fn test_bucket_tagging() {
     let request = client
         .put_bucket_tagging()
         .bucket(bucket)
-        .tag(Tag {
-            key: "env".to_string(),
-            value: "test".to_string(),
-        })
-        .tag(Tag {
-            key: "project".to_string(),
-            value: "s3-rs".to_string(),
-        })
+        .tagging(
+            shiguredo_s3::types::Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "test".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "project".to_string(),
+                    value: "s3-rs".to_string(),
+                })
+                .build(),
+        )
         .build_request()
         .unwrap();
     send(request, PutBucketTaggingFluentBuilder::parse_response).await;
@@ -2882,14 +2886,18 @@ async fn test_object_tagging() {
         .put_object_tagging()
         .bucket(bucket)
         .key(key)
-        .tag(Tag {
-            key: "env".to_string(),
-            value: "test".to_string(),
-        })
-        .tag(Tag {
-            key: "project".to_string(),
-            value: "s3-rs".to_string(),
-        })
+        .tagging(
+            shiguredo_s3::types::Tagging::builder()
+                .tag_set(Tag {
+                    key: "env".to_string(),
+                    value: "test".to_string(),
+                })
+                .tag_set(Tag {
+                    key: "project".to_string(),
+                    value: "s3-rs".to_string(),
+                })
+                .build(),
+        )
         .build_request()
         .unwrap();
     send(
@@ -3172,11 +3180,12 @@ async fn test_bucket_cors_not_supported() {
         .put_bucket_cors()
         .bucket(bucket)
         .cors_rule(shiguredo_s3::types::CorsRule {
+            id: None,
             allowed_origins: vec!["https://example.com".to_string()],
             allowed_methods: vec!["GET".to_string()],
-            allowed_headers: vec![],
+            allowed_headers: None,
             max_age_seconds: None,
-            expose_headers: vec![],
+            expose_headers: None,
         })
         .build_request()
         .unwrap();
@@ -3247,8 +3256,11 @@ async fn test_bucket_encryption() {
         body: xml.as_bytes().to_vec(),
     };
     let output = GetBucketEncryptionFluentBuilder::parse_response(&synthetic_response).unwrap();
-    assert_eq!(output.rules.len(), 1);
-    let rule = &output.rules[0];
+    let config = output
+        .server_side_encryption_configuration
+        .expect("config should exist");
+    assert_eq!(config.rules.len(), 1);
+    let rule = &config.rules[0];
     let default = rule
         .apply_server_side_encryption_by_default
         .as_ref()

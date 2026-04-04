@@ -7,7 +7,8 @@
 use crate::client::S3Client;
 use crate::error::Error;
 use crate::types::{
-    GetBucketEncryptionOutput, ServerSideEncryptionByDefault, ServerSideEncryptionRule,
+    GetBucketEncryptionOutput, ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration,
+    ServerSideEncryptionRule,
 };
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
@@ -52,8 +53,13 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
+        let rules = extract_encryption_rules(body_text);
         Ok(GetBucketEncryptionOutput {
-            rules: extract_encryption_rules(body_text),
+            server_side_encryption_configuration: if rules.is_empty() {
+                None
+            } else {
+                Some(ServerSideEncryptionConfiguration { rules })
+            },
         })
     }
 }

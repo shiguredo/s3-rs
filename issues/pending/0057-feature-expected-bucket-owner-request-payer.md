@@ -43,3 +43,7 @@ Model: Opus 4.6
 ## 優先度
 
 中（個別 API の機能追加と並行して対応可能）
+
+## pending 理由
+
+`expected_bucket_owner` は AWS アカウント ID に依存し、`request_payer` は AWS の Requester Pays 課金モデルに紐づくため、S3 互換オブジェクトストレージ (MinIO, Cloudflare R2 等) ではどちらも使われない。aws-sdk-rust 互換の API 表面を揃える意義はあるが、実用上の優先度は低いため保留する。

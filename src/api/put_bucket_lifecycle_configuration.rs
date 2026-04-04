@@ -119,11 +119,13 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
                 if let Some(ref prefix) = and.prefix {
                     w.element("Prefix", prefix);
                 }
-                for tag in &and.tags {
-                    w.start("Tag");
-                    w.element("Key", &tag.key);
-                    w.element("Value", &tag.value);
-                    w.end();
+                if let Some(ref tags) = and.tags {
+                    for tag in tags {
+                        w.start("Tag");
+                        w.element("Key", &tag.key);
+                        w.element("Value", &tag.value);
+                        w.end();
+                    }
                 }
                 if let Some(size) = and.object_size_greater_than {
                     w.element("ObjectSizeGreaterThan", &size.to_string());
@@ -152,7 +154,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
             w.end();
         }
 
-        w.element("Status", &rule.status);
+        w.element("Status", rule.status.as_str());
 
         // Expiration
         if let Some(ref exp) = rule.expiration {
@@ -173,7 +175,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         }
 
         // Transitions
-        for trans in &rule.transitions {
+        for trans in rule.transitions.iter().flatten() {
             w.start("Transition");
             if let Some(days) = trans.days {
                 w.element("Days", &days.to_string());
@@ -200,7 +202,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         }
 
         // NoncurrentVersionTransitions
-        for nvt in &rule.noncurrent_version_transitions {
+        for nvt in rule.noncurrent_version_transitions.iter().flatten() {
             w.start("NoncurrentVersionTransition");
             if let Some(days) = nvt.noncurrent_days {
                 w.element("NoncurrentDays", &days.to_string());
