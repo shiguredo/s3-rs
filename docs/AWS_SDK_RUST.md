@@ -70,12 +70,12 @@ S3 固有機能であり、S3 互換オブジェクトストレージでは基�
 | sse_customer_key | 対応済み |
 | version_id | 対応済み |
 | checksum_mode | **未対応** |
-| response_cache_control | **未対応** |
-| response_content_disposition | **未対応** |
-| response_content_encoding | **未対応** |
-| response_content_language | **未対応** |
-| response_content_type | **未対応** |
-| response_expires | **未対応** |
+| response_cache_control | 対応済み |
+| response_content_disposition | 対応済み |
+| response_content_encoding | 対応済み |
+| response_content_language | 対応済み |
+| response_content_type | 対応済み |
+| response_expires | 対応済み |
 | expected_bucket_owner | 対応予定無し |
 | request_payer | 対応予定無し |
 
@@ -353,7 +353,7 @@ S3 固有機能であり、S3 互換オブジェクトストレージでは基�
 | aws-sdk-rust | shiguredo_s3 |
 |---|---|
 | bucket | 対応済み |
-| create_bucket_configuration | 対応済み (リージョンから自動生成) |
+| create_bucket_configuration | 対応済み |
 | acl | **未対応** |
 | expected_bucket_owner | 対応予定無し |
 | grant_full_control | 対応予定無し |

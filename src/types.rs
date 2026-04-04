@@ -60,10 +60,77 @@ impl HttpDate {
         Self { value: s.into() }
     }
 
+    /// IMF-fixdate 文字列をバリデーション付きで生成する
+    ///
+    /// フォーマット: `Day, DD Mon YYYY HH:MM:SS GMT` (29 文字)
+    ///
+    /// ```
+    /// use shiguredo_s3::types::HttpDate;
+    ///
+    /// assert!(HttpDate::try_from_imf_fixdate("Thu, 01 Jan 1970 00:00:00 GMT").is_ok());
+    /// assert!(HttpDate::try_from_imf_fixdate("invalid").is_err());
+    /// ```
+    pub fn try_from_imf_fixdate(s: impl Into<String>) -> Result<Self, crate::error::Error> {
+        let value: String = s.into();
+        validate_imf_fixdate(&value)?;
+        Ok(Self { value })
+    }
+
     /// IMF-fixdate 形式の文字列を返す
     pub fn as_str(&self) -> &str {
         &self.value
     }
+}
+
+/// IMF-fixdate フォーマットを検証する
+fn validate_imf_fixdate(s: &str) -> Result<(), crate::error::Error> {
+    // IMF-fixdate は ASCII のみで構成される
+    if !s.is_ascii() {
+        return Err(crate::error::Error::InvalidInput(
+            "IMF-fixdate must be ASCII only".to_string(),
+        ));
+    }
+
+    let bytes = s.as_bytes();
+    // 長さチェック: "Day, DD Mon YYYY HH:MM:SS GMT" = 29 バイト
+    if bytes.len() != 29 {
+        return Err(crate::error::Error::InvalidInput(format!(
+            "IMF-fixdate must be 29 bytes, got {}",
+            bytes.len()
+        )));
+    }
+
+    // 以降は ASCII 確認済みのため、バイトインデックスと文字インデックスが一致する
+    let weekday = &s[..3];
+    if !WEEKDAY_NAMES.contains(&weekday) {
+        return Err(crate::error::Error::InvalidInput(format!(
+            "invalid weekday: {weekday}"
+        )));
+    }
+
+    // 区切り文字チェック
+    if &s[3..5] != ", " {
+        return Err(crate::error::Error::InvalidInput(
+            "expected ', ' after weekday".to_string(),
+        ));
+    }
+
+    // 月チェック (8..11)
+    let month = &s[8..11];
+    if !MONTH_NAMES.contains(&month) {
+        return Err(crate::error::Error::InvalidInput(format!(
+            "invalid month: {month}"
+        )));
+    }
+
+    // GMT チェック (末尾)
+    if !s.ends_with(" GMT") {
+        return Err(crate::error::Error::InvalidInput(
+            "IMF-fixdate must end with ' GMT'".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 impl fmt::Display for HttpDate {
@@ -84,6 +151,16 @@ pub struct GetObjectOutput {
     pub version_id: Option<String>,
     /// カスタムメタデータ (x-amz-meta-* ヘッダーから抽出)
     pub metadata: Option<std::collections::HashMap<String, String>>,
+    /// CRC32 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc32: Option<String>,
+    /// CRC32C チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc32c: Option<String>,
+    /// CRC64NVME チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc64nvme: Option<String>,
+    /// SHA1 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_sha1: Option<String>,
+    /// SHA256 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_sha256: Option<String>,
 }
 
 /// HeadObject の結果
@@ -93,10 +170,22 @@ pub struct HeadObjectOutput {
     pub content_length: Option<i64>,
     pub e_tag: Option<String>,
     pub last_modified: Option<String>,
+    /// `x-amz-storage-class` (STANDARD では省略されることがある)
+    pub storage_class: Option<String>,
     /// オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
     /// カスタムメタデータ (x-amz-meta-* ヘッダーから抽出)
     pub metadata: Option<std::collections::HashMap<String, String>>,
+    /// CRC32 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc32: Option<String>,
+    /// CRC32C チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc32c: Option<String>,
+    /// CRC64NVME チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_crc64nvme: Option<String>,
+    /// SHA1 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_sha1: Option<String>,
+    /// SHA256 チェックサム (checksum_mode=ENABLED 時)
+    pub checksum_sha256: Option<String>,
 }
 
 /// PutObject の結果
@@ -237,6 +326,15 @@ pub struct CommonPrefix {
 pub struct HeadBucketOutput {
     /// バケットが存在するリージョン
     pub bucket_region: Option<String>,
+}
+
+/// CreateBucket のリクエストボディ
+///
+/// バケット作成時のリージョン制約を指定する。
+/// `us-east-1` 以外のリージョンにバケットを作成する場合は `location_constraint` の指定が必要。
+#[derive(Debug, Clone)]
+pub struct CreateBucketConfiguration {
+    pub location_constraint: Option<String>,
 }
 
 /// CreateBucket の結果

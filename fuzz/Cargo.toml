@@ -1,0 +1,30 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.shiguredo_s3]
+path = ".."
+
+# XML パースの fuzz ターゲット
+[[bin]]
+name = "fuzz_xml_parse"
+path = "fuzz_targets/fuzz_xml_parse.rs"
+test = false
+doc = false
+bench = false
+
+# HttpDate バリデーションの fuzz ターゲット
+[[bin]]
+name = "fuzz_httpdate"
+path = "fuzz_targets/fuzz_httpdate.rs"
+test = false
+doc = false
+bench = false

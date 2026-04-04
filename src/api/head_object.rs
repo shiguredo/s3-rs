@@ -25,6 +25,7 @@ pub struct HeadObjectFluentBuilder<'a> {
     sse_customer_algorithm: Option<String>,
     sse_customer_key: Option<String>,
     version_id: Option<String>,
+    checksum_mode: Option<String>,
 }
 
 impl<'a> HeadObjectFluentBuilder<'a> {
@@ -42,6 +43,7 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             sse_customer_algorithm: None,
             sse_customer_key: None,
             version_id: None,
+            checksum_mode: None,
         }
     }
 
@@ -119,6 +121,14 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
+    /// チェックサムモードを指定する ("ENABLED")
+    ///
+    /// ENABLED を指定するとレスポンスにチェックサム値が含まれる。
+    pub fn checksum_mode(mut self, mode: impl Into<String>) -> Self {
+        self.checksum_mode = Some(mode.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -138,6 +148,9 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.if_unmodified_since {
             extra_headers.push(("if-unmodified-since", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_mode {
+            extra_headers.push(("x-amz-checksum-mode", v.as_str()));
         }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
@@ -205,8 +218,22 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             content_length: response.content_length().map(|v| v as i64),
             e_tag: response.get_header("etag").map(String::from),
             last_modified: response.get_header("last-modified").map(String::from),
+            storage_class: response.get_header("x-amz-storage-class").map(String::from),
             version_id: response.get_header("x-amz-version-id").map(String::from),
             metadata: response.extract_metadata(),
+            checksum_crc32: response
+                .get_header("x-amz-checksum-crc32")
+                .map(String::from),
+            checksum_crc32c: response
+                .get_header("x-amz-checksum-crc32c")
+                .map(String::from),
+            checksum_crc64nvme: response
+                .get_header("x-amz-checksum-crc64nvme")
+                .map(String::from),
+            checksum_sha1: response.get_header("x-amz-checksum-sha1").map(String::from),
+            checksum_sha256: response
+                .get_header("x-amz-checksum-sha256")
+                .map(String::from),
         })
     }
 

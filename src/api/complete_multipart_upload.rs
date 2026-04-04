@@ -23,6 +23,10 @@ pub struct CompleteMultipartUploadFluentBuilder<'a> {
     sse_customer_algorithm: Option<String>,
     /// SSE-C キー (Base64)
     sse_customer_key: Option<String>,
+    /// 条件付き書き込み: ETag が一致する場合のみ完了する
+    if_match: Option<String>,
+    /// 条件付き書き込み: オブジェクトが存在しない場合のみ完了する ("*")
+    if_none_match: Option<String>,
 }
 
 impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
@@ -35,6 +39,8 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             multipart_upload: None,
             sse_customer_algorithm: None,
             sse_customer_key: None,
+            if_match: None,
+            if_none_match: None,
         }
     }
 
@@ -72,6 +78,18 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         self
     }
 
+    /// ETag が一致する場合のみ完了する (楽観的ロック)
+    pub fn if_match(mut self, e_tag: impl Into<String>) -> Self {
+        self.if_match = Some(e_tag.into());
+        self
+    }
+
+    /// オブジェクトが存在しない場合のみ完了する ("*" を指定)
+    pub fn if_none_match(mut self, value: impl Into<String>) -> Self {
+        self.if_none_match = Some(value.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -100,6 +118,12 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         let xml_body = build_complete_multipart_xml(&self.multipart_upload);
         let query_params = [("uploadId", upload_id)];
         let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
+        if let Some(ref v) = self.if_match {
+            extra_headers.push(("if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.if_none_match {
+            extra_headers.push(("if-none-match", v.as_str()));
+        }
 
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((

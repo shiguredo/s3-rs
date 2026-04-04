@@ -48,8 +48,7 @@ impl<'a> GetBucketVersioningFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketVersioningOutput {
             status: crate::xml::extract_element(body_text, "Status"),

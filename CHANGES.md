@@ -10,3 +10,36 @@
   - バグ修正
 
 ## develop
+
+- [ADD] GetObject / HeadObject に `checksum_mode` パラメータを追加する
+  - @voluntas
+- [ADD] GetObjectOutput / HeadObjectOutput にチェックサム値フィールドを追加する
+  - @voluntas
+- [ADD] GetObject に `response_*` レスポンスヘッダーオーバーライドパラメータを追加する
+  - @voluntas
+- [ADD] ListObjectsV2 / ListMultipartUploads に `encoding_type` パラメータを追加する
+  - @voluntas
+- [ADD] PutObject / UploadPart に `content_length` パラメータを追加する
+  - @voluntas
+- [ADD] CreateBucket に `acl` パラメータを追加する
+  - @voluntas
+- [ADD] CopyObject に条件付きコピーパラメータ (`copy_source_if_*`) を追加する
+  - @voluntas
+- [ADD] PutObject / CopyObject / CreateMultipartUpload に `tagging` パラメータを追加する
+  - @voluntas
+- [ADD] CopyObject に `tagging_directive` パラメータを追加する
+  - @voluntas
+- [ADD] PutObject / CompleteMultipartUpload に条件付き書き込みパラメータ (`if_match`, `if_none_match`) を追加する
+  - @voluntas
+- [ADD] `HttpDate::try_from_imf_fixdate()` バリデーション付きコンストラクタを追加する
+  - @voluntas
+- [ADD] `CreateBucketConfiguration` 型と `CreateBucketFluentBuilder::create_bucket_configuration()` メソッドを追加する
+  - @voluntas
+- [ADD] XML レスポンスボディのサイズ上限チェック (10MB) を追加する
+  - @voluntas
+- [CHANGE] CreateBucket の LocationConstraint 自動付与を廃止し、利用者が `CreateBucketConfiguration` で明示的に指定する設計に変更する
+  - @voluntas
+- [CHANGE] CopyObject のメタデータディレクティブ事前検証を廃止し、aws-sdk-rust 互換の挙動に変更する
+  - @voluntas
+- [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
+  - @voluntas

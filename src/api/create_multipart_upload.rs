@@ -39,6 +39,8 @@ pub struct CreateMultipartUploadFluentBuilder<'a> {
     storage_class: Option<String>,
     /// チェックサムアルゴリズム
     checksum_algorithm: Option<String>,
+    /// オブジェクトタグ (URL エンコードされたキーバリューペア)
+    tagging: Option<String>,
 }
 
 impl<'a> CreateMultipartUploadFluentBuilder<'a> {
@@ -61,6 +63,7 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
             acl: None,
             storage_class: None,
             checksum_algorithm: None,
+            tagging: None,
         }
     }
 
@@ -158,6 +161,12 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
         self
     }
 
+    /// オブジェクトタグを指定する (URL エンコード形式: "key1=value1&key2=value2")
+    pub fn tagging(mut self, tagging: impl Into<String>) -> Self {
+        self.tagging = Some(tagging.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -168,6 +177,9 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
         }
         if let Some(ref v) = self.storage_class {
             extra_headers.push(("x-amz-storage-class", v.as_str()));
+        }
+        if let Some(ref v) = self.tagging {
+            extra_headers.push(("x-amz-tagging", v.as_str()));
         }
         if let Some(ref ct) = self.content_type {
             extra_headers.push(("content-type", ct.as_str()));
@@ -245,8 +257,7 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(CreateMultipartUploadOutput {
             bucket: crate::xml::extract_element(body_text, "Bucket"),

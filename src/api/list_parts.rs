@@ -131,8 +131,7 @@ impl<'a> ListPartsFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         let parts = extract_xml_parts(body_text);
 

@@ -48,4 +48,4 @@ testcontainers = { version = "0.27", features = ["http_wait_plain"] }
 
 [workspace]
 members = ["examples/s3cli"]
-exclude = []
+exclude = ["fuzz"]

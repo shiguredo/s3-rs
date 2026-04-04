@@ -2,6 +2,7 @@
 // サブコマンド
 // -------------------------------------------------------
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::ops::{
@@ -705,6 +706,113 @@ pub(crate) async fn cmd_ls(
     Ok(())
 }
 
+/// ListObjectsV2 の `Object` から実効ストレージクラスを得る
+///
+/// AWS では STANDARD のとき `StorageClass` 要素が省略されることがある。
+/// 省略時は STANDARD とみなす。
+fn effective_storage_class(object: &shiguredo_s3::types::Object) -> &str {
+    object.storage_class.as_deref().unwrap_or("STANDARD")
+}
+
+/// check-storage-class サブコマンド
+///
+/// プレフィックス配下を ListObjectsV2 でページングし、`Contents` の `StorageClass` を検査する。
+/// 省略は AWS 互換で STANDARD とみなす（`aws` の `(.StorageClass // "STANDARD")` と同じ前提）。
+/// 非 STANDARD のキーは標準出力に `KEY<TAB>CLASS`、集計は標準エラーに出す。
+///
+/// バケットの「既定ストレージクラス」は S3 の ListBuckets 等には載らない（オブジェクト単位の一覧のみ）。
+pub(crate) async fn cmd_check_storage_class(
+    mut args: noargs::RawArgs,
+    tls_config: Arc<rustls::ClientConfig>,
+) -> noargs::Result<()> {
+    noargs::HELP_FLAG.take_help(&mut args);
+
+    let page_size: Option<i32> = noargs::opt("page-size")
+        .doc("Number of results per page for pagination")
+        .ty("SIZE")
+        .take(&mut args)
+        .present_and_then(|o| o.value().parse())?;
+
+    let s3_uri: String = noargs::arg("<S3URI>")
+        .doc("S3 URI (s3://bucket[/prefix])")
+        .take(&mut args)
+        .then(|a| a.value().parse())?;
+
+    let client = build_client(&args)?;
+
+    if let Some(help) = args.finish()? {
+        print!("{help}");
+        return Ok(());
+    }
+
+    let (bucket, prefix) = parse_s3_uri(&s3_uri).ok_or("invalid S3 URI")?;
+
+    let mut continuation_token: Option<String> = None;
+    let mut total: u64 = 0;
+    let mut non_standard: u64 = 0;
+    // 実効ストレージクラス（大文字化）ごとの件数（ListObjectsV2 と同じ解釈）
+    let mut by_storage_class: BTreeMap<String, u64> = BTreeMap::new();
+
+    loop {
+        let mut builder = client.list_objects_v2().bucket(&bucket);
+        if !prefix.is_empty() {
+            builder = builder.prefix(&prefix);
+        }
+        if let Some(ref token) = continuation_token {
+            builder = builder.continuation_token(token);
+        }
+        if let Some(ps) = page_size {
+            builder = builder.max_keys(ps);
+        }
+
+        let request = builder.build_request()?;
+        let output = send(
+            &tls_config,
+            request,
+            shiguredo_s3::api::ListObjectsV2FluentBuilder::parse_response,
+        )
+        .await?;
+
+        if let Some(ref contents) = output.contents {
+            for object in contents {
+                let key = object.key.as_deref().unwrap_or("");
+                if key.is_empty() {
+                    continue;
+                }
+                let actual = effective_storage_class(object);
+                let class_key = actual.to_ascii_uppercase();
+                *by_storage_class.entry(class_key).or_insert(0) += 1;
+                total += 1;
+                if !actual.eq_ignore_ascii_case("STANDARD") {
+                    non_standard += 1;
+                    println!("{key}\t{actual}");
+                }
+            }
+        }
+
+        if output.is_truncated == Some(true) {
+            continuation_token = output.next_continuation_token;
+        } else {
+            break;
+        }
+    }
+
+    let standard_total = *by_storage_class.get("STANDARD").unwrap_or(&0);
+    eprintln!("check-storage-class: objects_total={total}");
+    eprintln!("check-storage-class: standard_total={standard_total}");
+    eprintln!("check-storage-class: non_standard_total={non_standard}");
+    let parts: Vec<String> = by_storage_class
+        .iter()
+        .map(|(c, n)| format!("{c}={n}"))
+        .collect();
+    eprintln!("check-storage-class: by_storage_class {}", parts.join(" "));
+
+    if non_standard > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 /// rm サブコマンド
 pub(crate) async fn cmd_rm(
     mut args: noargs::RawArgs,
@@ -796,7 +904,18 @@ pub(crate) async fn cmd_mb(
 
     let (bucket, _) = parse_s3_uri(&s3_uri).ok_or("invalid S3 URI")?;
 
-    let request = client.create_bucket().bucket(&bucket).build_request()?;
+    let region =
+        std::env::var("AWS_DEFAULT_REGION").unwrap_or_else(|_| "ap-northeast-1".to_string());
+
+    let mut builder = client.create_bucket().bucket(&bucket);
+    // us-east-1 以外のリージョンでは LocationConstraint の指定が必要
+    if region != "us-east-1" {
+        builder =
+            builder.create_bucket_configuration(shiguredo_s3::types::CreateBucketConfiguration {
+                location_constraint: Some(region),
+            });
+    }
+    let request = builder.build_request()?;
     send(
         &tls_config,
         request,

@@ -560,7 +560,8 @@ pub(crate) fn validate_presign_expires(expires_in_secs: u64) -> Result<(), Error
 /// CompleteMultipartUpload と CopyObject は 200 OK でボディにエラーを返すことがある。
 /// `<Error>` ルートタグの存在を確認してから `<Code>` を抽出する。
 pub(crate) fn check_body_error(response: &S3Response) -> Result<(), Error> {
-    if let Ok(text) = std::str::from_utf8(&response.body)
+    if response.body.len() <= MAX_XML_BODY_SIZE
+        && let Ok(text) = std::str::from_utf8(&response.body)
         && crate::xml::has_error_root(text)
     {
         return Err(parse_error_response_with_status(
@@ -569,6 +570,26 @@ pub(crate) fn check_body_error(response: &S3Response) -> Result<(), Error> {
         ));
     }
     Ok(())
+}
+
+/// XML レスポンスのボディサイズ上限 (10MB)
+///
+/// xml-rs には入力サイズの制限機能がないため、パース前にサイズチェックを行う。
+/// S3 の XML レスポンスは通常数百 KB 以内（ListObjectsV2 の max-keys=1000 でも十分収まる）。
+/// 10MB はプロキシ経由での改ざんや予期しない巨大レスポンスに対する防御ライン。
+const MAX_XML_BODY_SIZE: usize = 10 * 1024 * 1024;
+
+/// レスポンスボディを XML テキストとしてパースする（サイズチェック付き）
+pub(crate) fn xml_body_text(body: &[u8]) -> Result<&str, Error> {
+    if body.len() > MAX_XML_BODY_SIZE {
+        return Err(Error::InvalidResponse(format!(
+            "XML response body too large: {} bytes (max {})",
+            body.len(),
+            MAX_XML_BODY_SIZE
+        )));
+    }
+    std::str::from_utf8(body)
+        .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))
 }
 
 /// S3 エラーレスポンスを解析する

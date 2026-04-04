@@ -27,6 +27,8 @@ pub struct UploadPartFluentBuilder<'a> {
     sse_customer_algorithm: Option<String>,
     /// SSE-C キー (Base64)
     sse_customer_key: Option<String>,
+    /// 明示的な Content-Length
+    content_length: Option<i64>,
 }
 
 impl<'a> UploadPartFluentBuilder<'a> {
@@ -42,6 +44,7 @@ impl<'a> UploadPartFluentBuilder<'a> {
             checksum_value: None,
             sse_customer_algorithm: None,
             sse_customer_key: None,
+            content_length: None,
         }
     }
 
@@ -96,6 +99,12 @@ impl<'a> UploadPartFluentBuilder<'a> {
         self
     }
 
+    /// Content-Length を明示的に指定する
+    pub fn content_length(mut self, content_length: i64) -> Self {
+        self.content_length = Some(content_length);
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -122,6 +131,11 @@ impl<'a> UploadPartFluentBuilder<'a> {
         // - checksum_algorithm 未指定 → デフォルトで CRC32 を自動計算する
         let computed_checksum;
         let mut extra_headers = Vec::new();
+        let content_length_str;
+        if let Some(cl) = self.content_length {
+            content_length_str = cl.to_string();
+            extra_headers.push(("content-length", content_length_str.as_str()));
+        }
         let algo_str = self.checksum_algorithm.as_deref().unwrap_or("CRC32");
         extra_headers.push(("x-amz-checksum-algorithm", algo_str));
         let algorithm = algo_str.parse::<crate::checksum::ChecksumAlgorithm>()?;

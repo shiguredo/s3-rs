@@ -19,6 +19,7 @@ pub struct ListMultipartUploadsFluentBuilder<'a> {
     max_uploads: Option<i32>,
     key_marker: Option<String>,
     upload_id_marker: Option<String>,
+    encoding_type: Option<String>,
 }
 
 impl<'a> ListMultipartUploadsFluentBuilder<'a> {
@@ -31,6 +32,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             max_uploads: None,
             key_marker: None,
             upload_id_marker: None,
+            encoding_type: None,
         }
     }
 
@@ -64,6 +66,12 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
         self
     }
 
+    /// エンコーディングタイプを指定する ("url")
+    pub fn encoding_type(mut self, encoding_type: impl Into<String>) -> Self {
+        self.encoding_type = Some(encoding_type.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
@@ -83,6 +91,9 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
         }
         if let Some(ref marker) = self.upload_id_marker {
             query_params.push(("upload-id-marker".into(), marker.clone()));
+        }
+        if let Some(ref encoding_type) = self.encoding_type {
+            query_params.push(("encoding-type".into(), encoding_type.clone()));
         }
 
         let query_refs: Vec<(&str, &str)> = query_params
@@ -108,8 +119,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         let uploads = extract_xml_uploads(body_text);
         let common_prefixes = extract_xml_common_prefixes(body_text);

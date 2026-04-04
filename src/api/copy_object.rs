@@ -43,6 +43,18 @@ pub struct CopyObjectFluentBuilder<'a> {
     storage_class: Option<String>,
     /// チェックサムアルゴリズム
     checksum_algorithm: Option<String>,
+    /// オブジェクトタグ (URL エンコードされたキーバリューペア)
+    tagging: Option<String>,
+    /// タグディレクティブ (COPY または REPLACE)
+    tagging_directive: Option<String>,
+    /// 条件付きコピー: コピー元の ETag が一致する場合のみコピーする
+    copy_source_if_match: Option<String>,
+    /// 条件付きコピー: コピー元の ETag が異なる場合のみコピーする
+    copy_source_if_none_match: Option<String>,
+    /// 条件付きコピー: コピー元が指定日時以降に変更されている場合のみコピーする
+    copy_source_if_modified_since: Option<String>,
+    /// 条件付きコピー: コピー元が指定日時以降に変更されていない場合のみコピーする
+    copy_source_if_unmodified_since: Option<String>,
 }
 
 impl<'a> CopyObjectFluentBuilder<'a> {
@@ -69,6 +81,12 @@ impl<'a> CopyObjectFluentBuilder<'a> {
             copy_source_sse_customer_algorithm: None,
             copy_source_sse_customer_key: None,
             checksum_algorithm: None,
+            tagging: None,
+            tagging_directive: None,
+            copy_source_if_match: None,
+            copy_source_if_none_match: None,
+            copy_source_if_modified_since: None,
+            copy_source_if_unmodified_since: None,
         }
     }
 
@@ -194,30 +212,70 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         self
     }
 
+    /// オブジェクトタグを指定する (URL エンコード形式: "key1=value1&key2=value2")
+    pub fn tagging(mut self, tagging: impl Into<String>) -> Self {
+        self.tagging = Some(tagging.into());
+        self
+    }
+
+    /// タグディレクティブを指定する (COPY または REPLACE)
+    pub fn tagging_directive(mut self, directive: impl Into<String>) -> Self {
+        self.tagging_directive = Some(directive.into());
+        self
+    }
+
+    /// コピー元の ETag が一致する場合のみコピーする
+    pub fn copy_source_if_match(mut self, e_tag: impl Into<String>) -> Self {
+        self.copy_source_if_match = Some(e_tag.into());
+        self
+    }
+
+    /// コピー元の ETag が異なる場合のみコピーする
+    pub fn copy_source_if_none_match(mut self, e_tag: impl Into<String>) -> Self {
+        self.copy_source_if_none_match = Some(e_tag.into());
+        self
+    }
+
+    /// コピー元が指定日時以降に変更されている場合のみコピーする
+    pub fn copy_source_if_modified_since(mut self, date: impl Into<String>) -> Self {
+        self.copy_source_if_modified_since = Some(date.into());
+        self
+    }
+
+    /// コピー元が指定日時以降に変更されていない場合のみコピーする
+    pub fn copy_source_if_unmodified_since(mut self, date: impl Into<String>) -> Self {
+        self.copy_source_if_unmodified_since = Some(date.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let copy_source = required(self.copy_source.as_deref(), "copy_source")?;
-
-        // メタデータ系フィールドが設定されている場合、metadata_directive が REPLACE でなければエラー
-        let has_metadata_override = self.content_type.is_some()
-            || self.content_encoding.is_some()
-            || self.content_disposition.is_some()
-            || self.content_language.is_some()
-            || self.cache_control.is_some()
-            || self.expires.is_some()
-            || !self.metadata.is_empty();
-        if has_metadata_override && self.metadata_directive.as_deref() != Some("REPLACE") {
-            return Err(Error::InvalidInput(
-                "metadata_directive must be \"REPLACE\" when metadata fields are set".to_string(),
-            ));
-        }
 
         // AWS SDK は copy_source をそのままヘッダーに設定する
         // 利用者がエンコード済みの値を渡す前提
         let copy_source_header = format!("/{copy_source}");
         let mut extra_headers = vec![("x-amz-copy-source", copy_source_header.as_str())];
 
+        if let Some(ref v) = self.tagging {
+            extra_headers.push(("x-amz-tagging", v.as_str()));
+        }
+        if let Some(ref v) = self.tagging_directive {
+            extra_headers.push(("x-amz-tagging-directive", v.as_str()));
+        }
+        if let Some(ref v) = self.copy_source_if_match {
+            extra_headers.push(("x-amz-copy-source-if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.copy_source_if_none_match {
+            extra_headers.push(("x-amz-copy-source-if-none-match", v.as_str()));
+        }
+        if let Some(ref v) = self.copy_source_if_modified_since {
+            extra_headers.push(("x-amz-copy-source-if-modified-since", v.as_str()));
+        }
+        if let Some(ref v) = self.copy_source_if_unmodified_since {
+            extra_headers.push(("x-amz-copy-source-if-unmodified-since", v.as_str()));
+        }
         if let Some(ref v) = self.acl {
             extra_headers.push(("x-amz-acl", v.as_str()));
         }

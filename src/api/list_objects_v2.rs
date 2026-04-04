@@ -19,6 +19,7 @@ pub struct ListObjectsV2FluentBuilder<'a> {
     max_keys: Option<i32>,
     continuation_token: Option<String>,
     start_after: Option<String>,
+    encoding_type: Option<String>,
 }
 
 impl<'a> ListObjectsV2FluentBuilder<'a> {
@@ -31,6 +32,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             max_keys: None,
             continuation_token: None,
             start_after: None,
+            encoding_type: None,
         }
     }
 
@@ -64,6 +66,12 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         self
     }
 
+    /// エンコーディングタイプを指定する ("url")
+    pub fn encoding_type(mut self, encoding_type: impl Into<String>) -> Self {
+        self.encoding_type = Some(encoding_type.into());
+        self
+    }
+
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
@@ -82,6 +90,9 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         }
         if let Some(ref start_after) = self.start_after {
             query_params.push(("start-after".into(), start_after.clone()));
+        }
+        if let Some(ref encoding_type) = self.encoding_type {
+            query_params.push(("encoding-type".into(), encoding_type.clone()));
         }
 
         let query_refs: Vec<(&str, &str)> = query_params
@@ -105,8 +116,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         let contents = extract_xml_objects(body_text);
         let common_prefixes = extract_xml_common_prefixes(body_text);

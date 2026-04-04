@@ -10,6 +10,7 @@
 ///   s3cli mb s3://bucket-name
 ///   s3cli rb s3://bucket-name [--force]
 ///   s3cli presign <s3://bucket/key> [--expires-in SECONDS]
+///   s3cli check-storage-class <s3://bucket[/prefix]> [--page-size N]
 ///
 /// 環境変数:
 ///   AWS_ACCESS_KEY_ID       - アクセスキー ID
@@ -99,6 +100,12 @@ fn run() -> noargs::Result<()> {
         .is_present()
     {
         commands::cmd_presign(args)
+    } else if noargs::cmd("check-storage-class")
+        .doc("List objects whose storage class is not STANDARD (full prefix scan)")
+        .take(&mut args)
+        .is_present()
+    {
+        rt.block_on(commands::cmd_check_storage_class(args, tls_config))
     } else if let Some(help) = args.finish()? {
         print!("{help}");
         Ok(())

@@ -27,6 +27,13 @@ pub struct GetObjectFluentBuilder<'a> {
     sse_customer_algorithm: Option<String>,
     sse_customer_key: Option<String>,
     version_id: Option<String>,
+    response_cache_control: Option<String>,
+    response_content_disposition: Option<String>,
+    response_content_encoding: Option<String>,
+    response_content_language: Option<String>,
+    response_content_type: Option<String>,
+    response_expires: Option<String>,
+    checksum_mode: Option<String>,
 }
 
 impl<'a> GetObjectFluentBuilder<'a> {
@@ -44,6 +51,13 @@ impl<'a> GetObjectFluentBuilder<'a> {
             sse_customer_algorithm: None,
             sse_customer_key: None,
             version_id: None,
+            response_cache_control: None,
+            response_content_disposition: None,
+            response_content_encoding: None,
+            response_content_language: None,
+            response_content_type: None,
+            response_expires: None,
+            checksum_mode: None,
         }
     }
 
@@ -121,6 +135,50 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    /// レスポンスの Cache-Control ヘッダーを上書きする
+    pub fn response_cache_control(mut self, value: impl Into<String>) -> Self {
+        self.response_cache_control = Some(value.into());
+        self
+    }
+
+    /// レスポンスの Content-Disposition ヘッダーを上書きする
+    pub fn response_content_disposition(mut self, value: impl Into<String>) -> Self {
+        self.response_content_disposition = Some(value.into());
+        self
+    }
+
+    /// レスポンスの Content-Encoding ヘッダーを上書きする
+    pub fn response_content_encoding(mut self, value: impl Into<String>) -> Self {
+        self.response_content_encoding = Some(value.into());
+        self
+    }
+
+    /// レスポンスの Content-Language ヘッダーを上書きする
+    pub fn response_content_language(mut self, value: impl Into<String>) -> Self {
+        self.response_content_language = Some(value.into());
+        self
+    }
+
+    /// レスポンスの Content-Type ヘッダーを上書きする
+    pub fn response_content_type(mut self, value: impl Into<String>) -> Self {
+        self.response_content_type = Some(value.into());
+        self
+    }
+
+    /// レスポンスの Expires ヘッダーを上書きする
+    pub fn response_expires(mut self, value: impl Into<String>) -> Self {
+        self.response_expires = Some(value.into());
+        self
+    }
+
+    /// チェックサムモードを指定する ("ENABLED")
+    ///
+    /// ENABLED を指定するとレスポンスにチェックサム値が含まれる。
+    pub fn checksum_mode(mut self, mode: impl Into<String>) -> Self {
+        self.checksum_mode = Some(mode.into());
+        self
+    }
+
     /// 署名済みリクエストを構築する (Sans I/O)
     pub fn build_request(&self) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
@@ -141,6 +199,9 @@ impl<'a> GetObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.if_unmodified_since {
             extra_headers.push(("if-unmodified-since", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_mode {
+            extra_headers.push(("x-amz-checksum-mode", v.as_str()));
         }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
@@ -172,6 +233,24 @@ impl<'a> GetObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.version_id {
             query_params.push(("versionId", v.as_str()));
+        }
+        if let Some(ref v) = self.response_cache_control {
+            query_params.push(("response-cache-control", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_disposition {
+            query_params.push(("response-content-disposition", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_encoding {
+            query_params.push(("response-content-encoding", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_language {
+            query_params.push(("response-content-language", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_type {
+            query_params.push(("response-content-type", v.as_str()));
+        }
+        if let Some(ref v) = self.response_expires {
+            query_params.push(("response-expires", v.as_str()));
         }
         let query = if query_params.is_empty() {
             None
@@ -210,6 +289,19 @@ impl<'a> GetObjectFluentBuilder<'a> {
             last_modified: response.get_header("last-modified").map(String::from),
             version_id: response.get_header("x-amz-version-id").map(String::from),
             metadata: response.extract_metadata(),
+            checksum_crc32: response
+                .get_header("x-amz-checksum-crc32")
+                .map(String::from),
+            checksum_crc32c: response
+                .get_header("x-amz-checksum-crc32c")
+                .map(String::from),
+            checksum_crc64nvme: response
+                .get_header("x-amz-checksum-crc64nvme")
+                .map(String::from),
+            checksum_sha1: response.get_header("x-amz-checksum-sha1").map(String::from),
+            checksum_sha256: response
+                .get_header("x-amz-checksum-sha256")
+                .map(String::from),
         })
     }
 
@@ -227,6 +319,24 @@ impl<'a> GetObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.version_id {
             extra_query_params.push(("versionId", v.as_str()));
+        }
+        if let Some(ref v) = self.response_cache_control {
+            extra_query_params.push(("response-cache-control", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_disposition {
+            extra_query_params.push(("response-content-disposition", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_encoding {
+            extra_query_params.push(("response-content-encoding", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_language {
+            extra_query_params.push(("response-content-language", v.as_str()));
+        }
+        if let Some(ref v) = self.response_content_type {
+            extra_query_params.push(("response-content-type", v.as_str()));
+        }
+        if let Some(ref v) = self.response_expires {
+            extra_query_params.push(("response-expires", v.as_str()));
         }
 
         let mut extra_headers = Vec::new();

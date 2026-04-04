@@ -2943,6 +2943,27 @@ async fn test_put_object_storage_class() {
     )
     .await;
     assert_eq!(output.body, b"standard class data");
+
+    // HEAD の x-amz-storage-class (STANDARD では省略されうる)
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request()
+        .unwrap();
+    let head_output = send(
+        request,
+        shiguredo_s3::api::HeadObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(
+        matches!(
+            head_output.storage_class.as_deref(),
+            None | Some("STANDARD")
+        ),
+        "unexpected storage_class: {:?}",
+        head_output.storage_class
+    );
 }
 
 /// バケットライフサイクル設定の Put / Get / Delete を検証する

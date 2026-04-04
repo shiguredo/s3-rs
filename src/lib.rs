@@ -16,4 +16,4 @@ pub use api::{PresignedRequest, S3Request, S3Response};
 pub use client::{S3Client, S3Config, S3ConfigBuilder};
 pub use credential::Credential;
 pub use error::{Error, s3_error_code};
-pub use types::HttpDate;
+pub use types::{CreateBucketConfiguration, HttpDate};

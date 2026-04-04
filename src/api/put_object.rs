@@ -41,6 +41,14 @@ pub struct PutObjectFluentBuilder<'a> {
     metadata: Vec<(String, String)>,
     /// ストレージクラス (STANDARD, STANDARD_IA 等)
     storage_class: Option<String>,
+    /// 明示的な Content-Length
+    content_length: Option<i64>,
+    /// オブジェクトタグ (URL エンコードされたキーバリューペア)
+    tagging: Option<String>,
+    /// 条件付き書き込み: ETag が一致する場合のみ上書きする
+    if_match: Option<String>,
+    /// 条件付き書き込み: オブジェクトが存在しない場合のみ作成する ("*")
+    if_none_match: Option<String>,
 }
 
 impl<'a> PutObjectFluentBuilder<'a> {
@@ -65,6 +73,10 @@ impl<'a> PutObjectFluentBuilder<'a> {
             acl: None,
             metadata: Vec::new(),
             storage_class: None,
+            content_length: None,
+            tagging: None,
+            if_match: None,
+            if_none_match: None,
         }
     }
 
@@ -158,6 +170,30 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    /// Content-Length を明示的に指定する
+    pub fn content_length(mut self, content_length: i64) -> Self {
+        self.content_length = Some(content_length);
+        self
+    }
+
+    /// オブジェクトタグを指定する (URL エンコード形式: "key1=value1&key2=value2")
+    pub fn tagging(mut self, tagging: impl Into<String>) -> Self {
+        self.tagging = Some(tagging.into());
+        self
+    }
+
+    /// ETag が一致する場合のみ上書きする (楽観的ロック)
+    pub fn if_match(mut self, e_tag: impl Into<String>) -> Self {
+        self.if_match = Some(e_tag.into());
+        self
+    }
+
+    /// オブジェクトが存在しない場合のみ作成する ("*" を指定)
+    pub fn if_none_match(mut self, value: impl Into<String>) -> Self {
+        self.if_none_match = Some(value.into());
+        self
+    }
+
     /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
     ///
     /// 未指定の場合はデフォルトで CRC32 が使用される。
@@ -185,6 +221,15 @@ impl<'a> PutObjectFluentBuilder<'a> {
         if let Some(ref v) = self.storage_class {
             extra_headers.push(("x-amz-storage-class", v.as_str()));
         }
+        if let Some(ref v) = self.tagging {
+            extra_headers.push(("x-amz-tagging", v.as_str()));
+        }
+        if let Some(ref v) = self.if_match {
+            extra_headers.push(("if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.if_none_match {
+            extra_headers.push(("if-none-match", v.as_str()));
+        }
         if let Some(ref v) = self.content_type {
             extra_headers.push(("content-type", v.as_str()));
         }
@@ -202,6 +247,11 @@ impl<'a> PutObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.expires {
             extra_headers.push(("expires", v.as_str()));
+        }
+        let content_length_str;
+        if let Some(cl) = self.content_length {
+            content_length_str = cl.to_string();
+            extra_headers.push(("content-length", &content_length_str));
         }
         if let Some(ref v) = self.server_side_encryption {
             extra_headers.push(("x-amz-server-side-encryption", v.as_str()));
