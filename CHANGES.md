@@ -11,6 +11,8 @@
 
 ## develop
 
+- [ADD] UploadPartCopy API を追加する
+  - @voluntas
 - [ADD] GetObject / HeadObject に `checksum_mode` パラメータを追加する
   - @voluntas
 - [ADD] GetObjectOutput / HeadObjectOutput にチェックサム値フィールドを追加する

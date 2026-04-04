@@ -3350,3 +3350,109 @@ async fn test_bucket_cors_not_supported() {
     let response = execute(request).await;
     assert_eq!(response.status_code, 501);
 }
+
+/// UploadPartCopy でサーバー側コピーを検証する
+///
+/// ## 検証項目
+/// - UploadPartCopy でコピー元オブジェクトの全範囲をパートとしてコピーできる
+/// - CompleteMultipartUpload で結合したオブジェクトの内容がコピー元と一致する
+#[tokio::test]
+async fn test_upload_part_copy() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-upload-part-copy";
+    let src_key = "source.txt";
+    let dst_key = "destination.txt";
+    let body = b"upload part copy test data";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // コピー元オブジェクトを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(src_key)
+        .body(body.to_vec())
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // マルチパートアップロードを開始する
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(dst_key)
+        .build_request()
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id should exist");
+
+    // UploadPartCopy でコピー元からパートをコピーする
+    let request = client
+        .upload_part_copy()
+        .bucket(bucket)
+        .key(dst_key)
+        .upload_id(&upload_id)
+        .part_number(1)
+        .copy_source(format!("{bucket}/{src_key}"))
+        .build_request()
+        .unwrap();
+    let copy_output = send(
+        request,
+        shiguredo_s3::api::UploadPartCopyFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(copy_output.e_tag.is_some());
+
+    // マルチパートアップロードを完了する
+    let request = client
+        .complete_multipart_upload()
+        .bucket(bucket)
+        .key(dst_key)
+        .upload_id(&upload_id)
+        .multipart_upload(shiguredo_s3::types::CompletedMultipartUpload {
+            parts: Some(vec![shiguredo_s3::types::CompletedPart {
+                e_tag: copy_output.e_tag,
+                part_number: Some(1),
+            }]),
+        })
+        .build_request()
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+
+    // コピー先オブジェクトの内容を検証する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(dst_key)
+        .build_request()
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, body);
+}

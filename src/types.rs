@@ -217,6 +217,15 @@ pub struct UploadPartOutput {
     pub e_tag: Option<String>,
 }
 
+/// UploadPartCopy の結果
+#[derive(Debug)]
+pub struct UploadPartCopyOutput {
+    pub e_tag: Option<String>,
+    pub last_modified: Option<String>,
+    /// コピー元オブジェクトのバージョン ID
+    pub copy_source_version_id: Option<String>,
+}
+
 /// CompleteMultipartUpload の結果
 #[derive(Debug)]
 pub struct CompleteMultipartUploadOutput {

@@ -38,6 +38,7 @@ mod put_object;
 mod put_object_tagging;
 mod put_public_access_block;
 mod upload_part;
+mod upload_part_copy;
 
 pub use abort_multipart_upload::AbortMultipartUploadFluentBuilder;
 pub use complete_multipart_upload::CompleteMultipartUploadFluentBuilder;
@@ -79,6 +80,7 @@ pub use put_object::PutObjectFluentBuilder;
 pub use put_object_tagging::PutObjectTaggingFluentBuilder;
 pub use put_public_access_block::PutPublicAccessBlockFluentBuilder;
 pub use upload_part::UploadPartFluentBuilder;
+pub use upload_part_copy::UploadPartCopyFluentBuilder;
 
 use crate::client::S3Client;
 use crate::credential::Credential;

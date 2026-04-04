@@ -13,7 +13,8 @@ use crate::api::{
     PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectFluentBuilder,
-    PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartFluentBuilder,
+    PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartCopyFluentBuilder,
+    UploadPartFluentBuilder,
 };
 use crate::credential::Credential;
 use crate::error::Error;
@@ -168,6 +169,10 @@ impl S3Client {
 
     pub fn upload_part(&self) -> UploadPartFluentBuilder<'_> {
         UploadPartFluentBuilder::new(self)
+    }
+
+    pub fn upload_part_copy(&self) -> UploadPartCopyFluentBuilder<'_> {
+        UploadPartCopyFluentBuilder::new(self)
     }
 
     pub fn complete_multipart_upload(&self) -> CompleteMultipartUploadFluentBuilder<'_> {
