@@ -79,12 +79,12 @@ where
 
     for event in reader {
         match event {
-            Ok(XmlEvent::StartElement { name, .. }) if !inside_parent => {
-                if name.local_name == parent_tag {
-                    inside_parent = true;
-                    depth = 1;
-                    children.clear();
-                }
+            Ok(XmlEvent::StartElement { name, .. })
+                if !inside_parent && name.local_name == parent_tag =>
+            {
+                inside_parent = true;
+                depth = 1;
+                children.clear();
             }
             Ok(XmlEvent::StartElement { name, .. }) if inside_parent => {
                 depth += 1;
