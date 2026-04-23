@@ -11,6 +11,8 @@
 
 ## develop
 
+- [ADD] examples/s3cli に `h2` feature を追加し、ALPN ネゴシエーション結果に応じて HTTP/2 (shiguredo_http2) と HTTP/1.1 (shiguredo_http11) を自動で切り替えるようにする
+  - @voluntas
 - [ADD] GetObjectLegalHold / PutObjectLegalHold / GetObjectRetention / PutObjectRetention / GetObjectLockConfiguration / PutObjectLockConfiguration API を追加する
   - @voluntas
 - [ADD] GetBucketOwnershipControls / PutBucketOwnershipControls / DeleteBucketOwnershipControls API を追加する
