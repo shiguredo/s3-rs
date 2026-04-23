@@ -19,7 +19,7 @@ exclude = ["fuzz"]
 # - 署名: SHA-256, HMAC-SHA256
 # - チェックサム: SHA-256, SHA-1
 aws-lc-rs = { version = "1.16", optional = true }
-base64 = "0.22"
+base64ct = { version = "1.8", features = ["alloc"] }
 # チェックサム計算 (CRC32, CRC32C, CRC64NVME)
 crc-fast = "1.9"
 hmac = { version = "0.12", optional = true }

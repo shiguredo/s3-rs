@@ -3,7 +3,7 @@
 //! S3 の Flexible Checksums で使用するチェックサムを計算する。
 //! アルゴリズムに応じたヘッダー名と Base64 エンコード済みの値を返す。
 
-use base64::Engine;
+use base64ct::{Base64, Encoding};
 
 use crate::error::Error;
 
@@ -49,22 +49,21 @@ impl ChecksumAlgorithm {
 
 /// ボディからチェックサムを計算して Base64 エンコード済み文字列を返す
 pub(crate) fn compute_checksum(algorithm: ChecksumAlgorithm, data: &[u8]) -> String {
-    let engine = base64::engine::general_purpose::STANDARD;
     match algorithm {
         ChecksumAlgorithm::Crc32 => {
             let hash = crc_fast::checksum(crc_fast::CrcAlgorithm::Crc32IsoHdlc, data);
-            engine.encode((hash as u32).to_be_bytes())
+            Base64::encode_string(&(hash as u32).to_be_bytes())
         }
         ChecksumAlgorithm::Crc32c => {
             let hash = crc_fast::checksum(crc_fast::CrcAlgorithm::Crc32Iscsi, data);
-            engine.encode((hash as u32).to_be_bytes())
+            Base64::encode_string(&(hash as u32).to_be_bytes())
         }
         ChecksumAlgorithm::Crc64nvme => {
             let hash = crc_fast::checksum(crc_fast::CrcAlgorithm::Crc64Nvme, data);
-            engine.encode(hash.to_be_bytes())
+            Base64::encode_string(&hash.to_be_bytes())
         }
-        ChecksumAlgorithm::Sha1 => engine.encode(sha1_digest(data)),
-        ChecksumAlgorithm::Sha256 => engine.encode(crate::signing::sha256(data)),
+        ChecksumAlgorithm::Sha1 => Base64::encode_string(&sha1_digest(data)),
+        ChecksumAlgorithm::Sha256 => Base64::encode_string(&crate::signing::sha256(data)),
     }
 }
 
@@ -142,8 +141,7 @@ mod tests {
     fn test_compute_checksum_crc32() {
         let result = compute_checksum(ChecksumAlgorithm::Crc32, b"Hello, world!");
         // CRC32("Hello, world!") = 0xEBE6C6E6 → big-endian → Base64
-        let expected =
-            base64::engine::general_purpose::STANDARD.encode(0xEBE6C6E6u32.to_be_bytes());
+        let expected = Base64::encode_string(&0xEBE6C6E6u32.to_be_bytes());
         assert_eq!(result, expected);
     }
 

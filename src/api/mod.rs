@@ -674,10 +674,10 @@ fn parse_s3_error_xml(body: &[u8]) -> Option<(String, String)> {
 }
 
 pub(crate) fn base64_md5(data: &[u8]) -> String {
-    use base64::{Engine, engine::general_purpose::STANDARD};
+    use base64ct::{Base64, Encoding};
     use md5::{Digest, Md5};
     let hash = Md5::digest(data);
-    STANDARD.encode(hash.as_slice())
+    Base64::encode_string(hash.as_slice())
 }
 
 /// SSE-C キー (Base64) から MD5 (Base64) を自動計算する
@@ -685,11 +685,10 @@ pub(crate) fn base64_md5(data: &[u8]) -> String {
 /// sse_customer_key が指定されていて sse_customer_key_md5 が未指定の場合に
 /// 自動的に MD5 を計算する。
 pub(crate) fn compute_sse_c_key_md5(base64_key: &str) -> Result<String, Error> {
-    use base64::{Engine, engine::general_purpose::STANDARD};
+    use base64ct::{Base64, Encoding};
     use md5::{Digest, Md5};
-    let key_bytes = STANDARD
-        .decode(base64_key)
+    let key_bytes = Base64::decode_vec(base64_key)
         .map_err(|_| Error::InvalidInput("SSE-C key must be valid Base64".to_string()))?;
     let hash = Md5::digest(&key_bytes);
-    Ok(STANDARD.encode(hash.as_slice()))
+    Ok(Base64::encode_string(hash.as_slice()))
 }

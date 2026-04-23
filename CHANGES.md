@@ -61,3 +61,8 @@
   - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
+
+### misc
+
+- Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
+  - @voluntas
