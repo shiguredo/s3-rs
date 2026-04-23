@@ -33,7 +33,7 @@ xml = "1.2"
 [dev-dependencies]
 shiguredo_http11 = "2026.1"
 testcontainers = { version = "0.27", features = ["http_wait_plain"] }
-tokio = { version = "1", features = [
+tokio = { version = "1.52", features = [
   "io-util",
   "macros",
   "net",
