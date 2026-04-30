@@ -80,7 +80,7 @@ fn sha1_digest(data: &[u8]) -> [u8; 20] {
     sha1::Sha1::digest(data).into()
 }
 
-#[cfg(all(feature = "aws-lc-rs", not(feature = "rust-crypto")))]
+#[cfg(all(feature = "aws_lc_rs", not(feature = "rust-crypto")))]
 fn sha1_digest(data: &[u8]) -> [u8; 20] {
     let d = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA1_FOR_LEGACY_USE_ONLY, data);
     d.as_ref().try_into().expect("SHA-1 digest is 20 bytes")

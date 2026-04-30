@@ -43,8 +43,8 @@ tokio = { version = "1.52", features = [
 [features]
 # 署名計算 (SHA-256 / HMAC-SHA256) とチェックサム計算 (SHA-256 / SHA-1) の暗号ライブラリを選択する
 # - rust-crypto (デフォルト): pure Rust の sha2 / sha1 / hmac クレートを使用する
-# - aws-lc-rs: aws-lc-rs を使用する (SHA-256 / HMAC-SHA256 / SHA-1 を全てカバー)
+# - aws_lc_rs: aws-lc-rs を使用する (SHA-256 / HMAC-SHA256 / SHA-1 を全てカバー)
 #   rustls で aws-lc-rs を使用する場合は暗号ライブラリを統一するためにこちらを指定すること
 default = ["rust-crypto"]
-aws-lc-rs = ["dep:aws-lc-rs"]
+aws_lc_rs = ["dep:aws-lc-rs"]
 rust-crypto = ["dep:hmac", "dep:sha1", "dep:sha2"]

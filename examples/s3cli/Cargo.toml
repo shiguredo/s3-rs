@@ -6,7 +6,7 @@ rust-version = "1.88"
 publish = false
 
 [dependencies]
-shiguredo_s3 = { path = "../..", default-features = false, features = ["aws-lc-rs"] }
+shiguredo_s3 = { path = "../..", default-features = false, features = ["aws_lc_rs"] }
 shiguredo_http11 = "2026.1.0"
 rustls = { version = "0.23", default-features = false, features = [
     "std",

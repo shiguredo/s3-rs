@@ -56,14 +56,14 @@ feature flags で暗号ライブラリを切り替えられます。
 | feature | クレート | 備考 |
 |---|---|---|
 | `rust-crypto` (デフォルト) | sha2 / sha1 / hmac | pure Rust 実装 |
-| `aws-lc-rs` | aws-lc-rs | rustls で aws-lc-rs を使用する場合はこちらを指定すること |
+| `aws_lc_rs` | aws-lc-rs | rustls で aws-lc-rs を使用する場合はこちらを指定すること |
 
 ```toml
 # デフォルト (rust-crypto)
 shiguredo_s3 = "<version>"
 
-# aws-lc-rs を使用する場合
-shiguredo_s3 = { version = "<version>", default-features = false, features = ["aws-lc-rs"] }
+# aws_lc_rs を使用する場合
+shiguredo_s3 = { version = "<version>", default-features = false, features = ["aws_lc_rs"] }
 ```
 
 ### チェックサム計算 (CRC32 / CRC32C / CRC64NVME)

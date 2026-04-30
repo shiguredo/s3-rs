@@ -15,7 +15,7 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; 32] {
     sha2::Sha256::digest(data).into()
 }
 
-#[cfg(all(feature = "aws-lc-rs", not(feature = "rust-crypto")))]
+#[cfg(all(feature = "aws_lc_rs", not(feature = "rust-crypto")))]
 pub(crate) fn sha256(data: &[u8]) -> [u8; 32] {
     let d = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, data);
     d.as_ref().try_into().expect("SHA-256 digest is 32 bytes")
@@ -33,7 +33,7 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     mac.finalize().into_bytes().into()
 }
 
-#[cfg(all(feature = "aws-lc-rs", not(feature = "rust-crypto")))]
+#[cfg(all(feature = "aws_lc_rs", not(feature = "rust-crypto")))]
 fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     let key = aws_lc_rs::hmac::Key::new(aws_lc_rs::hmac::HMAC_SHA256, key);
     let tag = aws_lc_rs::hmac::sign(&key, data);
