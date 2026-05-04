@@ -21,17 +21,18 @@ exclude = ["fuzz"]
 aws-lc-rs = { version = "1.16", optional = true }
 base64ct = { version = "1.8", features = ["alloc"] }
 # チェックサム計算 (CRC32, CRC32C, CRC64NVME)
-crc-fast = "1.9"
-hmac = { version = "0.12", optional = true }
+# 1.10 は MSRV 1.89 を要求するため、本体の rust-version 1.88 を維持するために 1.9.x に固定する
+crc-fast = "~1.9"
+hmac = { version = "0.13", optional = true }
 # Content-MD5 / SSE-C key MD5 計算
-md-5 = "0.10"
-sha1 = { version = "0.10", optional = true }
-sha2 = { version = "0.10", optional = true }
+md-5 = "0.11"
+sha1 = { version = "0.11", optional = true }
+sha2 = { version = "0.11", optional = true }
 # XML パース
 xml = "1.2"
 
 [dev-dependencies]
-shiguredo_http11 = "2026.1"
+shiguredo_http11 = "2026.2"
 testcontainers = { version = "0.27", features = ["http_wait_plain"] }
 tokio = { version = "1.52", features = [
   "io-util",

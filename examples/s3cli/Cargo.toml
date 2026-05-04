@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 shiguredo_s3 = { path = "../..", default-features = false, features = ["aws_lc_rs"] }
-shiguredo_http11 = "2026.1.0"
+shiguredo_http11 = "2026.2.0"
 rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",
@@ -15,5 +15,5 @@ rustls = { version = "0.23", default-features = false, features = [
 ] }
 tokio = { version = "1", features = ["net", "io-util", "io-std", "rt-multi-thread", "sync", "fs"] }
 tokio-rustls = { version = "0.26", default-features = false }
-rustls-platform-verifier = "0.6"
-noargs = "0.3"
+rustls-platform-verifier = "0.7"
+noargs = "0.4"

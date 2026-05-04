@@ -166,7 +166,7 @@ fn encode_request(s3_request: &S3Request) -> Vec<u8> {
         request.add_header(name, value);
     }
     if !s3_request.body.is_empty() {
-        request.body = s3_request.body.clone();
+        request.body = Some(s3_request.body.clone());
     }
     request.try_encode().expect("failed to encode request")
 }
@@ -176,7 +176,7 @@ fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
     S3Response {
         status_code: response.status_code,
         headers: response.headers,
-        body: response.body,
+        body: response.body.unwrap_or_default(),
     }
 }
 

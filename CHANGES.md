@@ -134,6 +134,12 @@
 
 ### misc
 
+- 依存クレートを更新する (`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11、`shiguredo_http11` 2026.1 → 2026.2)
+  - @voluntas
+- `crc-fast` を `~1.9` に固定する (1.10 が MSRV 1.89 を要求するため `rust-version = "1.88"` を維持する)
+  - @voluntas
+- examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.2、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
+  - @voluntas
 - Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
   - @voluntas
 - docs/AWS_SDK_RUST.md の対応方針表を再分類する (「未対応 (互換性のため対応予定)」「入力は対応予定無し、出力は対応」「対応予定無し」維持の 3 カテゴリに整理)
