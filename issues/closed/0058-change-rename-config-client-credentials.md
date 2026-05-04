@@ -1,6 +1,7 @@
 # Config / Client / Credentials を aws-sdk-rust スタイルにリネームする
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -83,3 +84,52 @@ Model: Opus 4.7
 - `[CHANGE] Credential を Credentials にリネームする`
 - `[CHANGE] ConfigBuilder::credential を credentials_provider にリネームする`
 - `[CHANGE] ConfigBuilder::use_path_style を force_path_style にリネームする`
+
+## 解決方法
+
+### 実施した変更
+
+1. **型のリネーム**
+   - `src/client.rs`: `S3Config` → `Config`, `S3ConfigBuilder` → `ConfigBuilder`, `S3Client` → `Client`
+   - `src/credential.rs`: `Credential` → `Credentials`
+   - `src/api/mod.rs`: 内部型 `S3ClientConfig` → `ClientConfig`
+   - `src/lib.rs`: `pub use` 句を新名称に更新
+
+2. **`Client::from_conf` への変更**
+   - `S3Client::new(config)` を廃止し `Client::from_conf(config)` に統一
+   - aws-sdk-rust の `Client::from_conf(Config)` 流入口に揃える
+
+3. **`Credentials::new` シグネチャの拡張**
+   - aws-credential-types::Credentials::new と同じ 5 引数 (access_key_id, secret_access_key, session_token, expires_after, provider_name) に変更
+   - `Credential::with_session_token` を廃止し、上記の `session_token` 引数で表現
+   - `expires_after` と `provider_name` フィールドは保持するが署名計算では未使用 (情報目的のみ)
+
+4. **ビルダーメソッドのリネーム**
+   - `credential(Credential)` → `credentials_provider(Credentials)`
+   - `use_path_style(bool)` → `force_path_style(bool)`
+   - 同名のゲッターも setter と揃えてリネーム
+   - 内部フィールドも `credentials_provider` / `force_path_style` に揃える
+   - `ignore_cert_check` は aws-sdk-rust に対応 API がないため shiguredo_s3 独自として維持
+
+5. **互換 alias は提供しない**
+   - 旧名 (`S3Config`, `S3Client`, `Credential`) は完全削除
+   - `2026.1.0-canary.3` の canary 版のため破壊的変更を許容
+
+6. **関連箇所の更新**
+   - `src/api/*.rs` 56 ファイル: `&'a S3Client` → `&'a Client` を一括更新
+   - `src/signing.rs`: `SigningParams.credential` / `PresignParams.credential` を `credentials` にリネーム、テストも `Credentials::new` の新シグネチャに対応
+   - `examples/s3cli/src/util.rs`: `build_client` を新 API に書き換え
+   - `tests/minio.rs`, `tests/rustfs.rs`: テストヘルパを新 API に書き換え
+   - `README.md`: 全コード例を新 API に更新
+   - `CHANGES.md`: 10 件の `[CHANGE]` エントリを追加 (issue spec の 6 件 + getter リネーム等の追加 4 件)
+   - 関連 issue ファイル (0061, 0069) の `S3Client` 参照も更新
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 12 tests passed
+- `cargo test --test minio test_object_put_get_head_delete`: passed
+- `cargo test --test minio test_presigned_put_get_head_delete`: passed (signing path 検証)
+- `cargo test --test rustfs test_object_put_get_head_delete`: passed
+- pre-commit hook: cargo fmt / clippy / test すべて pass
