@@ -78,7 +78,7 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let mut query_params: Vec<(String, String)> = vec![("versions".into(), "".into())];
@@ -106,7 +106,7 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
@@ -114,7 +114,8 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
             &[],
             b"",
             Some(&query_refs),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<ListObjectVersionsOutput, Error> {
@@ -168,7 +169,9 @@ fn extract_xml_versions(text: &str) -> Vec<ObjectVersion> {
             key: elem.get("Key").map(String::from),
             version_id: elem.get("VersionId").map(String::from),
             is_latest: elem.get_parsed::<bool>("IsLatest"),
-            last_modified: elem.get("LastModified").map(String::from),
+            last_modified: elem
+                .get("LastModified")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
             storage_class: elem
@@ -186,7 +189,9 @@ fn extract_xml_delete_markers(text: &str) -> Vec<DeleteMarkerEntry> {
             key: elem.get("Key").map(String::from),
             version_id: elem.get("VersionId").map(String::from),
             is_latest: elem.get_parsed::<bool>("IsLatest"),
-            last_modified: elem.get("LastModified").map(String::from),
+            last_modified: elem
+                .get("LastModified")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
         });
     });
     markers

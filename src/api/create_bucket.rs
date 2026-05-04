@@ -48,7 +48,7 @@ impl<'a> CreateBucketFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let config = self.client.config_ref();
 
@@ -71,15 +71,7 @@ impl<'a> CreateBucketFluentBuilder<'a> {
             extra_headers.push(("x-amz-acl", v.as_str()));
         }
 
-        Ok(build_signed_request(
-            &config,
-            "PUT",
-            bucket,
-            "",
-            &extra_headers,
-            &body,
-            None,
-        ))
+        build_signed_request(&config, "PUT", bucket, "", &extra_headers, &body, None, now)
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<CreateBucketOutput, Error> {

@@ -51,7 +51,7 @@ impl<'a> DeleteObjectTaggingFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
 
@@ -65,7 +65,7 @@ impl<'a> DeleteObjectTaggingFluentBuilder<'a> {
             query_params.push(("versionId", vid.as_str()));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "DELETE",
             bucket,
@@ -73,7 +73,8 @@ impl<'a> DeleteObjectTaggingFluentBuilder<'a> {
             &extra_headers,
             b"",
             Some(&query_params),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

@@ -1,92 +1,22 @@
 use std::fmt;
+use std::time::SystemTime;
 
 use crate::error::Error;
 
-/// HTTP 日時 (IMF-fixdate 形式)
+/// IMF-fixdate (RFC 9110 Section 5.6.7) フォーマットの文字列を検証する
 ///
-/// RFC 9110 Section 5.6.7 で定義される IMF-fixdate 形式の日時。
-/// 条件付きリクエストヘッダー (`If-Modified-Since`, `If-Unmodified-Since`) で使用する。
-///
-/// # 構築方法
+/// 形式: `Day, DD Mon YYYY HH:MM:SS GMT` (29 バイト)
 ///
 /// ```
-/// use shiguredo_s3::types::HttpDate;
+/// use shiguredo_s3::types::validate_imf_fixdate;
 ///
-/// // UNIX タイムスタンプから生成する
-/// let date = HttpDate::from_unix_timestamp(0);
-/// assert_eq!(date.as_str(), "Thu, 01 Jan 1970 00:00:00 GMT");
-///
-/// // S3 レスポンスの Last-Modified ヘッダー値をそのまま渡す
-/// let date = HttpDate::from_imf_fixdate("Mon, 09 Mar 2026 12:00:00 GMT");
-/// assert_eq!(date.as_str(), "Mon, 09 Mar 2026 12:00:00 GMT");
+/// assert!(validate_imf_fixdate("Thu, 01 Jan 1970 00:00:00 GMT").is_ok());
+/// assert!(validate_imf_fixdate("invalid").is_err());
 /// ```
-#[derive(Debug, Clone)]
-pub struct HttpDate {
-    value: String,
-}
-
-const WEEKDAY_NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH_NAMES: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-impl HttpDate {
-    /// UNIX タイムスタンプ (秒) から生成する
-    pub fn from_unix_timestamp(secs: u64) -> Self {
-        let c = crate::datetime::civil_from_unix_timestamp(secs);
-
-        // 曜日: UNIX epoch (1970-01-01) は木曜日 (4)
-        let weekday = ((c.days_since_epoch % 7 + 4 + 7) % 7) as usize;
-
-        let value = format!(
-            "{}, {:02} {} {:04} {:02}:{:02}:{:02} GMT",
-            WEEKDAY_NAMES[weekday],
-            c.day,
-            MONTH_NAMES[(c.month - 1) as usize],
-            c.year,
-            c.hour,
-            c.minute,
-            c.second
-        );
-
-        Self { value }
-    }
-
-    /// IMF-fixdate 文字列から生成する
-    ///
-    /// S3 レスポンスの `Last-Modified` ヘッダー値をそのまま渡すことができる。
-    /// フォーマットのバリデーションは行わない。
-    pub fn from_imf_fixdate(s: impl Into<String>) -> Self {
-        Self { value: s.into() }
-    }
-
-    /// IMF-fixdate 文字列をバリデーション付きで生成する
-    ///
-    /// フォーマット: `Day, DD Mon YYYY HH:MM:SS GMT` (29 文字)
-    ///
-    /// ```
-    /// use shiguredo_s3::types::HttpDate;
-    ///
-    /// assert!(HttpDate::try_from_imf_fixdate("Thu, 01 Jan 1970 00:00:00 GMT").is_ok());
-    /// assert!(HttpDate::try_from_imf_fixdate("invalid").is_err());
-    /// ```
-    pub fn try_from_imf_fixdate(s: impl Into<String>) -> Result<Self, crate::error::Error> {
-        let value: String = s.into();
-        validate_imf_fixdate(&value)?;
-        Ok(Self { value })
-    }
-
-    /// IMF-fixdate 形式の文字列を返す
-    pub fn as_str(&self) -> &str {
-        &self.value
-    }
-}
-
-/// IMF-fixdate フォーマットを検証する
-fn validate_imf_fixdate(s: &str) -> Result<(), crate::error::Error> {
+pub fn validate_imf_fixdate(s: &str) -> Result<(), Error> {
     // IMF-fixdate は ASCII のみで構成される
     if !s.is_ascii() {
-        return Err(crate::error::Error::InvalidInput(
+        return Err(Error::InvalidInput(
             "IMF-fixdate must be ASCII only".to_string(),
         ));
     }
@@ -94,7 +24,7 @@ fn validate_imf_fixdate(s: &str) -> Result<(), crate::error::Error> {
     let bytes = s.as_bytes();
     // 長さチェック: "Day, DD Mon YYYY HH:MM:SS GMT" = 29 バイト
     if bytes.len() != 29 {
-        return Err(crate::error::Error::InvalidInput(format!(
+        return Err(Error::InvalidInput(format!(
             "IMF-fixdate must be 29 bytes, got {}",
             bytes.len()
         )));
@@ -102,41 +32,31 @@ fn validate_imf_fixdate(s: &str) -> Result<(), crate::error::Error> {
 
     // 以降は ASCII 確認済みのため、バイトインデックスと文字インデックスが一致する
     let weekday = &s[..3];
-    if !WEEKDAY_NAMES.contains(&weekday) {
-        return Err(crate::error::Error::InvalidInput(format!(
-            "invalid weekday: {weekday}"
-        )));
+    if !crate::datetime::WEEKDAY_NAMES.contains(&weekday) {
+        return Err(Error::InvalidInput(format!("invalid weekday: {weekday}")));
     }
 
     // 区切り文字チェック
     if &s[3..5] != ", " {
-        return Err(crate::error::Error::InvalidInput(
+        return Err(Error::InvalidInput(
             "expected ', ' after weekday".to_string(),
         ));
     }
 
     // 月チェック (8..11)
     let month = &s[8..11];
-    if !MONTH_NAMES.contains(&month) {
-        return Err(crate::error::Error::InvalidInput(format!(
-            "invalid month: {month}"
-        )));
+    if !crate::datetime::MONTH_NAMES.contains(&month) {
+        return Err(Error::InvalidInput(format!("invalid month: {month}")));
     }
 
     // GMT チェック (末尾)
     if !s.ends_with(" GMT") {
-        return Err(crate::error::Error::InvalidInput(
+        return Err(Error::InvalidInput(
             "IMF-fixdate must end with ' GMT'".to_string(),
         ));
     }
 
     Ok(())
-}
-
-impl fmt::Display for HttpDate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.value)
-    }
 }
 
 /// GetObject の結果
@@ -146,7 +66,7 @@ pub struct GetObjectOutput {
     pub content_type: Option<String>,
     pub content_length: Option<i64>,
     pub e_tag: Option<String>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     /// オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
     /// カスタムメタデータ (x-amz-meta-* ヘッダーから抽出)
@@ -169,7 +89,7 @@ pub struct HeadObjectOutput {
     pub content_type: Option<String>,
     pub content_length: Option<i64>,
     pub e_tag: Option<String>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     /// `x-amz-storage-class` (STANDARD では省略されることがある)
     pub storage_class: Option<StorageClass>,
     /// オブジェクトのバージョン ID (バージョニング有効時)
@@ -221,7 +141,7 @@ pub struct UploadPartOutput {
 #[derive(Debug)]
 pub struct UploadPartCopyOutput {
     pub e_tag: Option<String>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     /// コピー元オブジェクトのバージョン ID
     pub copy_source_version_id: Option<String>,
 }
@@ -245,7 +165,7 @@ pub struct AbortMultipartUploadOutput {}
 #[derive(Debug)]
 pub struct CopyObjectOutput {
     pub e_tag: Option<String>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     /// コピー先オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
     /// コピー元オブジェクトのバージョン ID
@@ -336,7 +256,7 @@ pub struct ObjectVersion {
     pub key: Option<String>,
     pub version_id: Option<String>,
     pub is_latest: Option<bool>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     pub e_tag: Option<String>,
     pub size: Option<i64>,
     pub storage_class: Option<StorageClass>,
@@ -348,14 +268,14 @@ pub struct DeleteMarkerEntry {
     pub key: Option<String>,
     pub version_id: Option<String>,
     pub is_latest: Option<bool>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
 }
 
 /// S3 オブジェクトのメタデータ
 #[derive(Debug, Clone)]
 pub struct Object {
     pub key: Option<String>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     pub e_tag: Option<String>,
     pub size: Option<i64>,
     pub storage_class: Option<StorageClass>,
@@ -409,7 +329,7 @@ pub struct ListBucketsOutput {
 #[derive(Debug, Clone)]
 pub struct Bucket {
     pub name: Option<String>,
-    pub creation_date: Option<String>,
+    pub creation_date: Option<SystemTime>,
     /// バケットが存在するリージョン
     pub bucket_region: Option<String>,
     /// バケットの ARN
@@ -779,7 +699,7 @@ pub struct ListPartsOutput {
 #[derive(Debug, Clone)]
 pub struct Part {
     pub part_number: Option<i32>,
-    pub last_modified: Option<String>,
+    pub last_modified: Option<SystemTime>,
     pub e_tag: Option<String>,
     pub size: Option<i64>,
 }
@@ -805,7 +725,7 @@ pub struct ListMultipartUploadsOutput {
 pub struct MultipartUpload {
     pub upload_id: Option<String>,
     pub key: Option<String>,
-    pub initiated: Option<String>,
+    pub initiated: Option<SystemTime>,
     pub storage_class: Option<StorageClass>,
 }
 

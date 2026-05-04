@@ -1,6 +1,7 @@
 # 署名計算から時刻取得の副作用を排除し Sans I/O 原則を徹底する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -131,3 +132,66 @@ let request = client.get_object().bucket("foo").key("bar").build_request(now)?;
 - `[CHANGE] HttpDate 構造体を廃止し validate_imf_fixdate 関数を提供する`
 - `[CHANGE] GetObject / HeadObject の if_modified_since / if_unmodified_since の型を Option<HttpDate> から Option<SystemTime> に変更する`
 - `[CHANGE] last_modified / creation_date / initiated / expires 等の出力日時フィールドを Option<String> から Option<SystemTime> に変更する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/datetime.rs` の Sans I/O 化と日時変換ヘルパ追加**
+   - `UtcDateTime::now()` を削除し、`UtcDateTime::from_system_time(now: SystemTime) -> Result<Self, Error>` を追加
+   - 反転変換 `unix_timestamp_from_civil` (Howard Hinnant の days_from_civil) を追加
+   - `pub(crate) fn format_imf_fixdate(t: SystemTime) -> Result<String, Error>` を追加 (リクエストヘッダー出力用)
+   - `pub(crate) fn parse_imf_fixdate(s: &str) -> Result<SystemTime, Error>` を追加 (レスポンスヘッダー入力用)
+   - `pub(crate) fn parse_iso8601(s: &str) -> Result<SystemTime, Error>` を追加 (XML レスポンスの ISO 8601 拡張形式)
+   - 単体テスト 9 件を追加
+
+2. **`src/types.rs` の `HttpDate` 廃止**
+   - `HttpDate` 構造体を削除
+   - `validate_imf_fixdate(s: &str) -> Result<(), Error>` を `pub fn` として公開
+   - `WEEKDAY_NAMES` / `MONTH_NAMES` を `src/datetime.rs` に移動
+
+3. **`src/lib.rs` の `pub use` 更新**
+   - `HttpDate` 削除、`validate_imf_fixdate` 追加
+
+4. **内部関数のシグネチャ変更 (`src/api/mod.rs`)**
+   - `build_signed_request` / `build_signed_service_request` / `build_presigned_url` に `now: SystemTime` 引数追加、戻り値を `Result<_, Error>` に変更
+   - 内部で `UtcDateTime::from_system_time(now)?` を呼ぶ
+
+5. **公開ビルダーへの `now` 引数追加 (56 ファイル)**
+   - `pub fn build_request(&self, now: SystemTime) -> Result<S3Request, Error>` に統一
+   - `pub fn presigned(self, expires_in_secs: u64, now: SystemTime) -> Result<PresignedRequest, Error>` に統一
+   - Python スクリプトで一括置換、その後 list_buckets.rs 等の特殊ケースを手動修正
+
+6. **入力日時フィールドの型変更**
+   - `src/api/get_object.rs` / `src/api/head_object.rs` の `if_modified_since` / `if_unmodified_since` を `Option<SystemTime>` に変更
+   - ビルダー内部で `format_imf_fixdate(t)?` で IMF-fixdate 文字列に変換してヘッダーに設定
+   - aws-sdk-rust 互換の `set_*` バリアントも追加
+
+7. **出力日時フィールドの `Option<SystemTime>` 統一**
+   - `last_modified`, `creation_date`, `initiated`, `last_modified_time`, `restore_expiry_date` を `Option<SystemTime>` に変更
+   - 各 `parse_response` でヘッダー (IMF-fixdate) は `parse_imf_fixdate`、XML (ISO 8601) は `parse_iso8601` でパース
+   - クロージャ内 (`for_each_element` のコールバック) では `?` が使えないため、`.and_then(|s| parse_iso8601(s).ok())` でパース失敗を `None` に落とす
+   - パース失敗のエラー伝搬は将来 `for_each_element` 自体を Result 対応にする issue で別途検討
+
+8. **examples / tests / fuzz の追従**
+   - `examples/s3cli/src/util.rs` に `now() -> SystemTime` ヘルパを追加
+   - `tests/minio.rs` / `tests/rustfs.rs` に同 `now()` ヘルパを追加
+   - 全 `.build_request()` / `.presigned(N)` を `.build_request(now())` / `.presigned(N, now())` に置換
+   - `tests/minio.rs` の `HttpDate::from_unix_timestamp(0)` を `SystemTime::UNIX_EPOCH` に置換
+   - `examples/s3cli/src/commands.rs` で `parse_s3_timestamp` (旧 ISO 8601 パーサ) を削除し、`format_systemtime_rfc3339` (表示用 ISO 8601 整形) を追加
+   - `collect_s3_objects` の戻り値を `Vec<(String, i64, Option<SystemTime>)>` に変更
+   - `fuzz/fuzz_targets/fuzz_httpdate.rs` を `validate_imf_fixdate` を呼ぶ形に書き換え
+
+9. **Sans I/O 原則の決定的署名テストを追加 (`src/api/mod.rs`)**
+   - `test_build_request_is_deterministic_for_fixed_now`: 同じ `now` で 2 回呼ぶと同じ `S3Request` を返すことを検証
+   - `test_build_request_varies_with_now`: 異なる `now` で署名が変わることを検証
+   - `test_presigned_is_deterministic_for_fixed_now`: presigned URL も同様
+   - `test_build_request_rejects_pre_epoch_now`: UNIX epoch 前の時刻は `Error::InvalidInput` を返すことを検証
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed (新規 13 件含む)
+- `cargo test --test minio test_object_put_get_head_delete test_conditional_headers_date test_presigned_put_get_head_delete`: 3 tests passed (signing path および条件付きヘッダー検証)
+- pre-commit hook (cargo fmt / clippy / test) すべて pass

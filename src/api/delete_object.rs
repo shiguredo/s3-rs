@@ -46,7 +46,7 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
 
@@ -60,7 +60,7 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
             Some(query_params.as_slice())
         };
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "DELETE",
             bucket,
@@ -68,7 +68,8 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
             &[],
             b"",
             query,
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<DeleteObjectOutput, Error> {
@@ -85,7 +86,11 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
     }
 
     /// Presigned リクエストを生成する (Sans I/O)
-    pub fn presigned(self, expires_in_secs: u64) -> Result<super::PresignedRequest, Error> {
+    pub fn presigned(
+        self,
+        expires_in_secs: u64,
+        now: std::time::SystemTime,
+    ) -> Result<super::PresignedRequest, Error> {
         validate_presign_expires(expires_in_secs)?;
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -101,7 +106,8 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
             expires_in_secs,
             &extra_query_params,
             &[],
-        );
+            now,
+        )?;
         Ok(super::PresignedRequest {
             url,
             method: "DELETE".to_string(),

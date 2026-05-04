@@ -77,7 +77,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let mut query_params: Vec<(String, String)> = vec![("list-type".into(), "2".into())];
@@ -105,7 +105,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
@@ -113,7 +113,8 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             &[],
             b"",
             Some(&query_refs),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<ListObjectsV2Output, Error> {
@@ -161,7 +162,9 @@ fn extract_xml_objects(text: &str) -> Vec<Object> {
     crate::xml::for_each_element(text, "Contents", |elem| {
         objects.push(Object {
             key: elem.get("Key").map(String::from),
-            last_modified: elem.get("LastModified").map(String::from),
+            last_modified: elem
+                .get("LastModified")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
             storage_class: elem

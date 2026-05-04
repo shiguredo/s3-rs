@@ -12,7 +12,7 @@ use crate::transport::send;
 use crate::upload::{
     DEFAULT_CONCURRENCY, MultipartUploadParams, UploadData, calculate_part_size, upload_multipart,
 };
-use crate::util::{FilterRule, resolve_content_type, should_include};
+use crate::util::{FilterRule, now, resolve_content_type, should_include};
 
 /// 単一ファイルをアップロードする
 #[allow(clippy::too_many_arguments)]
@@ -76,7 +76,7 @@ pub(crate) async fn download_file(
 
     let request = sse
         .apply_to_get(client.get_object().bucket(bucket).key(key))
-        .build_request()?;
+        .build_request(now())?;
     let output = send(
         tls_config,
         request,
@@ -190,7 +190,7 @@ pub(crate) async fn download_recursive(
         if let Some(ref token) = continuation_token {
             builder = builder.continuation_token(token);
         }
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             tls_config,
             request,
@@ -262,7 +262,7 @@ pub(crate) async fn copy_recursive(
         if let Some(ref token) = continuation_token {
             builder = builder.continuation_token(token);
         }
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             tls_config,
             request,
@@ -296,7 +296,7 @@ pub(crate) async fn copy_recursive(
                             .bucket(dst_bucket)
                             .key(&dst_key)
                             .copy_source(&copy_source);
-                        let request = sse.apply_to_copy(builder).build_request()?;
+                        let request = sse.apply_to_copy(builder).build_request(now())?;
                         send(
                             tls_config,
                             request,
@@ -349,7 +349,7 @@ pub(crate) async fn delete_recursive(
         if let Some(ref token) = continuation_token {
             builder = builder.continuation_token(token);
         }
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             tls_config,
             request,
@@ -389,7 +389,7 @@ pub(crate) async fn delete_recursive(
                             }
                         }
                     }
-                    let request = delete_builder.build_request()?;
+                    let request = delete_builder.build_request(now())?;
                     send(
                         tls_config,
                         request,

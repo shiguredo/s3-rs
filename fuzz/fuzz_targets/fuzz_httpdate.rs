@@ -1,20 +1,19 @@
 #![no_main]
 
-//! HttpDate バリデーションの fuzz ターゲット
+//! IMF-fixdate バリデーションとパースの fuzz ターゲット
 //!
-//! 任意の文字列を try_from_imf_fixdate に渡し、パニックしないことを検証する。
+//! 任意の文字列を `validate_imf_fixdate` および `parse_imf_fixdate` に渡し、
+//! パニックしないことを検証する。
+//!
+//! HttpDate 構造体は廃止されたため、本ターゲットも関数 API を直接呼び出す形に
+//! 書き換えている (issue 0060)。
 
 use libfuzzer_sys::fuzz_target;
-use shiguredo_s3::types::HttpDate;
+use shiguredo_s3::validate_imf_fixdate;
 
 fuzz_target!(|data: &[u8]| {
     if let Ok(s) = std::str::from_utf8(data) {
-        // バリデーション付きコンストラクタがパニックしないことを検証する
-        let _ = HttpDate::try_from_imf_fixdate(s);
-
-        // バリデーションなしコンストラクタもパニックしないことを検証する
-        let date = HttpDate::from_imf_fixdate(s);
-        let _ = date.as_str();
-        let _ = format!("{date}");
+        // バリデーション関数がパニックしないことを検証する
+        let _ = validate_imf_fixdate(s);
     }
 });

@@ -93,6 +93,14 @@ async fn start_rustfs() -> (ContainerAsync<GenericImage>, u16) {
     (container, port)
 }
 
+/// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
+///
+/// shiguredo_s3 は Sans I/O のため `build_request` / `presigned` に
+/// 現在時刻を引数で渡す。テスト側で副作用を 1 箇所に閉じ込める目的。
+fn now() -> std::time::SystemTime {
+    std::time::SystemTime::now()
+}
+
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
@@ -207,7 +215,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let _output = send(
         request,
@@ -217,7 +225,11 @@ async fn test_bucket_lifecycle() {
 
     // バケットが存在することを HEAD で確認する
     // 存在しない場合は 404 が返る
-    let request = client.head_bucket().bucket(bucket).build_request().unwrap();
+    let request = client
+        .head_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
     let _output = send(
         request,
         shiguredo_s3::api::HeadBucketFluentBuilder::parse_response,
@@ -225,7 +237,7 @@ async fn test_bucket_lifecycle() {
     .await;
 
     // ListBuckets で作成したバケットが一覧に含まれていることを確認する
-    let request = client.list_buckets().build_request().unwrap();
+    let request = client.list_buckets().build_request(now()).unwrap();
     let output = send(
         request,
         shiguredo_s3::api::ListBucketsFluentBuilder::parse_response,
@@ -244,7 +256,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .delete_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let _output = send(
         request,
@@ -253,7 +265,7 @@ async fn test_bucket_lifecycle() {
     .await;
 
     // 削除後に ListBuckets でバケットが消えていることを確認する
-    let request = client.list_buckets().build_request().unwrap();
+    let request = client.list_buckets().build_request(now()).unwrap();
     let output = send(
         request,
         shiguredo_s3::api::ListBucketsFluentBuilder::parse_response,
@@ -288,7 +300,7 @@ async fn test_object_put_get_head_delete() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -304,7 +316,7 @@ async fn test_object_put_get_head_delete() {
         .key(key)
         .body(body.to_vec())
         .content_type("text/plain")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put_output = send(
         request,
@@ -319,7 +331,7 @@ async fn test_object_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -336,7 +348,7 @@ async fn test_object_put_get_head_delete() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let head_output = send(
         request,
@@ -353,7 +365,7 @@ async fn test_object_put_get_head_delete() {
         .delete_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -366,7 +378,7 @@ async fn test_object_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -387,7 +399,7 @@ async fn test_list_objects_v2() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -403,7 +415,7 @@ async fn test_list_objects_v2() {
             .bucket(bucket)
             .key(&key)
             .body(format!("content-{i}").into_bytes())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -417,7 +429,7 @@ async fn test_list_objects_v2() {
         .list_objects_v2()
         .bucket(bucket)
         .prefix("dir/")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -433,7 +445,7 @@ async fn test_list_objects_v2() {
         .list_objects_v2()
         .bucket(bucket)
         .delimiter("/")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -464,7 +476,7 @@ async fn test_copy_object() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -478,7 +490,7 @@ async fn test_copy_object() {
         .bucket(bucket)
         .key(src_key)
         .body(body.to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -494,7 +506,7 @@ async fn test_copy_object() {
         .bucket(bucket)
         .key(dst_key)
         .copy_source(&copy_source)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let copy_output = send(
         request,
@@ -509,7 +521,7 @@ async fn test_copy_object() {
         .get_object()
         .bucket(bucket)
         .key(dst_key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -535,7 +547,7 @@ async fn test_delete_objects() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -551,7 +563,7 @@ async fn test_delete_objects() {
             .bucket(bucket)
             .key(key)
             .body(b"data".to_vec())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -569,7 +581,7 @@ async fn test_delete_objects() {
             version_id: None,
         });
     }
-    let request = builder.build_request().unwrap();
+    let request = builder.build_request(now()).unwrap();
     let output = send(
         request,
         shiguredo_s3::api::DeleteObjectsFluentBuilder::parse_response,
@@ -584,7 +596,7 @@ async fn test_delete_objects() {
     let request = client
         .list_objects_v2()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -615,7 +627,7 @@ async fn test_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -629,7 +641,7 @@ async fn test_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -653,7 +665,7 @@ async fn test_multipart_upload() {
         .upload_id(&upload_id)
         .part_number(1)
         .body(part1_data.clone())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let part1_output = send(
         request,
@@ -669,7 +681,7 @@ async fn test_multipart_upload() {
         .upload_id(&upload_id)
         .part_number(2)
         .body(part2_data.clone())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let part2_output = send(
         request,
@@ -696,7 +708,7 @@ async fn test_multipart_upload() {
                 },
             ]),
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     let complete_output = send(
         request,
@@ -711,7 +723,7 @@ async fn test_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -746,7 +758,7 @@ async fn test_abort_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -759,7 +771,7 @@ async fn test_abort_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -774,7 +786,7 @@ async fn test_abort_multipart_upload() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -787,7 +799,7 @@ async fn test_abort_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -809,7 +821,7 @@ async fn test_list_parts() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -822,7 +834,7 @@ async fn test_list_parts() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -843,7 +855,7 @@ async fn test_list_parts() {
             .upload_id(&upload_id)
             .part_number(part_number)
             .body(data)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -858,7 +870,7 @@ async fn test_list_parts() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListPartsFluentBuilder::parse_response).await;
     // レスポンスの upload_id が一致することを確認する
@@ -880,7 +892,7 @@ async fn test_list_parts() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -907,7 +919,7 @@ async fn test_list_multipart_uploads_not_supported() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -923,7 +935,7 @@ async fn test_list_multipart_uploads_not_supported() {
             .create_multipart_upload()
             .bucket(bucket)
             .key(*key)
-            .build_request()
+            .build_request(now())
             .unwrap();
         let output = send(
             request,
@@ -937,7 +949,7 @@ async fn test_list_multipart_uploads_not_supported() {
     let request = client
         .list_multipart_uploads()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListMultipartUploadsFluentBuilder::parse_response).await;
     assert!(
@@ -952,7 +964,7 @@ async fn test_list_multipart_uploads_not_supported() {
             .bucket(bucket)
             .key(*key)
             .upload_id(upload_id)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -982,7 +994,7 @@ async fn test_bucket_versioning() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -994,7 +1006,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert!(output.status.is_none());
@@ -1004,7 +1016,7 @@ async fn test_bucket_versioning() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Enabled")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -1012,7 +1024,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert_eq!(output.status.as_deref(), Some("Enabled"));
@@ -1022,7 +1034,7 @@ async fn test_bucket_versioning() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Suspended")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -1030,7 +1042,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert_eq!(output.status.as_deref(), Some("Suspended"));
@@ -1055,7 +1067,7 @@ async fn test_bucket_tagging() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1079,7 +1091,7 @@ async fn test_bucket_tagging() {
                 })
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketTaggingFluentBuilder::parse_response).await;
 
@@ -1087,7 +1099,7 @@ async fn test_bucket_tagging() {
     let request = client
         .get_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketTaggingFluentBuilder::parse_response).await;
     // タグが 2 件返ることを確認する
@@ -1111,7 +1123,7 @@ async fn test_bucket_tagging() {
     let request = client
         .delete_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketTaggingFluentBuilder::parse_response).await;
 
@@ -1119,7 +1131,7 @@ async fn test_bucket_tagging() {
     let request = client
         .get_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1136,7 +1148,7 @@ async fn test_object_tagging() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1150,7 +1162,7 @@ async fn test_object_tagging() {
         .bucket(bucket)
         .key("test.txt")
         .body(b"hello".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1163,7 +1175,7 @@ async fn test_object_tagging() {
         .get_object_tagging()
         .bucket(bucket)
         .key("test.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
     assert!(output.tag_set.is_empty());
@@ -1185,7 +1197,7 @@ async fn test_object_tagging() {
                 })
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutObjectTaggingFluentBuilder::parse_response).await;
 
@@ -1194,7 +1206,7 @@ async fn test_object_tagging() {
         .get_object_tagging()
         .bucket(bucket)
         .key("test.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
     assert_eq!(output.tag_set.len(), 2);
@@ -1216,7 +1228,7 @@ async fn test_object_tagging() {
         .delete_object_tagging()
         .bucket(bucket)
         .key("test.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteObjectTaggingFluentBuilder::parse_response).await;
 
@@ -1225,7 +1237,7 @@ async fn test_object_tagging() {
         .get_object_tagging()
         .bucket(bucket)
         .key("test.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetObjectTaggingFluentBuilder::parse_response).await;
     assert!(output.tag_set.is_empty());
@@ -1250,7 +1262,7 @@ async fn test_public_access_block() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1267,7 +1279,7 @@ async fn test_public_access_block() {
         .ignore_public_acls(true)
         .block_public_policy(true)
         .restrict_public_buckets(true)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutPublicAccessBlockFluentBuilder::parse_response).await;
 
@@ -1275,7 +1287,7 @@ async fn test_public_access_block() {
     let request = client
         .get_public_access_block()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetPublicAccessBlockFluentBuilder::parse_response).await;
     assert_eq!(output.block_public_acls, Some(true));
@@ -1287,7 +1299,7 @@ async fn test_public_access_block() {
     let request = client
         .delete_public_access_block()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1315,7 +1327,7 @@ async fn test_delete_public_access_block_returns_500() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1328,14 +1340,14 @@ async fn test_delete_public_access_block_returns_500() {
         .put_public_access_block()
         .bucket(bucket)
         .block_public_acls(true)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutPublicAccessBlockFluentBuilder::parse_response).await;
 
     let request = client
         .delete_public_access_block()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1347,7 +1359,7 @@ async fn test_delete_public_access_block_returns_500() {
     let request = client
         .get_public_access_block()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(
@@ -1376,7 +1388,7 @@ async fn test_bucket_policy() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1393,7 +1405,7 @@ async fn test_bucket_policy() {
         .put_bucket_policy()
         .bucket(bucket)
         .policy(&policy)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketPolicyFluentBuilder::parse_response).await;
 
@@ -1402,7 +1414,7 @@ async fn test_bucket_policy() {
     let request = client
         .get_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketPolicyFluentBuilder::parse_response).await;
     assert!(output.policy.is_some());
@@ -1411,7 +1423,7 @@ async fn test_bucket_policy() {
     let request = client
         .delete_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketPolicyFluentBuilder::parse_response).await;
 
@@ -1419,7 +1431,7 @@ async fn test_bucket_policy() {
     let request = client
         .get_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1442,7 +1454,7 @@ async fn test_bucket_lifecycle_configuration() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let _output = send(
         request,
@@ -1472,7 +1484,7 @@ async fn test_bucket_lifecycle_configuration() {
         .put_bucket_lifecycle_configuration()
         .bucket(bucket)
         .rule(rule)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let _output = send(
         request,
@@ -1484,7 +1496,7 @@ async fn test_bucket_lifecycle_configuration() {
     let request = client
         .get_bucket_lifecycle_configuration()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -1504,7 +1516,7 @@ async fn test_bucket_lifecycle_configuration() {
     let request = client
         .delete_bucket_lifecycle()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let _output = send(
         request,
@@ -1516,7 +1528,7 @@ async fn test_bucket_lifecycle_configuration() {
     let request = client
         .get_bucket_lifecycle_configuration()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     let result =
@@ -1535,7 +1547,7 @@ async fn test_bucket_encryption() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1561,7 +1573,7 @@ async fn test_bucket_encryption() {
                 )
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketEncryptionFluentBuilder::parse_response).await;
 
@@ -1569,7 +1581,7 @@ async fn test_bucket_encryption() {
     let request = client
         .get_bucket_encryption()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -1590,7 +1602,7 @@ async fn test_bucket_encryption() {
     let request = client
         .delete_bucket_encryption()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketEncryptionFluentBuilder::parse_response).await;
 
@@ -1598,7 +1610,7 @@ async fn test_bucket_encryption() {
     let request = client
         .get_bucket_encryption()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     // RustFS は削除後 400 を返す (MinIO は 404)
@@ -1620,7 +1632,7 @@ async fn test_bucket_cors() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1646,7 +1658,7 @@ async fn test_bucket_cors() {
                 )
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketCorsFluentBuilder::parse_response).await;
 
@@ -1654,7 +1666,7 @@ async fn test_bucket_cors() {
     let request = client
         .get_bucket_cors()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketCorsFluentBuilder::parse_response).await;
     let rules = output.cors_rules.unwrap();
@@ -1676,7 +1688,7 @@ async fn test_bucket_cors() {
     let request = client
         .delete_bucket_cors()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketCorsFluentBuilder::parse_response).await;
 
@@ -1684,7 +1696,7 @@ async fn test_bucket_cors() {
     let request = client
         .get_bucket_cors()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(

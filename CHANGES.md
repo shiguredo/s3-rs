@@ -91,6 +91,14 @@
   - @voluntas
 - [CHANGE] 全 enum 化対象のビルダーに aws-sdk-rust 互換の `set_*` バリアント (Option を直接受ける) を追加する
   - @voluntas
+- [CHANGE] 全 `build_request` / `presigned` メソッドに `now: SystemTime` 引数を追加し、Sans I/O 原則を徹底する
+  - @voluntas
+- [CHANGE] `HttpDate` 構造体を廃止し、`validate_imf_fixdate` 関数のみを公開する
+  - @voluntas
+- [CHANGE] `GetObject` / `HeadObject` の `if_modified_since` / `if_unmodified_since` を `Option<HttpDate>` から `Option<SystemTime>` に変更する
+  - @voluntas
+- [CHANGE] `last_modified` / `creation_date` / `initiated` / `last_modified_time` / `restore_expiry_date` の出力日時フィールドを `Option<String>` から `Option<SystemTime>` に変更する
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

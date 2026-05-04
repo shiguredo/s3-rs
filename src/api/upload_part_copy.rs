@@ -136,7 +136,7 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
@@ -213,7 +213,7 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
             ("uploadId", upload_id),
         ];
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -221,7 +221,8 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
             &extra_headers,
             b"",
             Some(&query_params),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<UploadPartCopyOutput, Error> {
@@ -236,7 +237,9 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
 
         Ok(UploadPartCopyOutput {
             e_tag: crate::xml::extract_element(body_text, "ETag"),
-            last_modified: crate::xml::extract_element(body_text, "LastModified"),
+            last_modified: crate::xml::extract_element(body_text, "LastModified")
+                .map(|s| crate::datetime::parse_iso8601(s.as_str()))
+                .transpose()?,
             copy_source_version_id: response
                 .get_header("x-amz-copy-source-version-id")
                 .map(String::from),

@@ -32,9 +32,9 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
@@ -42,7 +42,8 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
             &[],
             b"",
             Some(&[("lifecycle", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

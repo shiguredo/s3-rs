@@ -4,6 +4,14 @@
 
 use shiguredo_s3::{Client, Config, Credentials};
 
+/// `SystemTime::now()` を呼び出すヘルパ
+///
+/// shiguredo_s3 は Sans I/O のため `build_request` / `presigned` に
+/// 現在時刻を引数で渡す。サンプル側で副作用を 1 箇所に閉じ込める目的。
+pub(crate) fn now() -> std::time::SystemTime {
+    std::time::SystemTime::now()
+}
+
 /// ファイル拡張子から MIME タイプを推測する
 pub(crate) fn guess_mime_type(path: &str) -> Option<&'static str> {
     let ext = path.rsplit('.').next()?.to_ascii_lowercase();

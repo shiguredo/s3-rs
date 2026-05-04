@@ -21,7 +21,7 @@ test = false
 doc = false
 bench = false
 
-# HttpDate バリデーションの fuzz ターゲット
+# IMF-fixdate バリデーションの fuzz ターゲット
 [[bin]]
 name = "fuzz_httpdate"
 path = "fuzz_targets/fuzz_httpdate.rs"
