@@ -1,6 +1,7 @@
 # DeleteObjects の入力を Delete 構造体経由に変更する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -183,3 +184,35 @@ pub use types::{Delete, DeleteBuilder, ObjectIdentifier};
 - `[CHANGE] DeleteObjects の入力を Delete 構造体経由に変更する`
 - `[ADD] Delete / DeleteBuilder 型を追加する`
 - `[CHANGE] DeleteObjectsFluentBuilder::object / quiet メソッドを削除する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` に `Delete` / `DeleteBuilder` 型を新設**
+   - `Delete { objects: Vec<ObjectIdentifier>, quiet: Option<bool> }` を追加
+   - `Delete::builder()` で `DeleteBuilder` を返す
+   - `DeleteBuilder` に `objects` (単数追加) / `set_objects` (一括設定) / `quiet` / `set_quiet` / `build` を実装
+   - aws-sdk-rust の `aws_sdk_s3::types::Delete` と同じ命名規則
+
+2. **`src/api/delete_objects.rs` の刷新**
+   - `DeleteObjectsFluentBuilder` のフィールドを `objects` + `quiet` から `delete: Option<Delete>` に変更
+   - `object(ObjectIdentifier)` / `quiet(bool)` メソッドを削除
+   - `delete(Delete)` / `set_delete(Option<Delete>)` メソッドを追加
+   - `build_request` で `Delete` から `objects` と `quiet` を取り出して XML を組み立てる
+   - 互換 alias は提供せず破壊的変更とする
+
+3. **`src/lib.rs` の `pub use` 追加**
+   - `Delete`, `DeleteBuilder`, `ObjectIdentifier` を公開
+
+4. **利用箇所の書き換え**
+   - `tests/minio.rs` / `tests/rustfs.rs` を新 API に書き換え
+   - `examples/s3cli/src/ops.rs` の sync 削除処理 (chunks(1000)) を新 API に書き換え
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --test minio test_delete_objects`: passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass
