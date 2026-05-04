@@ -514,7 +514,13 @@ async fn test_copy_object() {
     )
     .await;
     // コピー成功時は ETag が返る
-    assert!(copy_output.e_tag.is_some());
+    assert!(
+        copy_output
+            .copy_object_result
+            .as_ref()
+            .and_then(|r| r.e_tag.as_ref())
+            .is_some()
+    );
 
     // コピー先を GetObject で取得してボディが一致することを確認する
     let request = client

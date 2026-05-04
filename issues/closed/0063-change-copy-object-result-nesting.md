@@ -1,6 +1,7 @@
 # CopyObjectOutput を CopyObjectResult ネスト構造に変更する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -161,3 +162,37 @@ pub use types::{CopyObjectOutput, CopyObjectResult};
 - `[CHANGE] CopyObjectOutput のフラット構造を CopyObjectResult ネスト構造に変更する`
 - `[ADD] CopyObjectResult 型を追加する`
 - `[ADD] CopyObjectResult に checksum_crc32 / checksum_crc32_c / checksum_crc64_nvme / checksum_sha1 / checksum_sha256 / checksum_type フィールドを追加する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` に `CopyObjectResult` 型を新設**
+   - `e_tag`, `last_modified` (`Option<SystemTime>`), `checksum_crc32`, `checksum_crc32_c`, `checksum_crc64_nvme`, `checksum_sha1`, `checksum_sha256`, `checksum_type` フィールドを持つ
+   - aws-sdk-rust の `aws_sdk_s3::types::CopyObjectResult` と同じ構造
+
+2. **`CopyObjectOutput` の再構成**
+   - フラットな `e_tag` / `last_modified` を削除
+   - `copy_object_result: Option<CopyObjectResult>` を追加
+   - `version_id`, `copy_source_version_id` はトップレベルに残す
+   - SSE / `expiration` 等の追加フィールドは issue 0067 で対応予定 (本 issue ではコア構造変更のみ)
+
+3. **`src/api/copy_object.rs` の `parse_response` 更新**
+   - XML body から `<CopyObjectResult>` 配下の各フィールド (ETag / LastModified / Checksum*) を抽出
+   - `last_modified` は `parse_iso8601` で `SystemTime` に変換
+   - body が UTF-8 として読めない場合は `copy_object_result: None`
+
+4. **`src/lib.rs` の `pub use` 更新**
+   - `CopyObjectResult` を公開
+
+5. **利用箇所の書き換え**
+   - `tests/minio.rs`, `tests/rustfs.rs` の `output.e_tag.is_some()` 等を `output.copy_object_result.as_ref().and_then(|r| r.e_tag.as_ref()).is_some()` に書き換え
+   - `UploadPartCopyOutput` (別構造体) はフラットなままなので影響なし
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --test minio test_copy_object test_copy_object_metadata_replace`: 2 件 passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass
