@@ -7,7 +7,10 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::CopyObjectOutput;
+use crate::types::{
+    ChecksumAlgorithm, CopyObjectOutput, MetadataDirective, ObjectCannedAcl, ServerSideEncryption,
+    StorageClass, TaggingDirective,
+};
 
 use super::{S3Request, build_signed_request, check_body_error, parse_error_response, required};
 
@@ -16,7 +19,7 @@ pub struct CopyObjectFluentBuilder<'a> {
     bucket: Option<String>,
     key: Option<String>,
     copy_source: Option<String>,
-    metadata_directive: Option<String>,
+    metadata_directive: Option<MetadataDirective>,
     content_type: Option<String>,
     content_encoding: Option<String>,
     content_disposition: Option<String>,
@@ -24,7 +27,7 @@ pub struct CopyObjectFluentBuilder<'a> {
     cache_control: Option<String>,
     expires: Option<String>,
     /// コピー先のサーバサイド暗号化 (AES256 または aws:kms)
-    server_side_encryption: Option<String>,
+    server_side_encryption: Option<ServerSideEncryption>,
     /// コピー先の SSE-KMS キー ID
     ssekms_key_id: Option<String>,
     /// コピー先の SSE-C アルゴリズム (AES256)
@@ -36,17 +39,17 @@ pub struct CopyObjectFluentBuilder<'a> {
     /// コピー元の SSE-C キー (Base64)
     copy_source_sse_customer_key: Option<String>,
     /// ACL (private, public-read 等)
-    acl: Option<String>,
+    acl: Option<ObjectCannedAcl>,
     /// カスタムメタデータ (x-amz-meta-*)
     metadata: Vec<(String, String)>,
     /// ストレージクラス (STANDARD, STANDARD_IA 等)
-    storage_class: Option<String>,
+    storage_class: Option<StorageClass>,
     /// チェックサムアルゴリズム
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
     /// オブジェクトタグ (URL エンコードされたキーバリューペア)
     tagging: Option<String>,
     /// タグディレクティブ (COPY または REPLACE)
-    tagging_directive: Option<String>,
+    tagging_directive: Option<TaggingDirective>,
     /// 条件付きコピー: コピー元の ETag が一致する場合のみコピーする
     copy_source_if_match: Option<String>,
     /// 条件付きコピー: コピー元の ETag が異なる場合のみコピーする
@@ -109,12 +112,17 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         self
     }
 
-    /// メタデータディレクティブ ("COPY" または "REPLACE")
+    /// メタデータディレクティブ (COPY または REPLACE)
     ///
-    /// "REPLACE" を指定するとコピー先のメタデータをこのリクエストで指定した値に置き換える
-    /// デフォルトは "COPY" (コピー元のメタデータをそのまま引き継ぐ)
-    pub fn metadata_directive(mut self, metadata_directive: impl Into<String>) -> Self {
-        self.metadata_directive = Some(metadata_directive.into());
+    /// `REPLACE` を指定するとコピー先のメタデータをこのリクエストで指定した値に置き換える。
+    /// デフォルトは `COPY` (コピー元のメタデータをそのまま引き継ぐ)。
+    pub fn metadata_directive(mut self, input: MetadataDirective) -> Self {
+        self.metadata_directive = Some(input);
+        self
+    }
+
+    pub fn set_metadata_directive(mut self, input: Option<MetadataDirective>) -> Self {
+        self.metadata_directive = input;
         self
     }
 
@@ -148,9 +156,14 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         self
     }
 
-    /// コピー先のサーバサイド暗号化を指定する (AES256 または aws:kms)
-    pub fn server_side_encryption(mut self, sse: impl Into<String>) -> Self {
-        self.server_side_encryption = Some(sse.into());
+    /// コピー先のサーバサイド暗号化を指定する (AES256 / aws:kms / aws:kms:dsse 等)
+    pub fn server_side_encryption(mut self, input: ServerSideEncryption) -> Self {
+        self.server_side_encryption = Some(input);
+        self
+    }
+
+    pub fn set_server_side_encryption(mut self, input: Option<ServerSideEncryption>) -> Self {
+        self.server_side_encryption = input;
         self
     }
 
@@ -189,8 +202,13 @@ impl<'a> CopyObjectFluentBuilder<'a> {
     }
 
     /// ACL を指定する (private, public-read, public-read-write 等)
-    pub fn acl(mut self, acl: impl Into<String>) -> Self {
-        self.acl = Some(acl.into());
+    pub fn acl(mut self, input: ObjectCannedAcl) -> Self {
+        self.acl = Some(input);
+        self
+    }
+
+    pub fn set_acl(mut self, input: Option<ObjectCannedAcl>) -> Self {
+        self.acl = input;
         self
     }
 
@@ -201,14 +219,24 @@ impl<'a> CopyObjectFluentBuilder<'a> {
     }
 
     /// ストレージクラスを指定する (STANDARD, STANDARD_IA, GLACIER 等)
-    pub fn storage_class(mut self, storage_class: impl Into<String>) -> Self {
-        self.storage_class = Some(storage_class.into());
+    pub fn storage_class(mut self, input: StorageClass) -> Self {
+        self.storage_class = Some(input);
+        self
+    }
+
+    pub fn set_storage_class(mut self, input: Option<StorageClass>) -> Self {
+        self.storage_class = input;
         self
     }
 
     /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -219,8 +247,13 @@ impl<'a> CopyObjectFluentBuilder<'a> {
     }
 
     /// タグディレクティブを指定する (COPY または REPLACE)
-    pub fn tagging_directive(mut self, directive: impl Into<String>) -> Self {
-        self.tagging_directive = Some(directive.into());
+    pub fn tagging_directive(mut self, input: TaggingDirective) -> Self {
+        self.tagging_directive = Some(input);
+        self
+    }
+
+    pub fn set_tagging_directive(mut self, input: Option<TaggingDirective>) -> Self {
+        self.tagging_directive = input;
         self
     }
 
@@ -347,7 +380,6 @@ impl<'a> CopyObjectFluentBuilder<'a> {
 
         if let Some(ref v) = self.checksum_algorithm {
             // CopyObject ではボディがないためヘッダーのみ指定する
-            let _: crate::checksum::ChecksumAlgorithm = v.parse()?;
             extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
         }
 

@@ -6,7 +6,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{CorsConfiguration, CorsRule, PutBucketCorsOutput};
+use crate::types::{ChecksumAlgorithm, CorsConfiguration, CorsRule, PutBucketCorsOutput};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
@@ -14,7 +14,7 @@ pub struct PutBucketCorsFluentBuilder<'a> {
     client: &'a Client,
     bucket: Option<String>,
     cors_rules: Vec<CorsRule>,
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
 impl<'a> PutBucketCorsFluentBuilder<'a> {
@@ -45,8 +45,14 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
     }
 
     /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    /// チェックサムアルゴリズムを Option で設定する (`set_*` バリアント)
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -61,11 +67,11 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
         ];
 
         let computed_checksum;
-        if let Some(ref algo_str) = self.checksum_algorithm {
-            extra_headers.push(("x-amz-checksum-algorithm", algo_str.as_str()));
-            let algorithm: crate::checksum::ChecksumAlgorithm = algo_str.parse()?;
-            computed_checksum = crate::checksum::compute_checksum(algorithm, xml_body.as_bytes());
-            extra_headers.push((algorithm.header_name(), &computed_checksum));
+        if let Some(ref algorithm) = self.checksum_algorithm {
+            extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
+            let header_name = crate::checksum::header_name(algorithm)?;
+            computed_checksum = crate::checksum::compute_checksum(algorithm, xml_body.as_bytes())?;
+            extra_headers.push((header_name, &computed_checksum));
         }
 
         Ok(build_signed_request(

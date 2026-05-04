@@ -6,7 +6,10 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::CreateMultipartUploadOutput;
+use crate::types::{
+    ChecksumAlgorithm, CreateMultipartUploadOutput, ObjectCannedAcl, ServerSideEncryption,
+    StorageClass,
+};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
@@ -26,7 +29,7 @@ pub struct CreateMultipartUploadFluentBuilder<'a> {
     /// カスタムメタデータ (x-amz-meta-*)
     metadata: Vec<(String, String)>,
     /// サーバサイド暗号化 (AES256 または aws:kms)
-    server_side_encryption: Option<String>,
+    server_side_encryption: Option<ServerSideEncryption>,
     /// SSE-KMS キー ID
     ssekms_key_id: Option<String>,
     /// SSE-C アルゴリズム (AES256)
@@ -34,11 +37,11 @@ pub struct CreateMultipartUploadFluentBuilder<'a> {
     /// SSE-C キー (Base64)
     sse_customer_key: Option<String>,
     /// ACL (private, public-read 等)
-    acl: Option<String>,
+    acl: Option<ObjectCannedAcl>,
     /// ストレージクラス (STANDARD, STANDARD_IA 等)
-    storage_class: Option<String>,
+    storage_class: Option<StorageClass>,
     /// チェックサムアルゴリズム
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
     /// オブジェクトタグ (URL エンコードされたキーバリューペア)
     tagging: Option<String>,
 }
@@ -114,9 +117,14 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
         self
     }
 
-    /// サーバサイド暗号化を指定する (AES256 または aws:kms)
-    pub fn server_side_encryption(mut self, sse: impl Into<String>) -> Self {
-        self.server_side_encryption = Some(sse.into());
+    /// サーバサイド暗号化を指定する (AES256 / aws:kms / aws:kms:dsse 等)
+    pub fn server_side_encryption(mut self, input: ServerSideEncryption) -> Self {
+        self.server_side_encryption = Some(input);
+        self
+    }
+
+    pub fn set_server_side_encryption(mut self, input: Option<ServerSideEncryption>) -> Self {
+        self.server_side_encryption = input;
         self
     }
 
@@ -141,14 +149,24 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
     }
 
     /// ACL を指定する (private, public-read, public-read-write 等)
-    pub fn acl(mut self, acl: impl Into<String>) -> Self {
-        self.acl = Some(acl.into());
+    pub fn acl(mut self, input: ObjectCannedAcl) -> Self {
+        self.acl = Some(input);
+        self
+    }
+
+    pub fn set_acl(mut self, input: Option<ObjectCannedAcl>) -> Self {
+        self.acl = input;
         self
     }
 
     /// ストレージクラスを指定する (STANDARD, STANDARD_IA, GLACIER 等)
-    pub fn storage_class(mut self, storage_class: impl Into<String>) -> Self {
-        self.storage_class = Some(storage_class.into());
+    pub fn storage_class(mut self, input: StorageClass) -> Self {
+        self.storage_class = Some(input);
+        self
+    }
+
+    pub fn set_storage_class(mut self, input: Option<StorageClass>) -> Self {
+        self.storage_class = input;
         self
     }
 
@@ -156,8 +174,13 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
     ///
     /// マルチパートアップロード全体で使用するチェックサムアルゴリズムを指定する。
     /// ここで指定したアルゴリズムは後続の UploadPart でも使用する。
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -224,7 +247,6 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
 
         if let Some(ref v) = self.checksum_algorithm {
             // CreateMultipartUpload ではボディがないためヘッダーのみ指定する
-            let _: crate::checksum::ChecksumAlgorithm = v.parse()?;
             extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
         }
 

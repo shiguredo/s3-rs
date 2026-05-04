@@ -6,7 +6,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{LifecycleRule, PutBucketLifecycleConfigurationOutput};
+use crate::types::{ChecksumAlgorithm, LifecycleRule, PutBucketLifecycleConfigurationOutput};
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
@@ -14,7 +14,7 @@ pub struct PutBucketLifecycleConfigurationFluentBuilder<'a> {
     client: &'a Client,
     bucket: Option<String>,
     rules: Vec<LifecycleRule>,
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
     /// 遷移対象のデフォルト最小オブジェクトサイズ
     transition_default_minimum_object_size: Option<String>,
 }
@@ -42,8 +42,13 @@ impl<'a> PutBucketLifecycleConfigurationFluentBuilder<'a> {
     }
 
     /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -73,11 +78,11 @@ impl<'a> PutBucketLifecycleConfigurationFluentBuilder<'a> {
         }
 
         let computed_checksum;
-        if let Some(ref algo_str) = self.checksum_algorithm {
-            extra_headers.push(("x-amz-checksum-algorithm", algo_str.as_str()));
-            let algorithm: crate::checksum::ChecksumAlgorithm = algo_str.parse()?;
-            computed_checksum = crate::checksum::compute_checksum(algorithm, xml_body.as_bytes());
-            extra_headers.push((algorithm.header_name(), &computed_checksum));
+        if let Some(ref algorithm) = self.checksum_algorithm {
+            extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
+            let header_name = crate::checksum::header_name(algorithm)?;
+            computed_checksum = crate::checksum::compute_checksum(algorithm, xml_body.as_bytes())?;
+            extra_headers.push((header_name, &computed_checksum));
         }
 
         Ok(build_signed_request(
@@ -184,7 +189,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
                 w.element("Date", date);
             }
             if let Some(ref sc) = trans.storage_class {
-                w.element("StorageClass", sc);
+                w.element("StorageClass", sc.as_str());
             }
             w.end();
         }
@@ -208,7 +213,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
                 w.element("NoncurrentDays", &days.to_string());
             }
             if let Some(ref sc) = nvt.storage_class {
-                w.element("StorageClass", sc);
+                w.element("StorageClass", sc.as_str());
             }
             if let Some(newer) = nvt.newer_noncurrent_versions {
                 w.element("NewerNoncurrentVersions", &newer.to_string());

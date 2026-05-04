@@ -7,7 +7,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{GetObjectOutput, HttpDate};
+use crate::types::{ChecksumMode, GetObjectOutput, HttpDate};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
@@ -33,7 +33,7 @@ pub struct GetObjectFluentBuilder<'a> {
     response_content_language: Option<String>,
     response_content_type: Option<String>,
     response_expires: Option<String>,
-    checksum_mode: Option<String>,
+    checksum_mode: Option<ChecksumMode>,
 }
 
 impl<'a> GetObjectFluentBuilder<'a> {
@@ -174,8 +174,13 @@ impl<'a> GetObjectFluentBuilder<'a> {
     /// チェックサムモードを指定する ("ENABLED")
     ///
     /// ENABLED を指定するとレスポンスにチェックサム値が含まれる。
-    pub fn checksum_mode(mut self, mode: impl Into<String>) -> Self {
-        self.checksum_mode = Some(mode.into());
+    pub fn checksum_mode(mut self, input: ChecksumMode) -> Self {
+        self.checksum_mode = Some(input);
+        self
+    }
+
+    pub fn set_checksum_mode(mut self, input: Option<ChecksumMode>) -> Self {
+        self.checksum_mode = input;
         self
     }
 

@@ -1,6 +1,7 @@
 # 主要 8 種の S3 パラメータを型付き enum に置き換える
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -186,3 +187,54 @@ pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Sel
 - `[CHANGE] GetObject / HeadObject の checksum_mode を ChecksumMode enum に変更する`
 - `[CHANGE] ListObjectsV2 等の encoding_type を EncodingType enum に変更する`
 - `[ADD] ChecksumAlgorithm を public 型として公開する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **8 種の型付き enum を新設 (`src/types.rs`)**
+   - `ChecksumAlgorithm` (10 variants: `Crc32, Crc32C, Crc64Nvme, Md5, Sha1, Sha256, Sha512, Xxhash128, Xxhash3, Xxhash64`)
+   - `ChecksumMode` (`Enabled`)
+   - `ServerSideEncryption` (`Aes256, AwsFsx, AwsKms, AwsKmsDsse`)
+   - `ObjectCannedAcl` (7 variants)
+   - `StorageClass` (13 variants)
+   - `MetadataDirective` (`Copy, Replace`)
+   - `TaggingDirective` (`Copy, Replace`)
+   - `EncodingType` (`Url`)
+   - 各 enum は `#[non_exhaustive]`、`Unknown(String)` variant、`as_str()` メソッド、`From<&str>`、`Display` を持つ
+   - variants は aws-sdk-rust の対応 enum と完全一致 (issue spec の variant 数より多い場合も含む)
+
+2. **`src/checksum.rs` のリファクタリング**
+   - `pub(crate) enum ChecksumAlgorithm` を削除
+   - `header_name` / `compute_checksum` を public な `ChecksumAlgorithm` を引数に取り、`Result<_, Error>` を返す関数に変更
+   - 内部計算未対応の variant (`Md5`, `Sha512`, `Xxhash*`, `Unknown`) は `Error::InvalidInput` を返す
+   - `test_header_name_unsupported` / `test_compute_checksum_unsupported` を追加
+
+3. **入力フィールドを enum 型に変更**
+   - `src/api/put_object.rs`, `src/api/copy_object.rs`, `src/api/create_multipart_upload.rs`, `src/api/create_bucket.rs`, `src/api/upload_part.rs`, `src/api/delete_objects.rs` の `acl` / `storage_class` / `server_side_encryption` / `checksum_algorithm` / `metadata_directive` / `tagging_directive` を対応 enum に変更
+   - `src/api/get_object.rs`, `src/api/head_object.rs` の `checksum_mode` を `ChecksumMode` に変更
+   - `src/api/list_objects_v2.rs`, `src/api/list_object_versions.rs`, `src/api/list_multipart_uploads.rs` の `encoding_type` を `EncodingType` に変更
+   - `src/api/put_bucket_*.rs` (8 ファイル) の `checksum_algorithm` を `ChecksumAlgorithm` に変更
+   - すべての enum 化対象ビルダーに aws-sdk-rust 互換の `set_*` バリアントを追加 (Option を直接受ける)
+
+4. **出力フィールドを enum 型に変更 (`src/types.rs`)**
+   - `Object.storage_class`, `ObjectVersion.storage_class`, `ListPartsOutput.storage_class`, `MultipartUpload.storage_class`, `HeadObjectOutput.storage_class` を `Option<StorageClass>` に変更
+   - `Transition.storage_class`, `NoncurrentVersionTransition.storage_class` を `Option<StorageClass>` に変更
+   - `ListObjectVersionsOutput.encoding_type` を `Option<EncodingType>` に変更
+   - 各 `parse_response` で `From<&str>` を使ってパースする
+
+5. **examples / tests の追従**
+   - `examples/s3cli/src/params.rs`: builder 適用箇所を `Enum::from(v.as_str())` 変換に書き換え
+   - `examples/s3cli/src/commands.rs`: `Object.storage_class.as_deref()` を `as_ref().map(|sc| sc.as_str())` に変更
+   - `tests/minio.rs`: `.checksum_algorithm("CRC32C")` 等の文字列を enum バリアントに置換
+
+6. **`src/lib.rs` の `pub use` 拡張**
+   - 新設した 8 種の enum を `pub use types::{...}` で公開
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 14 tests passed (新規追加 2 件含む)
+- `cargo test --test minio test_object_put_get_head_delete test_checksum_algorithm test_put_object_acl test_put_object_storage_class test_copy_object_metadata_replace`: 5 tests passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass

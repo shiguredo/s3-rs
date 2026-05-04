@@ -7,7 +7,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::UploadPartOutput;
+use crate::types::{ChecksumAlgorithm, UploadPartOutput};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
@@ -21,7 +21,7 @@ pub struct UploadPartFluentBuilder<'a> {
     upload_id: Option<String>,
     part_number: Option<i32>,
     body: Option<Vec<u8>>,
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
     checksum_value: Option<String>,
     /// SSE-C アルゴリズム (AES256)
     sse_customer_algorithm: Option<String>,
@@ -74,8 +74,13 @@ impl<'a> UploadPartFluentBuilder<'a> {
     }
 
     /// チェックサムアルゴリズムを指定する (CRC32, CRC32C, SHA1, SHA256, CRC64NVME)
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -136,14 +141,18 @@ impl<'a> UploadPartFluentBuilder<'a> {
             content_length_str = cl.to_string();
             extra_headers.push(("content-length", content_length_str.as_str()));
         }
-        let algo_str = self.checksum_algorithm.as_deref().unwrap_or("CRC32");
-        extra_headers.push(("x-amz-checksum-algorithm", algo_str));
-        let algorithm = algo_str.parse::<crate::checksum::ChecksumAlgorithm>()?;
+        let default_algorithm = ChecksumAlgorithm::Crc32;
+        let algorithm = self
+            .checksum_algorithm
+            .as_ref()
+            .unwrap_or(&default_algorithm);
+        extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
+        let header_name = crate::checksum::header_name(algorithm)?;
         if let Some(ref v) = self.checksum_value {
-            extra_headers.push((algorithm.header_name(), v.as_str()));
+            extra_headers.push((header_name, v.as_str()));
         } else {
-            computed_checksum = crate::checksum::compute_checksum(algorithm, body);
-            extra_headers.push((algorithm.header_name(), &computed_checksum));
+            computed_checksum = crate::checksum::compute_checksum(algorithm, body)?;
+            extra_headers.push((header_name, &computed_checksum));
         }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
@@ -227,10 +236,10 @@ impl<'a> UploadPartFluentBuilder<'a> {
             extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
         }
         if let Some(ref v) = self.checksum_value
-            && let Some(ref algo) = self.checksum_algorithm
+            && let Some(ref algorithm) = self.checksum_algorithm
         {
-            let algorithm: crate::checksum::ChecksumAlgorithm = algo.parse()?;
-            extra_headers.push((algorithm.header_name(), v.as_str()));
+            let header_name = crate::checksum::header_name(algorithm)?;
+            extra_headers.push((header_name, v.as_str()));
         }
 
         let url = build_presigned_url(

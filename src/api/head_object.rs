@@ -6,7 +6,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{HeadObjectOutput, HttpDate};
+use crate::types::{ChecksumMode, HeadObjectOutput, HttpDate};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, required, validate_presign_expires,
@@ -25,7 +25,7 @@ pub struct HeadObjectFluentBuilder<'a> {
     sse_customer_algorithm: Option<String>,
     sse_customer_key: Option<String>,
     version_id: Option<String>,
-    checksum_mode: Option<String>,
+    checksum_mode: Option<ChecksumMode>,
 }
 
 impl<'a> HeadObjectFluentBuilder<'a> {
@@ -124,8 +124,13 @@ impl<'a> HeadObjectFluentBuilder<'a> {
     /// チェックサムモードを指定する ("ENABLED")
     ///
     /// ENABLED を指定するとレスポンスにチェックサム値が含まれる。
-    pub fn checksum_mode(mut self, mode: impl Into<String>) -> Self {
-        self.checksum_mode = Some(mode.into());
+    pub fn checksum_mode(mut self, input: ChecksumMode) -> Self {
+        self.checksum_mode = Some(input);
+        self
+    }
+
+    pub fn set_checksum_mode(mut self, input: Option<ChecksumMode>) -> Self {
+        self.checksum_mode = input;
         self
     }
 
@@ -218,7 +223,9 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             content_length: response.content_length().map(|v| v as i64),
             e_tag: response.get_header("etag").map(String::from),
             last_modified: response.get_header("last-modified").map(String::from),
-            storage_class: response.get_header("x-amz-storage-class").map(String::from),
+            storage_class: response
+                .get_header("x-amz-storage-class")
+                .map(crate::types::StorageClass::from),
             version_id: response.get_header("x-amz-version-id").map(String::from),
             metadata: response.extract_metadata(),
             checksum_crc32: response
