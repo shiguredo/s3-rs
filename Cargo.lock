@@ -1817,6 +1817,7 @@ dependencies = [
  "rustls",
  "rustls-platform-verifier",
  "shiguredo_http11",
+ "shiguredo_http2",
  "shiguredo_s3",
  "tokio",
  "tokio-rustls",
@@ -2017,6 +2018,12 @@ name = "shiguredo_http11"
 version = "2026.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50203212be42844ef00003e05fe57f0b19a80b33d9d35745c48efc01e5d2fb63"
+
+[[package]]
+name = "shiguredo_http2"
+version = "2026.1.0-canary.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112050e6391ba749fd91a5f572139069d66b0dcdb65e842703c4d733c73cc12a"
 
 [[package]]
 name = "shiguredo_s3"
