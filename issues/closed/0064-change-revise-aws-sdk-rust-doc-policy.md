@@ -1,6 +1,7 @@
 # docs/AWS_SDK_RUST.md の対応方針を再分類する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -100,3 +101,28 @@ Model: Opus 4.7
 
 - `[UPDATE] docs/AWS_SDK_RUST.md の対応方針表を再分類する`
   - `### misc` サブセクションに記載
+
+## 解決方法
+
+### 実施した変更
+
+1. **`docs/AWS_SDK_RUST.md` の対応方針表を再分類**
+   - 凡例を更新 (`対応予定無し` の説明を「S3 固有機能 / S3 互換ストレージで意味が薄いため対応しない」に修正)
+   - 旧「対応予定無しのパラメータ」セクションを「対応方針」セクションに置き換え、3 カテゴリに整理:
+     - 「未対応 (互換性のため対応予定)」: `expected_bucket_owner` / `request_payer` / `website_redirect_location` / `grant_*`
+     - 「入力は対応予定無し、出力は対応」: `bucket_key_enabled` / `ssekms_encryption_context` / `ssekms_key_id` / `sse_customer_algorithm` / `sse_customer_key_md5`
+     - 「対応予定無し」維持: `object_lock_*` / `mfa` / `bypass_governance_retention` / `if_match_*` / `mpu_object_size` / `write_offset_bytes` / `optional_object_attributes` / `fetch_owner` / `confirm_remove_self_bucket_access` / `object_ownership` / `checksum_type`
+
+2. **shiguredo_s3 独自パラメータ表を更新**
+   - 旧 `checksum_value` を削除 (issue 0062 で個別 `checksum_*` フィールドに置換済み)
+   - 「該当なし」とコメント
+
+3. **メソッド名の差異表を更新**
+   - `delete` (DeleteObjects) を削除 (issue 0061 で `Delete` 構造体経由に統一済み)
+
+4. **`CHANGES.md` の `### misc` セクションに記載**
+   - 機能変更ではなく文書整理のため `[UPDATE]` として misc サブセクションに追記
+
+### issue 0057 の pending 解除について
+
+`issues/pending/0057-feature-expected-bucket-owner-request-payer.md` を `issues/` に戻す作業は別 issue として残す (本 issue では文書修正のみに絞る)。

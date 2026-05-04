@@ -6,34 +6,51 @@ aws-sdk-s3 と shiguredo_s3 の API パラメータ対応をまとめる。
 
 - 対応済み: shiguredo_s3 で利用可能
 - **未対応**: shiguredo_s3 で未実装
-- 対応予定無し: S3 固有機能のため対応しない
+- 対応予定無し: S3 固有機能 / S3 互換ストレージで意味が薄いため対応しない
 - (*): shiguredo_s3 独自パラメータ (aws-sdk-rust に存在しない)
 
-## 対応予定無しのパラメータ
+## 対応方針
 
-S3 固有機能であり、S3 互換オブジェクトストレージでは基本的に不要なため対応しない。
+`AGENTS.md` / `CLAUDE.md` の「Amazon S3 API の仕様と aws-sdk-rust との互換性を最優先」方針に従い、
+パラメータを以下の 3 カテゴリに再分類する。
+
+### 「未対応 (互換性のため対応予定)」
+
+ヘッダー渡しまたは値の追加のみで実装が軽量で、aws-sdk-rust 互換のため対応する。
+
+| パラメータ | 該当 API | 理由 |
+|---|---|---|
+| `expected_bucket_owner` | 全 API | issue 0057 で対応 |
+| `request_payer` | 全 API | issue 0057 で対応、enum 化は issue 0059 後続 |
+| `website_redirect_location` | PutObject, CopyObject, CreateMultipartUpload | `x-amz-website-redirect-location` ヘッダー追加のみ |
+| `grant_full_control` / `grant_read` / `grant_read_acp` / `grant_write` / `grant_write_acp` | PutObject, CopyObject, CreateBucket, CreateMultipartUpload | レガシー ACL だが API は単純 (文字列ヘッダー) |
+
+### 「入力は対応予定無し、出力は対応」(出力のみ対応)
+
+入力側は機能本格対応とセットになるため保留するが、**出力側はレスポンスをパースして提供するだけで実装コストが軽量** であり、利用者が結果を確認できると有用なもの。
+
+| パラメータ | 入力 (該当 API) | 出力 (該当 *Output) | 理由 |
+|---|---|---|---|
+| `bucket_key_enabled` | PutObject 等の入力で対応予定無し | `GetObjectOutput` / `HeadObjectOutput` / `PutObjectOutput` 等で対応 | 入力は KMS 機能本格対応とセット、出力は `x-amz-server-side-encryption-bucket-key-enabled` ヘッダーをパースするだけ |
+| `ssekms_encryption_context` | PutObject 等の入力で対応予定無し | `CopyObjectOutput` 等で対応 | 入力は KMS 詳細機能、出力は `x-amz-server-side-encryption-context` ヘッダーをパースするだけ |
+| `ssekms_key_id` | PutObject 等の入力で対応予定無し | `GetObjectOutput` / `PutObjectOutput` 等で対応 | 入力は KMS 詳細機能、出力は `x-amz-server-side-encryption-aws-kms-key-id` ヘッダーをパースするだけ |
+| `sse_customer_algorithm` / `sse_customer_key_md5` | 既存の SSE-C 入力対応の延長 | 上記 Output で対応 | 出力ヘッダーをパースするだけ |
+
+### 「対応予定無し」維持
+
+機能本格対応とセットになるため保留する。
 
 | パラメータ | 理由 |
 |---|---|
-| `expected_bucket_owner` | AWS アカウント ID によるクロスアカウント保護 |
-| `request_payer` | Requester Pays 課金機能 |
-| `grant_*` (5 種) | ACL グラント (レガシー、AWS IAM 依存) |
-| `object_lock_*` (3 種) | オブジェクトロック (AWS コンプライアンス用途) |
-| `ssekms_encryption_context` | AWS KMS 固有の暗号化コンテキスト |
-| `bucket_key_enabled` | SSE-KMS バケットキー最適化 |
-| `website_redirect_location` | S3 静的ウェブサイトホスティング |
-| `object_ownership` | バケットオーナーシップコントロール |
+| `object_lock_legal_hold_status`, `object_lock_mode`, `object_lock_retain_until_date` | Object Lock 機能本格対応とセット (別 issue) |
+| `object_lock_enabled_for_bucket` | 同上 |
+| `mfa`, `bypass_governance_retention` | Object Lock / Versioning MFA 機能とセット |
+| `if_match_initiated_time`, `if_match_last_modified_time`, `if_match_size` | S3 固有の条件付き機能、AWS SDK でも限定 |
+| `mpu_object_size`, `write_offset_bytes` | S3 Express One Zone 専用機能 |
+| `optional_object_attributes`, `fetch_owner` | AWS IAM ベース、S3 互換ストレージで意味が薄い |
 | `confirm_remove_self_bucket_access` | AWS 固有の安全装置 |
-| `write_offset_bytes` | S3 Express One Zone 用 |
-| `optional_object_attributes` | S3 固有の拡張属性 |
-| `fetch_owner` | AWS IAM ベースのオーナー情報 |
-| `mfa` | MFA Delete |
-| `bypass_governance_retention` | オブジェクトロック関連 |
-| `if_match_initiated_time` | AbortMultipartUpload の S3 固有条件 |
-| `if_match_last_modified_time` | DeleteObject の S3 固有条件 |
-| `if_match_size` | DeleteObject の S3 固有条件 |
-| `mpu_object_size` | S3 固有のマルチパートサイズ指定 |
-| `checksum_type` | S3 固有のチェックサムタイプ |
+| `object_ownership` | バケットオーナーシップコントロール (別 issue) |
+| `checksum_type` | issue 0059 後続で型化検討 |
 
 ## メソッド名の差異
 
@@ -42,13 +59,10 @@ S3 固有機能であり、S3 互換オブジェクトストレージでは基�
 | `versioning_configuration` | `status` | aws-sdk-rust は構造体を受けるが shiguredo_s3 は文字列で指定 |
 | `public_access_block_configuration` | 4 つの bool フィールドに分解 | 構造体ではなく個別指定 |
 | `tagging` (PutBucketTagging) | `tag` | aws-sdk-rust は構造体を受けるが shiguredo_s3 は Tag を個別追加 |
-| `delete` (DeleteObjects) | `object` + `quiet` | aws-sdk-rust は構造体を受けるが shiguredo_s3 は ObjectIdentifier を個別追加 |
 
 ## shiguredo_s3 独自パラメータ
 
-| パラメータ | 該当 API | 説明 |
-|---|---|---|
-| `checksum_value` | PutObject, UploadPart | aws-sdk-rust はアルゴリズム別メソッド (`checksum_crc32` 等) を持つ。shiguredo_s3 は汎用的に `checksum_value` で受ける |
+(該当なし: 旧 `checksum_value` は issue 0062 で aws-sdk-rust と同じ個別 `checksum_*` フィールドに置換済み)
 
 ---
 
