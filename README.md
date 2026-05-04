@@ -88,9 +88,21 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 | DeleteObjects | `client.delete_objects()` |
 | CopyObject | `client.copy_object()` |
 | ListObjectsV2 | `client.list_objects_v2()` |
+| ListObjectVersions | `client.list_object_versions()` |
 | GetObjectTagging | `client.get_object_tagging()` |
 | PutObjectTagging | `client.put_object_tagging()` |
 | DeleteObjectTagging | `client.delete_object_tagging()` |
+
+### Object Lock
+
+| オペレーション | メソッド |
+|---|---|
+| GetObjectLegalHold | `client.get_object_legal_hold()` |
+| PutObjectLegalHold | `client.put_object_legal_hold()` |
+| GetObjectRetention | `client.get_object_retention()` |
+| PutObjectRetention | `client.put_object_retention()` |
+| GetObjectLockConfiguration | `client.get_object_lock_configuration()` |
+| PutObjectLockConfiguration | `client.put_object_lock_configuration()` |
 
 ### バケット操作
 
@@ -107,6 +119,7 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 |---|---|
 | CreateMultipartUpload | `client.create_multipart_upload()` |
 | UploadPart | `client.upload_part()` |
+| UploadPartCopy | `client.upload_part_copy()` |
 | CompleteMultipartUpload | `client.complete_multipart_upload()` |
 | AbortMultipartUpload | `client.abort_multipart_upload()` |
 | ListParts | `client.list_parts()` |
@@ -136,40 +149,52 @@ shiguredo_s3 = { version = "<version>", default-features = false, features = ["a
 | GetBucketEncryption | `client.get_bucket_encryption()` |
 | PutBucketEncryption | `client.put_bucket_encryption()` |
 | DeleteBucketEncryption | `client.delete_bucket_encryption()` |
+| GetBucketOwnershipControls | `client.get_bucket_ownership_controls()` |
+| PutBucketOwnershipControls | `client.put_bucket_ownership_controls()` |
+| DeleteBucketOwnershipControls | `client.delete_bucket_ownership_controls()` |
+| GetBucketWebsite | `client.get_bucket_website()` |
+| PutBucketWebsite | `client.put_bucket_website()` |
+| DeleteBucketWebsite | `client.delete_bucket_website()` |
+| GetBucketNotificationConfiguration | `client.get_bucket_notification_configuration()` |
+| PutBucketNotificationConfiguration | `client.put_bucket_notification_configuration()` |
 
 メソッド名や引数の渡し方を [aws-sdk-rust](https://github.com/awslabs/aws-sdk-rust) スタイルにしています。aws-sdk-rust へ移行する際に違和感なく移行できることを目的としています。
 
 ### Presigned リクエスト
 
-`presigned(expires)` は `PresignedRequest` を返します。
-`PresignedRequest` は `url`、`method`、`body` を持ちます。
+`presigned(expires_in_secs, now)` は `PresignedRequest` を返します。
+`PresignedRequest` は `url`、`method`、`headers`、`body` を持ちます。
 CompleteMultipartUpload のように POST ボディが必要なオペレーションでは `body` に XML が入ります。
+`now` には `SystemTime` (通常は `SystemTime::now()`) を渡します (Sans I/O 原則のため呼び出し側で時刻を取得する)。
 
 | オペレーション | メソッド |
 |---|---|
-| Presigned GetObject | `client.get_object().presigned(expires)` |
-| Presigned HeadObject | `client.head_object().presigned(expires)` |
-| Presigned PutObject | `client.put_object().presigned(expires)` |
-| Presigned DeleteObject | `client.delete_object().presigned(expires)` |
-| Presigned UploadPart | `client.upload_part().presigned(expires)` |
-| Presigned CreateMultipartUpload | `client.create_multipart_upload().presigned(expires)` |
-| Presigned CompleteMultipartUpload | `client.complete_multipart_upload().presigned(expires)` |
-| Presigned AbortMultipartUpload | `client.abort_multipart_upload().presigned(expires)` |
+| Presigned GetObject | `client.get_object().presigned(expires_in_secs, now)` |
+| Presigned HeadObject | `client.head_object().presigned(expires_in_secs, now)` |
+| Presigned PutObject | `client.put_object().presigned(expires_in_secs, now)` |
+| Presigned DeleteObject | `client.delete_object().presigned(expires_in_secs, now)` |
+| Presigned UploadPart | `client.upload_part().presigned(expires_in_secs, now)` |
+| Presigned CreateMultipartUpload | `client.create_multipart_upload().presigned(expires_in_secs, now)` |
+| Presigned CompleteMultipartUpload | `client.complete_multipart_upload().presigned(expires_in_secs, now)` |
+| Presigned AbortMultipartUpload | `client.abort_multipart_upload().presigned(expires_in_secs, now)` |
 
 ## Sans I/O
 
 全ての API は Sans I/O で設計されています。
-`build_request()` で署名済みの `S3Request` を構築し、`parse_response()` で `S3Response` をパースします。
+`build_request(now)` で署名済みの `S3Request` を構築し、`parse_response()` で `S3Response` をパースします。
 HTTP の通信とエンコード/デコードは利用者が自由に実装できます。
+`now` 引数 (`SystemTime`) は署名のタイムスタンプに使われます。
+通常は `SystemTime::now()` を渡しますが、テスト時は固定値を渡すことで決定的な署名を再現できます。
 
 ```rust
+use std::time::SystemTime;
 use shiguredo_s3::{S3Request, S3Response};
 
 // 署名済みリクエストを構築する (Sans I/O)
 let s3_request = client.get_object()
     .bucket("my-bucket")
     .key("my-key")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 
 // S3Request のフィールド:
 //   s3_request.method   - HTTP メソッド (GET, PUT, DELETE, POST, HEAD)
@@ -240,10 +265,12 @@ let client = Client::from_conf(config);
 ### GetObject
 
 ```rust
+use std::time::SystemTime;
+
 let s3_request = client.get_object()
     .bucket("my-bucket")
     .key("my-key")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::GetObjectFluentBuilder::parse_response(&s3_response)?;
 
@@ -257,7 +284,7 @@ let s3_request = client.get_object()
     .bucket("my-bucket")
     .key("my-key")
     .range("bytes=0-1023")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 ```
 
 ### PutObject
@@ -268,7 +295,7 @@ let s3_request = client.put_object()
     .key("my-key")
     .body(b"Hello, World!".to_vec())
     .content_type("text/plain")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::PutObjectFluentBuilder::parse_response(&s3_response)?;
 ```
@@ -279,7 +306,7 @@ let output = shiguredo_s3::api::PutObjectFluentBuilder::parse_response(&s3_respo
 let s3_request = client.delete_object()
     .bucket("my-bucket")
     .key("my-key")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response(&s3_response)?;
 ```
@@ -291,14 +318,14 @@ let output = shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response(&s3_re
 let s3_request = client.put_bucket_versioning()
     .bucket("my-bucket")
     .status("Enabled")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::PutBucketVersioningFluentBuilder::parse_response(&s3_response)?;
 
 // バージョニング設定を取得する
 let s3_request = client.get_bucket_versioning()
     .bucket("my-bucket")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::GetBucketVersioningFluentBuilder::parse_response(&s3_response)?;
 println!("status: {:?}", output.status); // Some("Enabled")
@@ -333,14 +360,14 @@ let s3_request = client.put_bucket_lifecycle_configuration()
             days_after_initiation: Some(7),
         }),
     })
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::PutBucketLifecycleConfigurationFluentBuilder::parse_response(&s3_response)?;
 
 // ライフサイクル設定を取得する
 let s3_request = client.get_bucket_lifecycle_configuration()
     .bucket("my-bucket")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::GetBucketLifecycleConfigurationFluentBuilder::parse_response(&s3_response)?;
 for rule in &output.rules {
@@ -350,7 +377,7 @@ for rule in &output.rules {
 // ライフサイクル設定を削除する
 let s3_request = client.delete_bucket_lifecycle()
     .bucket("my-bucket")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::DeleteBucketLifecycleFluentBuilder::parse_response(&s3_response)?;
 ```
@@ -358,25 +385,27 @@ let output = shiguredo_s3::api::DeleteBucketLifecycleFluentBuilder::parse_respon
 ### Presigned リクエスト
 
 ```rust
+use std::time::SystemTime;
 use shiguredo_s3::PresignedRequest;
 
 // 1 時間有効な GetObject Presigned リクエストを生成する
 let presigned = client.get_object()
     .bucket("my-bucket")
     .key("my-key")
-    .presigned(3600)?;
+    .presigned(3600, SystemTime::now())?;
 println!("url: {}", presigned.url);
 
 // PutObject Presigned リクエスト
 let presigned = client.put_object()
     .bucket("my-bucket")
     .key("my-key")
-    .presigned(3600)?;
+    .presigned(3600, SystemTime::now())?;
 ```
 
 ### マルチパートアップロード
 
 ```rust
+use std::time::SystemTime;
 use shiguredo_s3::types::{CompletedPart, CompletedMultipartUpload};
 
 // 1. マルチパートアップロードを開始する
@@ -384,7 +413,7 @@ let s3_request = client.create_multipart_upload()
     .bucket("my-bucket")
     .key("my-key")
     .content_type("application/octet-stream")
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let create_output = shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response(&s3_response)?;
 let upload_id = create_output.upload_id.unwrap();
@@ -396,7 +425,7 @@ let s3_request = client.upload_part()
     .upload_id(&upload_id)
     .part_number(1)
     .body(part1_data)
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let part1 = shiguredo_s3::api::UploadPartFluentBuilder::parse_response(&s3_response)?;
 
@@ -410,10 +439,15 @@ let s3_request = client.complete_multipart_upload()
             CompletedPart {
                 e_tag: part1.e_tag,
                 part_number: Some(1),
+                checksum_crc32: None,
+                checksum_crc32_c: None,
+                checksum_crc64_nvme: None,
+                checksum_sha1: None,
+                checksum_sha256: None,
             },
         ]),
     })
-    .build_request()?;
+    .build_request(SystemTime::now())?;
 let s3_response = execute(s3_request).await?;
 let output = shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_response(&s3_response)?;
 ```
