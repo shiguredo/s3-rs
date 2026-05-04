@@ -3,6 +3,7 @@
 Created: 2026-04-04
 Completed: 2026-04-05
 Model: Opus 4.6
+Renumbered: 2026-05-04 (旧番号 0047、`closed/0047-feature-object-tagging-api.md` と重複していたため)
 
 ## 根拠
 

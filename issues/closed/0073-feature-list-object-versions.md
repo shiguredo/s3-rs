@@ -3,6 +3,7 @@
 Created: 2026-04-04
 Completed: 2026-04-05
 Model: Opus 4.6
+Renumbered: 2026-05-04 (旧番号 0048、`closed/0048-feature-bucket-cors-api.md` と重複していたため)
 
 ## 根拠
 
