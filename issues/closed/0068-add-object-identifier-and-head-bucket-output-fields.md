@@ -1,6 +1,7 @@
 # ObjectIdentifier / CompletedPart / HeadBucketOutput にフィールドを追加する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -120,3 +121,36 @@ pub access_point_alias: Option<bool>,
 - `[ADD] ObjectIdentifier に e_tag / last_modified_time / size を追加する`
 - `[ADD] CompletedPart にアルゴリズム別チェックサムフィールドを追加する`
 - `[ADD] HeadBucketOutput に bucket_arn / bucket_location_type / bucket_location_name / access_point_alias を追加する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` の構造体拡張**
+   - `ObjectIdentifier`: `e_tag` / `last_modified_time` (`Option<SystemTime>`) / `size` (`Option<i64>`) を追加
+   - `CompletedPart`: `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_sha1` / `checksum_sha256` を追加
+   - `HeadBucketOutput`: `bucket_arn` / `bucket_location_type` / `bucket_location_name` / `access_point_alias` (bool) を追加
+
+2. **`src/api/delete_objects.rs` の XML シリアライズ拡張**
+   - `<Object>` 要素配下に `<ETag>` / `<LastModifiedTime>` (ISO 8601 RFC 3339) / `<Size>` を出力
+   - `last_modified_time` の整形は `crate::datetime::civil_from_unix_timestamp` を使用 (秒精度)
+
+3. **`src/api/complete_multipart_upload.rs` の XML シリアライズ拡張**
+   - `<Part>` 要素配下に `<ChecksumCRC32>` / `<ChecksumCRC32C>` / `<ChecksumCRC64NVME>` / `<ChecksumSHA1>` / `<ChecksumSHA256>` を出力
+
+4. **`src/api/head_bucket.rs` の `parse_response` 拡張**
+   - `x-amz-bucket-arn` / `x-amz-bucket-location-type` / `x-amz-bucket-location-name` を文字列で抽出
+   - `x-amz-access-point-alias` (bool) を `parse::<bool>().ok()` でパース
+
+5. **利用箇所への対応**
+   - `examples/s3cli/src/ops.rs` / `examples/s3cli/src/upload.rs`
+   - `tests/minio.rs` / `tests/rustfs.rs`
+   - 既存の `ObjectIdentifier` / `CompletedPart` リテラル構築箇所に追加フィールドを `: None` で初期化 (Python スクリプトで一括処理)
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --workspace`: 18 統合テスト全て passed (rustfs)
+- pre-commit hook (cargo fmt / clippy / test) すべて pass

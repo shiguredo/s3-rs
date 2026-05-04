@@ -319,5 +319,10 @@ async fn upload_single_part(
     Ok(CompletedPart {
         e_tag: output.e_tag,
         part_number: Some(part_number),
+        checksum_crc32: None,
+        checksum_crc32_c: None,
+        checksum_crc64_nvme: None,
+        checksum_sha1: None,
+        checksum_sha256: None,
     })
 }

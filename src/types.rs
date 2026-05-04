@@ -320,6 +320,12 @@ pub struct DeleteError {
 pub struct ObjectIdentifier {
     pub key: String,
     pub version_id: Option<String>,
+    /// 削除対象オブジェクトの ETag (Conditional Delete 用)
+    pub e_tag: Option<String>,
+    /// 削除対象オブジェクトの最終更新時刻 (Conditional Delete 用)
+    pub last_modified_time: Option<SystemTime>,
+    /// 削除対象オブジェクトのサイズ (Conditional Delete 用)
+    pub size: Option<i64>,
 }
 
 /// `DeleteObjects` のリクエストボディ
@@ -386,6 +392,11 @@ impl DeleteBuilder {
 pub struct CompletedPart {
     pub e_tag: Option<String>,
     pub part_number: Option<i32>,
+    pub checksum_crc32: Option<String>,
+    pub checksum_crc32_c: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
+    pub checksum_sha1: Option<String>,
+    pub checksum_sha256: Option<String>,
 }
 
 /// マルチパートアップロードの完了情報
@@ -503,6 +514,14 @@ pub struct CommonPrefix {
 pub struct HeadBucketOutput {
     /// バケットが存在するリージョン
     pub bucket_region: Option<String>,
+    /// バケットの ARN
+    pub bucket_arn: Option<String>,
+    /// バケットのロケーションタイプ (issue 0059 後続で型化検討)
+    pub bucket_location_type: Option<String>,
+    /// バケットのロケーション名
+    pub bucket_location_name: Option<String>,
+    /// アクセスポイント alias であるかどうか
+    pub access_point_alias: Option<bool>,
 }
 
 /// CreateBucket のリクエストボディ
