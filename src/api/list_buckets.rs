@@ -91,11 +91,20 @@ impl<'a> ListBucketsFluentBuilder<'a> {
         let buckets = extract_xml_buckets(body_text);
         let continuation_token = crate::xml::extract_element(body_text, "ContinuationToken");
         let prefix = crate::xml::extract_element(body_text, "Prefix");
+        // <Owner> はトップレベル <ListAllMyBucketsResult> 配下に出現する
+        let display_name = crate::xml::extract_element(body_text, "DisplayName");
+        let id = crate::xml::extract_element(body_text, "ID");
+        let owner = if display_name.is_some() || id.is_some() {
+            Some(crate::types::Owner { display_name, id })
+        } else {
+            None
+        };
 
         Ok(ListBucketsOutput {
             buckets,
             continuation_token,
             prefix,
+            owner,
         })
     }
 }

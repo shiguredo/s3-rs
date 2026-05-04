@@ -113,6 +113,12 @@
   - @voluntas
 - [CHANGE] `CopyObjectOutput` のフラット構造を `CopyObjectResult` ネスト構造に変更する (`e_tag` / `last_modified` を `copy_object_result` 配下に移動、aws-sdk-rust 互換)
   - @voluntas
+- [ADD] `Owner` / `RestoreStatus` 型を追加する (aws-sdk-rust 互換)
+  - @voluntas
+- [ADD] `Object` / `ObjectVersion` に `owner` / `restore_status` / `checksum_algorithm` / `checksum_type` フィールドを追加する
+  - @voluntas
+- [ADD] `ListBucketsOutput` に `owner` フィールドを追加する
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

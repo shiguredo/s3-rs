@@ -18,7 +18,7 @@ pub use credential::Credentials;
 pub use error::{Error, s3_error_code};
 pub use types::{
     ChecksumAlgorithm, ChecksumMode, CopyObjectResult, CreateBucketConfiguration, Delete,
-    DeleteBuilder, EncodingType, MetadataDirective, ObjectCannedAcl, ObjectIdentifier,
-    ServerSideEncryption, ServerSideEncryptionByDefault, ServerSideEncryptionRule, StorageClass,
-    TaggingDirective, validate_imf_fixdate,
+    DeleteBuilder, EncodingType, MetadataDirective, ObjectCannedAcl, ObjectIdentifier, Owner,
+    RestoreStatus, ServerSideEncryption, ServerSideEncryptionByDefault, ServerSideEncryptionRule,
+    StorageClass, TaggingDirective, validate_imf_fixdate,
 };
