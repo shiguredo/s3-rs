@@ -12,7 +12,8 @@ Model: Opus 4.7
 - テスト時に固定時刻を指定できず、署名値の回帰検証が困難。
 - `Trait Callback` (`TimeSource` トレイト等) で抽象化する案もあるが、trait 内部から副作用が発火する以上 Sans I/O 違反は解消しない。値の引数渡しが唯一の正解。
 - `grep` で確認した結果、`SystemTime::now()` 呼び出しは上記 2 箇所のみ。乱数生成 (`rand` / `random`) は元々未使用。修正範囲は限定的。
-- `HttpDate` 構造体 (`src/types.rs:24-83`) は文字列の薄いラッパであり、aws-sdk-rust 互換性の観点でも残す価値が薄い。バリデーションは関数として提供し、入力フィールドは生文字列を受ける形にする。
+- `HttpDate` 構造体 (`src/types.rs:24-83`) は文字列の薄いラッパで、入出力で日時を扱う型としてのセマンティクスが弱い。aws-sdk-rust は同等のフィールドを `aws_smithy_types::DateTime` で扱っており、文字列ではない。本 crate でも文字列ではなく標準の `SystemTime` で扱う形に統一することで、aws-sdk-rust の利用感に近づけつつ、外部依存追加を回避する。
+- `aws_smithy_types::DateTime` 自体は使わない。`aws-smithy-types` への依存追加は確定方針として行わないため、`std::time::SystemTime` を採用する。`SystemTime` は `aws_smithy_types::DateTime` ほどの精度メソッド (秒未満の細かい操作等) はないが、S3 が扱う日時 (HTTP `Last-Modified` / XML `LastModified` / `IfModifiedSince` 等) はすべて秒精度であり機能的に十分。
 
 ## 変更内容
 
@@ -46,21 +47,28 @@ let request = client.get_object().bucket("foo").key("bar").build_request(now)?;
 - `use std::time::{SystemTime, UNIX_EPOCH}` のうち `now()` 用途のものを削除し、`UNIX_EPOCH` のみ残す。
 - `UtcDateTime::from_unix_timestamp(secs: u64)` を `UtcDateTime::from_system_time(now: SystemTime) -> Result<Self, Error>` に変更する。`SystemTime::duration_since(UNIX_EPOCH)` の `Err` (UNIX epoch 前の時刻) は `Error::InvalidInput` に変換する。
 
-### 4. `HttpDate` 構造体廃止とバリデーション関数化
+### 4. `HttpDate` 構造体廃止と日時型の `SystemTime` 統一
 
 - `src/types.rs:24-83` の `HttpDate` 構造体を削除する。
-- `src/types.rs:86-134` の `validate_imf_fixdate(s: &str) -> Result<(), Error>` は **関数として残す** (`pub fn validate_imf_fixdate` で公開)。利用者が事前にバリデーションしたい場合に使える。
+- `src/types.rs:86-134` の `validate_imf_fixdate(s: &str) -> Result<(), Error>` は **関数として残す** (`pub fn validate_imf_fixdate` で公開)。利用者が手元の文字列を事前検証したい場合に使える。
+- 内部用フォーマット/パースヘルパを `src/datetime.rs` に追加する:
+  - `pub(crate) fn format_imf_fixdate(t: SystemTime) -> String` (リクエストヘッダー出力用)
+  - `pub(crate) fn parse_imf_fixdate(s: &str) -> Result<SystemTime, Error>` (レスポンスヘッダー入力用)
+  - `pub(crate) fn parse_iso8601(s: &str) -> Result<SystemTime, Error>` (XML レスポンスの `LastModified` / `Initiated` / `CreationDate` 用)
+  - 既存の `src/datetime.rs` (Howard Hinnant の civil_from_days アルゴリズム) を流用する。
 - `src/lib.rs:20` の `pub use types::HttpDate` を削除する。
 - 入力フィールドの型変更:
-  - `src/api/get_object.rs:25-26` `if_modified_since: Option<HttpDate>` → `Option<String>`
-  - `src/api/get_object.rs:105-115` ビルダーメソッド `if_modified_since(date: HttpDate)` → `if_modified_since(date: impl Into<String>)`
+  - `src/api/get_object.rs:25-26` `if_modified_since: Option<HttpDate>` → `Option<SystemTime>`
+  - `src/api/get_object.rs:105-115` ビルダーメソッド `if_modified_since(date: HttpDate)` → `if_modified_since(date: SystemTime)`
   - `src/api/head_object.rs:23-24` 同様
-- ビルダー内部で受け取った文字列を IMF-fixdate としてヘッダーに設定する (バリデーションは `build_request` 内で行うか、ビルダー側で行うかは実装時に判断)。
+  - ビルダー内部で受け取った `SystemTime` を `format_imf_fixdate` で IMF-fixdate に変換してヘッダーに設定する。
 
-### 5. 出力日時フィールドは `Option<String>` 維持
+### 5. 出力日時フィールドも `Option<SystemTime>` に統一
 
-- `last_modified`, `creation_date`, `initiated`, `expires` 等の出力日時フィールドは `Option<String>` のまま維持する。
-- 利用者が必要に応じて `chrono` / `time` 等の好みのライブラリでパースできる。
+- `last_modified`, `creation_date`, `initiated`, `expires` 等の出力日時フィールドは `Option<SystemTime>` に変更する。
+- パース処理 (各 `parse_response` 内の XML/ヘッダー処理) で IMF-fixdate / ISO 8601 を `SystemTime` に変換する。
+- パース失敗時は `Error::InvalidResponse` を返す (現状は文字列を素通ししていたため、ここで初めて失敗する可能性が出るが、aws-sdk-rust も同様の挙動)。
+- aws-sdk-rust では `aws_smithy_types::DateTime` を使うが、本 crate は依存追加しないため `SystemTime` を選ぶ。型は異なるが利用感 (ビルダーに日時オブジェクトを渡す/出力から日時オブジェクトを得る) は揃える。
 
 ### 6. `Cargo.toml` の依存追加なし
 
@@ -96,13 +104,15 @@ let request = client.get_object().bucket("foo").key("bar").build_request(now)?;
 
 - `src/api/mod.rs` の `build_signed_request` / `build_presigned_url` / `build_signed_service_request` のシグネチャ変更。
 - `src/api/` 配下の全 56 オペレーションファイルの `build_request()` / `presigned()` メソッド変更。
-- `src/datetime.rs` の `UtcDateTime::now()` 削除、`from_unix_timestamp` を `from_system_time` に変更。
+- `src/datetime.rs` の `UtcDateTime::now()` 削除、`from_unix_timestamp` を `from_system_time` に変更、`format_imf_fixdate` / `parse_imf_fixdate` / `parse_iso8601` を追加。
 - `src/types.rs:24-140` の `HttpDate` 構造体削除、`validate_imf_fixdate` 関数を公開する。
+- `src/types.rs` の出力日時フィールド (`last_modified`, `creation_date`, `initiated`, `expires` 等) を `Option<String>` から `Option<SystemTime>` に変更。
+- `src/api/` 配下の各 `parse_response` 内で日時文字列を `SystemTime` にパース。
 - `src/lib.rs:20` の `pub use HttpDate` 削除。
-- `examples/s3cli/src/upload.rs`、`examples/s3cli/src/ops.rs`、`examples/s3cli/src/commands.rs` の `build_request()` 呼び出し全箇所に `now` 引数追加 (テンプレ化のため `examples/s3cli/src/util.rs` に `fn now() -> SystemTime { SystemTime::now() }` ヘルパを追加する)。
+- `examples/s3cli/src/upload.rs`、`examples/s3cli/src/ops.rs`、`examples/s3cli/src/commands.rs` の `build_request()` 呼び出し全箇所に `now` 引数追加 (テンプレ化のため `examples/s3cli/src/util.rs` に `fn now() -> SystemTime { SystemTime::now() }` ヘルパを追加する)。日時出力の表示処理は `SystemTime` を IMF-fixdate に整形して表示する。
 - `tests/minio.rs` (3271 行)、`tests/rustfs.rs` (1695 行) の `build_request()` 呼び出し全箇所への `now` 引数追加 (テストヘルパ `fn now() -> SystemTime` を冒頭に追加)。
-- `tests/minio.rs:1781,1794` の `HttpDate::from_unix_timestamp(0)` を IMF-fixdate 文字列 `"Thu, 01 Jan 1970 00:00:00 GMT"` に置換 (内部処理として civil_from_unix_timestamp + フォーマットヘルパを利用)。
-- `fuzz/fuzz_targets/fuzz_httpdate.rs` を `validate_imf_fixdate` 関数を呼ぶ形に書き換え。
+- `tests/minio.rs:1781,1794` の `HttpDate::from_unix_timestamp(0)` を `SystemTime::UNIX_EPOCH` に置換。
+- `fuzz/fuzz_targets/fuzz_httpdate.rs` を `validate_imf_fixdate` 関数および `parse_imf_fixdate` 関数を呼ぶ形に書き換え。
 
 ## 検証方法
 
@@ -119,4 +129,5 @@ let request = client.get_object().bucket("foo").key("bar").build_request(now)?;
 - `[CHANGE] build_request / presigned に now: SystemTime 引数を追加する`
 - `[CHANGE] UtcDateTime::now() を削除する`
 - `[CHANGE] HttpDate 構造体を廃止し validate_imf_fixdate 関数を提供する`
-- `[CHANGE] GetObject / HeadObject の if_modified_since / if_unmodified_since の型を Option<HttpDate> から Option<String> に変更する`
+- `[CHANGE] GetObject / HeadObject の if_modified_since / if_unmodified_since の型を Option<HttpDate> から Option<SystemTime> に変更する`
+- `[CHANGE] last_modified / creation_date / initiated / expires 等の出力日時フィールドを Option<String> から Option<SystemTime> に変更する`

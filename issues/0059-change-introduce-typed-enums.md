@@ -15,7 +15,7 @@ Model: Opus 4.7
 
 | enum 型 | 関連 API | 値 |
 |---|---|---|
-| `ChecksumAlgorithm` | PutObject, UploadPart, CopyObject, DeleteObjects 等 | `Crc32`, `Crc32C`, `Crc64Nvme`, `Sha1`, `Sha256` |
+| `ChecksumAlgorithm` | PutObject, UploadPart, CopyObject, DeleteObjects 等 | `Crc32`, `Crc32C`, `Crc64Nvme`, `Md5`, `Sha1`, `Sha256`, `Sha512`, `Xxhash128`, `Xxhash3`, `Xxhash64` |
 | `ChecksumMode` | GetObject, HeadObject | `Enabled` |
 | `ServerSideEncryption` | PutObject, CopyObject, CreateMultipartUpload | `Aes256`, `AwsKms`, `AwsKmsDsse` |
 | `ObjectCannedAcl` | PutObject, CopyObject, CreateMultipartUpload | `Private`, `PublicRead`, `PublicReadWrite`, `AuthenticatedRead`, `AwsExecRead`, `BucketOwnerRead`, `BucketOwnerFullControl` |
@@ -37,8 +37,13 @@ pub enum ChecksumAlgorithm {
     Crc32,
     Crc32C,
     Crc64Nvme,
+    Md5,
     Sha1,
     Sha256,
+    Sha512,
+    Xxhash128,
+    Xxhash3,
+    Xxhash64,
     /// 未知の値を保持する (前方互換性のため)
     Unknown(String),
 }
@@ -49,8 +54,13 @@ impl ChecksumAlgorithm {
             Self::Crc32 => "CRC32",
             Self::Crc32C => "CRC32C",
             Self::Crc64Nvme => "CRC64NVME",
+            Self::Md5 => "MD5",
             Self::Sha1 => "SHA1",
             Self::Sha256 => "SHA256",
+            Self::Sha512 => "SHA512",
+            Self::Xxhash128 => "XXHASH128",
+            Self::Xxhash3 => "XXHASH3",
+            Self::Xxhash64 => "XXHASH64",
             Self::Unknown(s) => s.as_str(),
         }
     }
@@ -62,8 +72,13 @@ impl From<&str> for ChecksumAlgorithm {
             "CRC32" => Self::Crc32,
             "CRC32C" => Self::Crc32C,
             "CRC64NVME" => Self::Crc64Nvme,
+            "MD5" => Self::Md5,
             "SHA1" => Self::Sha1,
             "SHA256" => Self::Sha256,
+            "SHA512" => Self::Sha512,
+            "XXHASH128" => Self::Xxhash128,
+            "XXHASH3" => Self::Xxhash3,
+            "XXHASH64" => Self::Xxhash64,
             _ => Self::Unknown(s.to_string()),
         }
     }
@@ -74,17 +89,28 @@ impl From<&str> for ChecksumAlgorithm {
 - `Unknown(String)` variant により、S3 互換ストレージが返す未知の値もパース可能にする (前方互換性)。
 - aws-sdk-rust 互換の `as_str()` メソッドを提供する。
 - `From<&str>` で文字列からの変換を許容する。
+- variants は aws-sdk-rust の `ChecksumAlgorithm` (`/Users/voluntas/src/aws-sdk-rust/sdk/s3/src/types/_checksum_algorithm.rs:52`) と完全に揃える。S3 公式ドキュメントの「Valid values」では CRC32 / CRC32C / CRC64NVME / SHA1 / SHA256 のみ列挙されているが、aws-sdk-rust の Smithy モデルには 10 種が定義されているため、互換性最優先方針に従い shiguredo_s3 でも 10 種すべてを公開する。
+- 他の enum (`ServerSideEncryption`, `ObjectCannedAcl`, `StorageClass`, `MetadataDirective`, `TaggingDirective`, `EncodingType`, `ChecksumMode`) も同様の構造で実装し、variants は aws-sdk-rust のものと完全に揃える。
 
 ### 入力フィールドの型変更
 
-`PutObject` 等のビルダーメソッドは `impl Into<ChecksumAlgorithm>` を受けるシグネチャに変更し、利用者が `ChecksumAlgorithm::Crc32C` も `"CRC32C"` も渡せるようにする。
+aws-sdk-rust と完全に揃えるため、ビルダーメソッドは型を直接受けるシグネチャにする (`impl Into<ChecksumAlgorithm>` は使わない)。
 
 ```rust
-pub fn checksum_algorithm(mut self, algorithm: impl Into<ChecksumAlgorithm>) -> Self {
-    self.checksum_algorithm = Some(algorithm.into());
+pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+    self.checksum_algorithm = Some(input);
+    self
+}
+
+pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+    self.checksum_algorithm = input;
     self
 }
 ```
+
+- 利用者が `&str` を持っている場合は `ChecksumAlgorithm::from("CRC32C")` を明示的に呼ぶ形になる。
+- `impl Into<T>` 方式は型推論失敗時のエラーメッセージが分かりにくくなりやすく、aws-sdk-rust と挙動も異なるため採用しない。
+- aws-sdk-rust 互換の `set_*` バリアントを並列で提供する。
 
 ### 出力フィールドの型変更
 
@@ -95,6 +121,7 @@ pub fn checksum_algorithm(mut self, algorithm: impl Into<ChecksumAlgorithm>) -> 
 - `src/checksum.rs:11-18` の `pub(crate) enum ChecksumAlgorithm` を `src/types/enums.rs` に移動して `pub` に格上げする。
 - variant 名を AWS S3 API 仕様準拠に揃える (`Crc32` → `Crc32`、`Crc32c` → `Crc32C`、`Crc64nvme` → `Crc64Nvme` 等、aws-sdk-rust と一致)。
 - 内部の署名計算側は新しい公開 enum を直接利用する。
+- `Md5` / `Sha512` / `Xxhash*` は内部チェックサム計算には未対応のため、対象 variant が指定された場合は明確なエラー (`Error::UnsupportedChecksumAlgorithm` 等) を返す。「公開する型としては aws-sdk-rust と揃え、実装の進捗に応じて段階的にサポートする」スタイルにする。
 
 ### `lib.rs` の `pub use`
 
@@ -143,7 +170,7 @@ pub fn checksum_algorithm(mut self, algorithm: impl Into<ChecksumAlgorithm>) -> 
 
 - `src/api/put_object.rs:22-50`、`src/api/copy_object.rs:14-58`、`src/api/delete_objects.rs:14-19`、`src/api/get_object.rs:36`、`src/api/head_object.rs`、`src/api/list_objects_v2.rs:22`、`src/api/upload_part.rs:24` 等のフィールド型変更とビルダーメソッド更新。
 - `src/types.rs:330,342,361` 等の出力フィールド型変更。
-- `examples/s3cli`, `tests/minio.rs`, `tests/rustfs.rs` の呼び出し箇所書き換え (現状文字列を渡しているので大半はそのまま `impl Into<...>` で動くが、出力受け取り側は要変更)。
+- `examples/s3cli`, `tests/minio.rs`, `tests/rustfs.rs` の呼び出し箇所書き換え。文字列を直接渡している箇所はすべて `ChecksumAlgorithm::from("CRC32C")` 等の明示変換に置換する必要がある。
 
 ## 優先度
 
