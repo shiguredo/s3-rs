@@ -28,7 +28,26 @@ pub struct PutObjectFluentBuilder<'a> {
     cache_control: Option<String>,
     expires: Option<String>,
     checksum_algorithm: Option<ChecksumAlgorithm>,
-    checksum_value: Option<String>,
+    /// CRC32 チェックサム (Base64) - 個別指定
+    checksum_crc32: Option<String>,
+    /// CRC32C チェックサム (Base64) - 個別指定
+    checksum_crc32_c: Option<String>,
+    /// CRC64NVME チェックサム (Base64) - 個別指定
+    checksum_crc64_nvme: Option<String>,
+    /// MD5 チェックサム (Base64) - 個別指定 (内部計算未対応)
+    checksum_md5: Option<String>,
+    /// SHA1 チェックサム (Base64) - 個別指定
+    checksum_sha1: Option<String>,
+    /// SHA256 チェックサム (Base64) - 個別指定
+    checksum_sha256: Option<String>,
+    /// SHA512 チェックサム (Base64) - 個別指定 (内部計算未対応)
+    checksum_sha512: Option<String>,
+    /// XXHASH128 チェックサム (Base64) - 個別指定 (内部計算未対応)
+    checksum_xxhash128: Option<String>,
+    /// XXHASH3 チェックサム (Base64) - 個別指定 (内部計算未対応)
+    checksum_xxhash3: Option<String>,
+    /// XXHASH64 チェックサム (Base64) - 個別指定 (内部計算未対応)
+    checksum_xxhash64: Option<String>,
     /// サーバサイド暗号化 (AES256 または aws:kms)
     server_side_encryption: Option<ServerSideEncryption>,
     /// SSE-KMS キー ID
@@ -67,7 +86,16 @@ impl<'a> PutObjectFluentBuilder<'a> {
             cache_control: None,
             expires: None,
             checksum_algorithm: None,
-            checksum_value: None,
+            checksum_crc32: None,
+            checksum_crc32_c: None,
+            checksum_crc64_nvme: None,
+            checksum_md5: None,
+            checksum_sha1: None,
+            checksum_sha256: None,
+            checksum_sha512: None,
+            checksum_xxhash128: None,
+            checksum_xxhash3: None,
+            checksum_xxhash64: None,
             server_side_encryption: None,
             ssekms_key_id: None,
             sse_customer_algorithm: None,
@@ -229,9 +257,113 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
-    /// 計算済みチェックサム値を指定する (Base64 エンコード)
-    pub fn checksum_value(mut self, value: impl Into<String>) -> Self {
-        self.checksum_value = Some(value.into());
+    /// CRC32 チェックサム (Base64) を直接指定する
+    pub fn checksum_crc32(mut self, input: impl Into<String>) -> Self {
+        self.checksum_crc32 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_crc32(mut self, input: Option<String>) -> Self {
+        self.checksum_crc32 = input;
+        self
+    }
+
+    /// CRC32C チェックサム (Base64) を直接指定する
+    pub fn checksum_crc32_c(mut self, input: impl Into<String>) -> Self {
+        self.checksum_crc32_c = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_crc32_c(mut self, input: Option<String>) -> Self {
+        self.checksum_crc32_c = input;
+        self
+    }
+
+    /// CRC64NVME チェックサム (Base64) を直接指定する
+    pub fn checksum_crc64_nvme(mut self, input: impl Into<String>) -> Self {
+        self.checksum_crc64_nvme = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_crc64_nvme(mut self, input: Option<String>) -> Self {
+        self.checksum_crc64_nvme = input;
+        self
+    }
+
+    /// MD5 チェックサム (Base64) を直接指定する
+    pub fn checksum_md5(mut self, input: impl Into<String>) -> Self {
+        self.checksum_md5 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_md5(mut self, input: Option<String>) -> Self {
+        self.checksum_md5 = input;
+        self
+    }
+
+    /// SHA1 チェックサム (Base64) を直接指定する
+    pub fn checksum_sha1(mut self, input: impl Into<String>) -> Self {
+        self.checksum_sha1 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_sha1(mut self, input: Option<String>) -> Self {
+        self.checksum_sha1 = input;
+        self
+    }
+
+    /// SHA256 チェックサム (Base64) を直接指定する
+    pub fn checksum_sha256(mut self, input: impl Into<String>) -> Self {
+        self.checksum_sha256 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_sha256(mut self, input: Option<String>) -> Self {
+        self.checksum_sha256 = input;
+        self
+    }
+
+    /// SHA512 チェックサム (Base64) を直接指定する
+    pub fn checksum_sha512(mut self, input: impl Into<String>) -> Self {
+        self.checksum_sha512 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_sha512(mut self, input: Option<String>) -> Self {
+        self.checksum_sha512 = input;
+        self
+    }
+
+    /// XXHASH128 チェックサム (Base64) を直接指定する
+    pub fn checksum_xxhash128(mut self, input: impl Into<String>) -> Self {
+        self.checksum_xxhash128 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_xxhash128(mut self, input: Option<String>) -> Self {
+        self.checksum_xxhash128 = input;
+        self
+    }
+
+    /// XXHASH3 チェックサム (Base64) を直接指定する
+    pub fn checksum_xxhash3(mut self, input: impl Into<String>) -> Self {
+        self.checksum_xxhash3 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_xxhash3(mut self, input: Option<String>) -> Self {
+        self.checksum_xxhash3 = input;
+        self
+    }
+
+    /// XXHASH64 チェックサム (Base64) を直接指定する
+    pub fn checksum_xxhash64(mut self, input: impl Into<String>) -> Self {
+        self.checksum_xxhash64 = Some(input.into());
+        self
+    }
+
+    pub fn set_checksum_xxhash64(mut self, input: Option<String>) -> Self {
+        self.checksum_xxhash64 = input;
         self
     }
 
@@ -303,23 +435,70 @@ impl<'a> PutObjectFluentBuilder<'a> {
                 &computed_key_md5,
             ));
         }
-        // チェックサムの処理:
-        // - checksum_algorithm 指定あり + checksum_value 指定あり → 利用者提供の値を使用する
-        // - checksum_algorithm 指定あり + checksum_value 未指定 → ボディから自動計算する
-        // - checksum_algorithm 未指定 → デフォルトで CRC32 を自動計算する
-        let computed_checksum;
-        let default_algorithm = ChecksumAlgorithm::Crc32;
-        let algorithm = self
-            .checksum_algorithm
-            .as_ref()
-            .unwrap_or(&default_algorithm);
-        extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
-        let header_name = crate::checksum::header_name(algorithm)?;
-        if let Some(ref v) = self.checksum_value {
-            extra_headers.push((header_name, v.as_str()));
-        } else {
-            computed_checksum = crate::checksum::compute_checksum(algorithm, body)?;
-            extra_headers.push((header_name, &computed_checksum));
+        // チェックサムの処理 (PutObject 仕様):
+        // - 個別 checksum_* フィールド指定あり: 該当ヘッダー (x-amz-checksum-{algo}) に値を設定
+        // - checksum_algorithm 指定あり: x-amz-sdk-checksum-algorithm ヘッダーに設定
+        //   (個別フィールドとの整合性チェックは S3 サーバ側に任せる、aws-sdk-rust と同じ挙動)
+        // - 個別フィールドも checksum_algorithm も未指定: デフォルトで CRC32 を自動計算する
+        let computed_checksum_default;
+        let any_individual = self.checksum_crc32.is_some()
+            || self.checksum_crc32_c.is_some()
+            || self.checksum_crc64_nvme.is_some()
+            || self.checksum_md5.is_some()
+            || self.checksum_sha1.is_some()
+            || self.checksum_sha256.is_some()
+            || self.checksum_sha512.is_some()
+            || self.checksum_xxhash128.is_some()
+            || self.checksum_xxhash3.is_some()
+            || self.checksum_xxhash64.is_some();
+        if let Some(ref v) = self.checksum_crc32 {
+            extra_headers.push(("x-amz-checksum-crc32", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_crc32_c {
+            extra_headers.push(("x-amz-checksum-crc32c", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_crc64_nvme {
+            extra_headers.push(("x-amz-checksum-crc64nvme", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_md5 {
+            extra_headers.push(("x-amz-checksum-md5", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha1 {
+            extra_headers.push(("x-amz-checksum-sha1", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha256 {
+            extra_headers.push(("x-amz-checksum-sha256", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha512 {
+            extra_headers.push(("x-amz-checksum-sha512", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash128 {
+            extra_headers.push(("x-amz-checksum-xxhash128", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash3 {
+            extra_headers.push(("x-amz-checksum-xxhash3", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash64 {
+            extra_headers.push(("x-amz-checksum-xxhash64", v.as_str()));
+        }
+        if let Some(ref algorithm) = self.checksum_algorithm {
+            extra_headers.push(("x-amz-sdk-checksum-algorithm", algorithm.as_str()));
+        }
+        if !any_individual {
+            // 個別フィールド未指定。checksum_algorithm 指定があればそれを、なければ
+            // デフォルトの CRC32 を自動計算する。
+            let default_algorithm_owned = ChecksumAlgorithm::Crc32;
+            let algorithm = self
+                .checksum_algorithm
+                .as_ref()
+                .unwrap_or(&default_algorithm_owned);
+            // checksum_algorithm 指定があれば既に上で push 済み。未指定なら追加する。
+            if self.checksum_algorithm.is_none() {
+                extra_headers.push(("x-amz-sdk-checksum-algorithm", "CRC32"));
+            }
+            let header_name = crate::checksum::header_name(algorithm)?;
+            computed_checksum_default = crate::checksum::compute_checksum(algorithm, body)?;
+            extra_headers.push((header_name, &computed_checksum_default));
         }
 
         let meta_headers: Vec<(String, &str)> = self
@@ -384,16 +563,39 @@ impl<'a> PutObjectFluentBuilder<'a> {
                 &computed_key_md5,
             ));
         }
-        // チェックサムアルゴリズムが指定されている場合はヘッダーに含める
-        // (presigned ではボディがないため自動計算は行わない)
+        // チェックサムの処理 (presigned はボディがないため自動計算しない)
         if let Some(ref v) = self.checksum_algorithm {
-            extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
+            extra_headers.push(("x-amz-sdk-checksum-algorithm", v.as_str()));
         }
-        if let Some(ref v) = self.checksum_value
-            && let Some(ref algorithm) = self.checksum_algorithm
-        {
-            let header_name = crate::checksum::header_name(algorithm)?;
-            extra_headers.push((header_name, v.as_str()));
+        if let Some(ref v) = self.checksum_crc32 {
+            extra_headers.push(("x-amz-checksum-crc32", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_crc32_c {
+            extra_headers.push(("x-amz-checksum-crc32c", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_crc64_nvme {
+            extra_headers.push(("x-amz-checksum-crc64nvme", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_md5 {
+            extra_headers.push(("x-amz-checksum-md5", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha1 {
+            extra_headers.push(("x-amz-checksum-sha1", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha256 {
+            extra_headers.push(("x-amz-checksum-sha256", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_sha512 {
+            extra_headers.push(("x-amz-checksum-sha512", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash128 {
+            extra_headers.push(("x-amz-checksum-xxhash128", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash3 {
+            extra_headers.push(("x-amz-checksum-xxhash3", v.as_str()));
+        }
+        if let Some(ref v) = self.checksum_xxhash64 {
+            extra_headers.push(("x-amz-checksum-xxhash64", v.as_str()));
         }
 
         let url = build_presigned_url(

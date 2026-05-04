@@ -103,6 +103,12 @@
   - @voluntas
 - [CHANGE] `DeleteObjects` の入力を `Delete` 構造体経由に変更し、`DeleteObjectsFluentBuilder::object` / `quiet` メソッドを廃止する
   - @voluntas
+- [CHANGE] `PutObject` の `checksum_value` を廃止し `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_md5` / `checksum_sha1` / `checksum_sha256` / `checksum_sha512` / `checksum_xxhash128` / `checksum_xxhash3` / `checksum_xxhash64` の個別フィールドに分解する
+  - @voluntas
+- [CHANGE] `UploadPart` の `checksum_value` を廃止し 10 種の個別チェックサムフィールドに分解する。個別 checksum 指定時に `checksum_algorithm` を無視する S3 仕様に合わせる
+  - @voluntas
+- [CHANGE] `PutObject` / `UploadPart` の `x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更する (aws-sdk-rust 仕様準拠)
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 
