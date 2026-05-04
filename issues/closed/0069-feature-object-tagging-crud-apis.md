@@ -1,6 +1,7 @@
 # GetObjectTagging / PutObjectTagging / DeleteObjectTagging の実装
 
 Created: 2026-04-04
+Completed: 2026-05-04
 Model: Composer 2 Fast
 
 ## 根拠
@@ -35,3 +36,25 @@ Model: Composer 2 Fast
 ## 優先度
 
 高
+
+## 解決方法
+
+### 実装状況
+
+本 issue が要求する 3 API はいずれも、過去のリリースで既に実装済みであり、本 issue の closed 化時点で `src/api/get_object_tagging.rs` / `src/api/put_object_tagging.rs` / `src/api/delete_object_tagging.rs` として動作している。
+
+- `Client::get_object_tagging()` / `put_object_tagging()` / `delete_object_tagging()` を提供
+- 3 API とも `version_id(impl Into<String>)` ビルダーメソッド経由で `versionId` クエリパラメータを送信可能
+- `GetObjectTaggingFluentBuilder::parse_response` で XML レスポンスから `Tagging.TagSet` を `Vec<Tag>` に変換
+- `PutObjectTaggingFluentBuilder` は `tagging(Tagging)` 経由で構造化入力を受ける (issue 0061 で `DeleteObjects` を `Delete` 構造体経由に変更したのと同じ方針)
+- `DeleteObjectTaggingFluentBuilder` は `bucket` / `key` / `version_id` のみで動作
+
+### 番号変更の経緯
+
+本 issue は元々番号 0046 で作成されたが、過去の closed issue (`0046-feature-bucket-lifecycle-configuration.md`) と番号が重複していたため、issue 台帳整理 (commit `b6437b3`) で `0069` に振り直した。
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo test --test minio test_object_tagging`: passed (実装直後に追加された統合テスト)
+- 既存 `Client::*_object_tagging()` の利用箇所はすべて build を通過
