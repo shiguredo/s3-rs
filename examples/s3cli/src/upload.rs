@@ -156,9 +156,24 @@ pub(crate) async fn upload_multipart(
                 shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_response,
             )
             .await?;
+            // CompleteMultipartUploadOutput からは PutObject 相当のフィールドを
+            // 引き継ぎ、追加フィールドは None で初期化する (s3cli では未使用)
             Ok(PutObjectOutput {
                 e_tag: output.e_tag,
                 version_id: output.version_id,
+                expiration: output.expiration,
+                server_side_encryption: output.server_side_encryption,
+                sse_customer_algorithm: None,
+                sse_customer_key_md5: None,
+                ssekms_key_id: output.ssekms_key_id,
+                bucket_key_enabled: output.bucket_key_enabled,
+                request_charged: output.request_charged,
+                checksum_crc32: output.checksum_crc32,
+                checksum_crc32_c: output.checksum_crc32_c,
+                checksum_crc64_nvme: output.checksum_crc64_nvme,
+                checksum_sha1: output.checksum_sha1,
+                checksum_sha256: output.checksum_sha256,
+                checksum_type: output.checksum_type,
             })
         }
         Err(e) => {

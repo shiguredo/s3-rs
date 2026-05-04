@@ -1,6 +1,7 @@
 # PutObjectOutput / UploadPartOutput / CompleteMultipartUploadOutput / CopyObjectOutput に SSE / checksum / request_charged を追加する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -127,3 +128,29 @@ pub request_charged: Option<String>,
 ## CHANGES.md への記載
 
 - `[ADD] PutObjectOutput / UploadPartOutput / CompleteMultipartUploadOutput / CopyObjectOutput に SSE / checksum / request_charged 等のフィールドを追加する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` の書き込み系 `*Output` にフィールド追加**
+   - `PutObjectOutput`: `expiration` / `server_side_encryption` (`ServerSideEncryption`) / `sse_customer_algorithm` / `sse_customer_key_md5` / `ssekms_key_id` / `bucket_key_enabled` (bool) / `request_charged` / `checksum_crc32` 〜 `checksum_sha256` / `checksum_type`
+   - `UploadPartOutput`: 上記から `expiration` / `checksum_type` を除いた SSE / 個別 checksum / `request_charged`
+   - `CompleteMultipartUploadOutput`: `expiration` / `server_side_encryption` / `ssekms_key_id` / `bucket_key_enabled` / `request_charged` / `checksum_crc32` 〜 `checksum_sha256` / `checksum_type`
+   - `CopyObjectOutput` (issue 0063 で新設したもの): トップレベルに `expiration` / `server_side_encryption` / `sse_customer_algorithm` / `sse_customer_key_md5` / `ssekms_key_id` / `ssekms_encryption_context` / `bucket_key_enabled` / `request_charged` を追加
+
+2. **`src/api/put_object.rs` / `upload_part.rs` / `complete_multipart_upload.rs` / `copy_object.rs` の `parse_response` 拡張**
+   - レスポンスヘッダー (`x-amz-expiration`, `x-amz-server-side-encryption`, `x-amz-server-side-encryption-aws-kms-key-id`, `x-amz-server-side-encryption-bucket-key-enabled`, 各 `x-amz-checksum-*`, `x-amz-checksum-type`, `x-amz-request-charged`, `x-amz-server-side-encryption-context` 等) からフィールドを抽出
+   - `server_side_encryption` は `From<&str>` で `ServerSideEncryption` に変換
+   - `bucket_key_enabled` は `parse::<bool>().ok()` でパース失敗を None に落とす
+
+3. **`examples/s3cli/src/upload.rs` の追従**
+   - `CompleteMultipartUploadOutput` から `PutObjectOutput` を構築する箇所で、追加フィールドを `output.<field>` から引き継ぎ、SSE-C 関連 (sse_customer_*) は s3cli では非対応のため `None` で初期化
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --workspace`: 18 統合テスト全て passed (rustfs)
+- pre-commit hook (cargo fmt / clippy / test) すべて pass

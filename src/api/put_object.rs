@@ -530,6 +530,39 @@ impl<'a> PutObjectFluentBuilder<'a> {
         Ok(PutObjectOutput {
             e_tag: response.get_header("etag").map(String::from),
             version_id: response.get_header("x-amz-version-id").map(String::from),
+            expiration: response.get_header("x-amz-expiration").map(String::from),
+            server_side_encryption: response
+                .get_header("x-amz-server-side-encryption")
+                .map(crate::types::ServerSideEncryption::from),
+            sse_customer_algorithm: response
+                .get_header("x-amz-server-side-encryption-customer-algorithm")
+                .map(String::from),
+            sse_customer_key_md5: response
+                .get_header("x-amz-server-side-encryption-customer-key-md5")
+                .map(String::from),
+            ssekms_key_id: response
+                .get_header("x-amz-server-side-encryption-aws-kms-key-id")
+                .map(String::from),
+            bucket_key_enabled: response
+                .get_header("x-amz-server-side-encryption-bucket-key-enabled")
+                .and_then(|s| s.parse::<bool>().ok()),
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
+            checksum_crc32: response
+                .get_header("x-amz-checksum-crc32")
+                .map(String::from),
+            checksum_crc32_c: response
+                .get_header("x-amz-checksum-crc32c")
+                .map(String::from),
+            checksum_crc64_nvme: response
+                .get_header("x-amz-checksum-crc64nvme")
+                .map(String::from),
+            checksum_sha1: response.get_header("x-amz-checksum-sha1").map(String::from),
+            checksum_sha256: response
+                .get_header("x-amz-checksum-sha256")
+                .map(String::from),
+            checksum_type: response.get_header("x-amz-checksum-type").map(String::from),
         })
     }
 
