@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
-use shiguredo_s3::S3Client;
+use shiguredo_s3::Client;
 use shiguredo_s3::types::{CompletedMultipartUpload, CompletedPart, PutObjectOutput};
 
 use crate::params::UploadParams;
@@ -48,7 +48,7 @@ impl UploadData<'_> {
 
 /// マルチパートアップロードのパラメータ
 pub(crate) struct MultipartUploadParams<'a> {
-    pub(crate) client: &'a S3Client,
+    pub(crate) client: &'a Client,
     pub(crate) tls_config: &'a Arc<rustls::ClientConfig>,
     pub(crate) bucket: &'a str,
     pub(crate) key: &'a str,
@@ -282,7 +282,7 @@ async fn upload_parts_concurrent(
 #[allow(clippy::too_many_arguments)]
 async fn upload_single_part(
     pool: &ConnectionPool,
-    client: &S3Client,
+    client: &Client,
     bucket: &str,
     key: &str,
     upload_id: &str,

@@ -77,7 +77,7 @@ aws-sdk-rust と同じ命名規則で、`objects()` (単数追加) と `set_obje
 
 ```rust
 pub struct DeleteObjectsFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     delete: Option<Delete>,
     checksum_algorithm: Option<ChecksumAlgorithm>,  // issue 0059 で型化

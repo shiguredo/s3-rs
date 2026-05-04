@@ -1,4 +1,4 @@
-use crate::credential::Credential;
+use crate::credential::Credentials;
 pub(crate) use crate::datetime::UtcDateTime;
 
 // -------------------------------------------------------
@@ -153,7 +153,7 @@ pub(crate) fn build_canonical_query_string(params: &[(&str, &str)]) -> String {
 
 /// 署名の入力パラメータ
 pub(crate) struct SigningParams<'a> {
-    pub credential: &'a Credential,
+    pub credentials: &'a Credentials,
     pub method: &'a str,
     pub canonical_uri: &'a str,
     pub canonical_query_string: &'a str,
@@ -167,7 +167,7 @@ pub(crate) struct SigningParams<'a> {
 ///
 /// headers は (小文字名, 値) のスライスで、ソート済みであること
 pub(crate) fn compute_authorization(params: &SigningParams<'_>) -> String {
-    let credential = params.credential;
+    let credentials = params.credentials;
     let method = params.method;
     let canonical_uri = params.canonical_uri;
     let canonical_query_string = params.canonical_query_string;
@@ -206,7 +206,7 @@ pub(crate) fn compute_authorization(params: &SigningParams<'_>) -> String {
 
     // 署名キーを導出する
     let date_key = hmac_sha256(
-        format!("AWS4{}", credential.secret_access_key).as_bytes(),
+        format!("AWS4{}", credentials.secret_access_key).as_bytes(),
         date_stamp.as_bytes(),
     );
     let date_region_key = hmac_sha256(&date_key, region.as_bytes());
@@ -219,13 +219,13 @@ pub(crate) fn compute_authorization(params: &SigningParams<'_>) -> String {
     // Authorization ヘッダーを構成する
     format!(
         "AWS4-HMAC-SHA256 Credential={}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
-        credential.access_key_id
+        credentials.access_key_id
     )
 }
 
 /// Presigned URL 用の署名パラメータ
 pub(crate) struct PresignParams<'a> {
-    pub credential: &'a Credential,
+    pub credentials: &'a Credentials,
     pub method: &'a str,
     pub canonical_uri: &'a str,
     /// 署名対象に含める全クエリパラメータ (X-Amz-* 含む、X-Amz-Signature 除く)
@@ -273,7 +273,7 @@ pub(crate) fn compute_presigned_signature(params: &PresignParams<'_>) -> String 
     );
 
     let date_key = hmac_sha256(
-        format!("AWS4{}", params.credential.secret_access_key).as_bytes(),
+        format!("AWS4{}", params.credentials.secret_access_key).as_bytes(),
         date_stamp.as_bytes(),
     );
     let date_region_key = hmac_sha256(&date_key, params.region.as_bytes());
@@ -318,9 +318,12 @@ mod tests {
     /// AWS 公式テストベクトルに基づく署名検証
     #[test]
     fn test_compute_authorization() {
-        let credential = Credential::new(
+        let credentials = Credentials::new(
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            None,
+            "static",
         );
 
         let datetime = UtcDateTime::from_unix_timestamp(1369353600); // 2013-05-24T00:00:00Z
@@ -334,7 +337,7 @@ mod tests {
         ];
 
         let auth = compute_authorization(&SigningParams {
-            credential: &credential,
+            credentials: &credentials,
             method: "GET",
             canonical_uri: "/test.txt",
             canonical_query_string: "",

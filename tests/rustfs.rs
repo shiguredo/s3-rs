@@ -35,7 +35,7 @@ use shiguredo_s3::types::{
     ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
     Tag, Tagging,
 };
-use shiguredo_s3::{Credential, S3Client, S3Config, S3Request, S3Response};
+use shiguredo_s3::{Client, Config, Credentials, S3Request, S3Response};
 use testcontainers::core::wait::HttpWaitStrategy;
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -93,21 +93,21 @@ async fn start_rustfs() -> (ContainerAsync<GenericImage>, u16) {
     (container, port)
 }
 
-/// テスト用の S3Client を構築する
+/// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
 /// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
-/// - use_path_style: true (RustFS はパススタイルが必要)
-fn build_client(port: u16) -> S3Client {
-    let config = S3Config::builder()
+/// - force_path_style: true (RustFS はパススタイルが必要)
+fn build_client(port: u16) -> Client {
+    let config = Config::builder()
         .region("us-east-1")
-        .credential(Credential::new(ACCESS_KEY, SECRET_KEY))
+        .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
         .endpoint(format!("http://127.0.0.1:{port}"))
         // RustFS は仮想ホストスタイルに対応していないためパススタイルを使う
-        .use_path_style(true)
+        .force_path_style(true)
         .build()
-        .expect("failed to build S3Config");
-    S3Client::new(config)
+        .expect("failed to build Config");
+    Client::from_conf(config)
 }
 
 /// S3Request を HTTP/1.1 で送信して S3Response を返す

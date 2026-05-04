@@ -59,6 +59,26 @@
   - @voluntas
 - [CHANGE] CopyObject のメタデータディレクティブ事前検証を廃止し、aws-sdk-rust 互換の挙動に変更する
   - @voluntas
+- [CHANGE] `S3Config` を `Config` にリネームする
+  - @voluntas
+- [CHANGE] `S3ConfigBuilder` を `ConfigBuilder` にリネームする
+  - @voluntas
+- [CHANGE] `S3Client` を `Client` にリネームする
+  - @voluntas
+- [CHANGE] `S3Client::new` を `Client::from_conf` にリネームする
+  - @voluntas
+- [CHANGE] `Credential` を `Credentials` にリネームし、`Credentials::new` を aws-credential-types と同じ 5 引数シグネチャ (access_key_id, secret_access_key, session_token, expires_after, provider_name) に変更する
+  - @voluntas
+- [CHANGE] `Credential::with_session_token` を廃止し、`Credentials::new` で `session_token` を `Some` 指定する形に統合する
+  - @voluntas
+- [CHANGE] `ConfigBuilder::credential` を `credentials_provider` にリネームする
+  - @voluntas
+- [CHANGE] `ConfigBuilder::use_path_style` を `force_path_style` にリネームする
+  - @voluntas
+- [CHANGE] `Config::credential()` ゲッターを `credentials_provider()` にリネームする
+  - @voluntas
+- [CHANGE] `Config::use_path_style()` ゲッターを `force_path_style()` にリネームする
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

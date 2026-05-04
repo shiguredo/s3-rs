@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use shiguredo_s3::S3Client;
+use shiguredo_s3::Client;
 use shiguredo_s3::types::ObjectIdentifier;
 
 use crate::params::UploadParams;
@@ -17,7 +17,7 @@ use crate::util::{FilterRule, resolve_content_type, should_include};
 /// 単一ファイルをアップロードする
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn upload_file(
-    client: &S3Client,
+    client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
     local_path: &str,
     bucket: &str,
@@ -60,7 +60,7 @@ pub(crate) async fn upload_file(
 /// 単一ファイルをダウンロードする
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn download_file(
-    client: &S3Client,
+    client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
     bucket: &str,
     key: &str,
@@ -105,7 +105,7 @@ pub(crate) async fn download_file(
 
 /// 再帰アップロードのパラメータ
 pub(crate) struct RecursiveUploadParams<'a> {
-    pub(crate) client: &'a S3Client,
+    pub(crate) client: &'a Client,
     pub(crate) tls_config: &'a Arc<rustls::ClientConfig>,
     pub(crate) local_dir: &'a str,
     pub(crate) bucket: &'a str,
@@ -173,7 +173,7 @@ pub(crate) async fn upload_recursive(
 /// 再帰的にダウンロードする
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn download_recursive(
-    client: &S3Client,
+    client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
     bucket: &str,
     prefix: &str,
@@ -241,7 +241,7 @@ pub(crate) async fn download_recursive(
 /// 再帰的に S3 → S3 コピーする
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn copy_recursive(
-    client: &S3Client,
+    client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
     src_bucket: &str,
     src_prefix: &str,
@@ -334,7 +334,7 @@ fn is_safe_relative_path(path: &str) -> bool {
 
 /// 再帰的に削除する
 pub(crate) async fn delete_recursive(
-    client: &S3Client,
+    client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
     bucket: &str,
     prefix: &str,

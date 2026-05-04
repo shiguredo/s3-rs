@@ -4,7 +4,7 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketEncryption.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::{
     PutBucketEncryptionOutput, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
@@ -13,14 +13,14 @@ use crate::types::{
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
 pub struct PutBucketEncryptionFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     rules: Vec<ServerSideEncryptionRule>,
     checksum_algorithm: Option<String>,
 }
 
 impl<'a> PutBucketEncryptionFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

@@ -4,14 +4,14 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjectTagging.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::DeleteObjectTaggingOutput;
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
 pub struct DeleteObjectTaggingFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     key: Option<String>,
     version_id: Option<String>,
@@ -19,7 +19,7 @@ pub struct DeleteObjectTaggingFluentBuilder<'a> {
 }
 
 impl<'a> DeleteObjectTaggingFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

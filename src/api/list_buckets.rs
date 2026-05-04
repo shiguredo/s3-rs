@@ -4,14 +4,14 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::{Bucket, ListBucketsOutput};
 
 use super::{S3Request, build_signed_service_request, parse_error_response};
 
 pub struct ListBucketsFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     max_buckets: Option<u32>,
     continuation_token: Option<String>,
     prefix: Option<String>,
@@ -19,7 +19,7 @@ pub struct ListBucketsFluentBuilder<'a> {
 }
 
 impl<'a> ListBucketsFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             max_buckets: None,

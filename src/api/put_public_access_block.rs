@@ -4,14 +4,14 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutPublicAccessBlock.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::PutPublicAccessBlockOutput;
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
 pub struct PutPublicAccessBlockFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     block_public_acls: Option<bool>,
     ignore_public_acls: Option<bool>,
@@ -21,7 +21,7 @@ pub struct PutPublicAccessBlockFluentBuilder<'a> {
 }
 
 impl<'a> PutPublicAccessBlockFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

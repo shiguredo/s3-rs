@@ -23,28 +23,30 @@ use crate::api::{
     PutObjectTaggingFluentBuilder, PutPublicAccessBlockFluentBuilder, UploadPartCopyFluentBuilder,
     UploadPartFluentBuilder,
 };
-use crate::credential::Credential;
+use crate::credential::Credentials;
 use crate::error::Error;
 
 /// S3 クライアントの設定
+///
+/// aws-sdk-rust の `aws_sdk_s3::Config` と同等の API を提供する。
 #[derive(Debug, Clone)]
-pub struct S3Config {
+pub struct Config {
     /// AWS リージョン (例: "ap-northeast-1")
     pub(crate) region: String,
     /// AWS クレデンシャル
-    pub(crate) credential: Credential,
+    pub(crate) credentials_provider: Credentials,
     /// カスタムエンドポイント (None の場合は AWS デフォルトを使用する)
     pub(crate) endpoint: Option<String>,
     /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
-    pub(crate) use_path_style: bool,
+    pub(crate) force_path_style: bool,
     /// TLS 証明書の検証を無視する (テスト環境向け)
     pub(crate) ignore_cert_check: bool,
 }
 
-impl S3Config {
-    /// S3ConfigBuilder を返す
-    pub fn builder() -> S3ConfigBuilder {
-        S3ConfigBuilder::default()
+impl Config {
+    /// `ConfigBuilder` を返す
+    pub fn builder() -> ConfigBuilder {
+        ConfigBuilder::default()
     }
 
     /// リージョンを返す
@@ -53,8 +55,8 @@ impl S3Config {
     }
 
     /// クレデンシャルを返す
-    pub fn credential(&self) -> &Credential {
-        &self.credential
+    pub fn credentials_provider(&self) -> &Credentials {
+        &self.credentials_provider
     }
 
     /// エンドポイントを返す
@@ -63,8 +65,8 @@ impl S3Config {
     }
 
     /// パススタイルアクセスを使用するかを返す
-    pub fn use_path_style(&self) -> bool {
-        self.use_path_style
+    pub fn force_path_style(&self) -> bool {
+        self.force_path_style
     }
 
     /// TLS 証明書の検証を無視するかを返す
@@ -73,17 +75,17 @@ impl S3Config {
     }
 }
 
-/// S3Config のビルダー
+/// `Config` のビルダー
 #[derive(Debug, Clone, Default)]
-pub struct S3ConfigBuilder {
+pub struct ConfigBuilder {
     region: Option<String>,
-    credential: Option<Credential>,
+    credentials_provider: Option<Credentials>,
     endpoint: Option<String>,
-    use_path_style: bool,
+    force_path_style: bool,
     ignore_cert_check: bool,
 }
 
-impl S3ConfigBuilder {
+impl ConfigBuilder {
     /// AWS リージョンを設定する (必須)
     pub fn region(mut self, region: impl Into<String>) -> Self {
         self.region = Some(region.into());
@@ -91,8 +93,8 @@ impl S3ConfigBuilder {
     }
 
     /// AWS クレデンシャルを設定する (必須)
-    pub fn credential(mut self, credential: Credential) -> Self {
-        self.credential = Some(credential);
+    pub fn credentials_provider(mut self, credentials_provider: Credentials) -> Self {
+        self.credentials_provider = Some(credentials_provider);
         self
     }
 
@@ -103,33 +105,33 @@ impl S3ConfigBuilder {
     }
 
     /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
-    pub fn use_path_style(mut self, use_path_style: bool) -> Self {
-        self.use_path_style = use_path_style;
+    pub fn force_path_style(mut self, force_path_style: bool) -> Self {
+        self.force_path_style = force_path_style;
         self
     }
 
-    /// TLS 証明書の検証を無視する (テスト環境向け)
+    /// TLS 証明書の検証を無視する (テスト環境向け、shiguredo_s3 独自フィールド)
     pub fn ignore_cert_check(mut self, ignore_cert_check: bool) -> Self {
         self.ignore_cert_check = ignore_cert_check;
         self
     }
 
-    /// S3Config を構築する
+    /// `Config` を構築する
     ///
-    /// region と credential が未設定の場合はエラーを返す
-    pub fn build(self) -> Result<S3Config, Error> {
+    /// region と credentials_provider が未設定の場合はエラーを返す
+    pub fn build(self) -> Result<Config, Error> {
         let region = self
             .region
             .ok_or_else(|| Error::InvalidInput("region is required".to_string()))?;
-        let credential = self
-            .credential
-            .ok_or_else(|| Error::InvalidInput("credential is required".to_string()))?;
+        let credentials_provider = self
+            .credentials_provider
+            .ok_or_else(|| Error::InvalidInput("credentials_provider is required".to_string()))?;
 
-        Ok(S3Config {
+        Ok(Config {
             region,
-            credential,
+            credentials_provider,
             endpoint: self.endpoint,
-            use_path_style: self.use_path_style,
+            force_path_style: self.force_path_style,
             ignore_cert_check: self.ignore_cert_check,
         })
     }
@@ -138,15 +140,17 @@ impl S3ConfigBuilder {
 /// S3 クライアント (Sans I/O)
 ///
 /// 設定を保持し、各 API の Fluent Builder を生成する。
-/// I/O は行わない。
+/// I/O は行わない。aws-sdk-rust の `aws_sdk_s3::Client` と同等の API を提供する。
 #[derive(Debug, Clone)]
-pub struct S3Client {
-    pub(crate) config: S3Config,
+pub struct Client {
+    pub(crate) config: Config,
 }
 
-impl S3Client {
-    /// 新しい S3 クライアントを作成する
-    pub fn new(config: S3Config) -> Self {
+impl Client {
+    /// 設定から S3 クライアントを作成する
+    ///
+    /// aws-sdk-rust の `Client::from_conf(Config)` と同等。
+    pub fn from_conf(config: Config) -> Self {
         Self { config }
     }
 

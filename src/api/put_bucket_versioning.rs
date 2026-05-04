@@ -5,21 +5,21 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketVersioning.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::PutBucketVersioningOutput;
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
 pub struct PutBucketVersioningFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     status: Option<String>,
     checksum_algorithm: Option<String>,
 }
 
 impl<'a> PutBucketVersioningFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,
