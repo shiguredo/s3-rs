@@ -13,8 +13,8 @@ pub mod types;
 mod xml;
 
 pub use api::{PresignedRequest, S3Request, S3Response};
-pub use client::{S3Client, S3Config, S3ConfigBuilder};
-pub use credential::Credential;
+pub use client::{Client, Config, ConfigBuilder};
+pub use credential::Credentials;
 pub use error::{Error, s3_error_code};
 pub use types::{
     CreateBucketConfiguration, HttpDate, ServerSideEncryptionByDefault, ServerSideEncryptionRule,

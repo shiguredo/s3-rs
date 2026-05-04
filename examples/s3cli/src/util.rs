@@ -2,7 +2,7 @@
 // ユーティリティ
 // -------------------------------------------------------
 
-use shiguredo_s3::{Credential, S3Client, S3Config};
+use shiguredo_s3::{Client, Config, Credentials};
 
 /// ファイル拡張子から MIME タイプを推測する
 pub(crate) fn guess_mime_type(path: &str) -> Option<&'static str> {
@@ -181,8 +181,8 @@ pub(crate) fn is_s3_uri(path: &str) -> bool {
     path.starts_with("s3://")
 }
 
-/// 環境変数から S3Client を構築する
-pub(crate) fn build_client(args: &noargs::RawArgs) -> noargs::Result<S3Client> {
+/// 環境変数から Client を構築する
+pub(crate) fn build_client(args: &noargs::RawArgs) -> noargs::Result<Client> {
     let access_key_id = std::env::var("AWS_ACCESS_KEY_ID")
         .map_err(|_| noargs::Error::other(args, "AWS_ACCESS_KEY_ID is not set"))?;
     let secret_access_key = std::env::var("AWS_SECRET_ACCESS_KEY")
@@ -197,17 +197,23 @@ pub(crate) fn build_client(args: &noargs::RawArgs) -> noargs::Result<S3Client> {
         .map(|v| v == "1")
         .unwrap_or(false);
 
-    let mut builder = S3Config::builder()
+    let mut builder = Config::builder()
         .region(region)
-        .credential(Credential::new(access_key_id, secret_access_key))
-        .use_path_style(use_path_style)
+        .credentials_provider(Credentials::new(
+            access_key_id,
+            secret_access_key,
+            None,
+            None,
+            "s3cli",
+        ))
+        .force_path_style(use_path_style)
         .ignore_cert_check(ignore_cert_check);
     if let Some(ep) = endpoint {
         builder = builder.endpoint(ep);
     }
     let config = builder.build().map_err(|e| format!("{e}"))?;
 
-    Ok(S3Client::new(config))
+    Ok(Client::from_conf(config))
 }
 
 /// 人間が読みやすいサイズ表示に変換する

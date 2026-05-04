@@ -5,14 +5,14 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::{ListPartsOutput, Part};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
 pub struct ListPartsFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     key: Option<String>,
     upload_id: Option<String>,
@@ -25,7 +25,7 @@ pub struct ListPartsFluentBuilder<'a> {
 }
 
 impl<'a> ListPartsFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

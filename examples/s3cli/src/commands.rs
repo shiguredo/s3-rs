@@ -1002,7 +1002,7 @@ async fn collect_local_files(
 
 /// S3 オブジェクトのキー・サイズ・LastModified を収集する
 async fn collect_s3_objects(
-    client: &shiguredo_s3::S3Client,
+    client: &shiguredo_s3::Client,
     tls_config: &Arc<rustls::ClientConfig>,
     bucket: &str,
     prefix: &str,

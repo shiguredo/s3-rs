@@ -202,31 +202,39 @@ let output = shiguredo_s3::api::GetObjectFluentBuilder::parse_response(&s3_respo
 ### S3 クライアントの作成
 
 ```rust
-use shiguredo_s3::{S3Client, S3Config, Credential};
+use shiguredo_s3::{Client, Config, Credentials};
 
-let config = S3Config::builder()
+let config = Config::builder()
     .region("ap-northeast-1")
-    .credential(Credential::new("YOUR_ACCESS_KEY_ID", "YOUR_SECRET_ACCESS_KEY"))
+    .credentials_provider(Credentials::new(
+        "YOUR_ACCESS_KEY_ID",
+        "YOUR_SECRET_ACCESS_KEY",
+        None,
+        None,
+        "static",
+    ))
     .build()?;
 
-let client = S3Client::new(config);
+let client = Client::from_conf(config);
 ```
 
 ### 一時クレデンシャル (STS / IAM ロール)
 
 ```rust
-use shiguredo_s3::{S3Client, S3Config, Credential};
+use shiguredo_s3::{Client, Config, Credentials};
 
-let config = S3Config::builder()
+let config = Config::builder()
     .region("ap-northeast-1")
-    .credential(Credential::with_session_token(
+    .credentials_provider(Credentials::new(
         "YOUR_ACCESS_KEY_ID",
         "YOUR_SECRET_ACCESS_KEY",
-        "YOUR_SESSION_TOKEN",
+        Some("YOUR_SESSION_TOKEN".to_string()),
+        None,
+        "sts",
     ))
     .build()?;
 
-let client = S3Client::new(config);
+let client = Client::from_conf(config);
 ```
 
 ### GetObject
@@ -413,27 +421,39 @@ let output = shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_resp
 ### S3 互換サービス (Cloudflare R2)
 
 ```rust
-let config = S3Config::builder()
+let config = Config::builder()
     .region("auto")
-    .credential(Credential::new("YOUR_ACCESS_KEY_ID", "YOUR_SECRET_ACCESS_KEY"))
+    .credentials_provider(Credentials::new(
+        "YOUR_ACCESS_KEY_ID",
+        "YOUR_SECRET_ACCESS_KEY",
+        None,
+        None,
+        "static",
+    ))
     .endpoint("https://<ACCOUNT_ID>.r2.cloudflarestorage.com")
-    .use_path_style(true)
+    .force_path_style(true)
     .build()?;
 
-let client = S3Client::new(config);
+let client = Client::from_conf(config);
 ```
 
 ### S3 互換サービス (Akamai Cloud Object Storage)
 
 ```rust
-let config = S3Config::builder()
+let config = Config::builder()
     .region("us-east-1")
-    .credential(Credential::new("YOUR_ACCESS_KEY_ID", "YOUR_SECRET_ACCESS_KEY"))
+    .credentials_provider(Credentials::new(
+        "YOUR_ACCESS_KEY_ID",
+        "YOUR_SECRET_ACCESS_KEY",
+        None,
+        None,
+        "static",
+    ))
     .endpoint("https://<CLUSTER_ID>.linodeobjects.com")
-    .use_path_style(true)
+    .force_path_style(true)
     .build()?;
 
-let client = S3Client::new(config);
+let client = Client::from_conf(config);
 ```
 
 ### S3 互換サービス (RustFS、HTTP)
@@ -442,14 +462,20 @@ endpoint のスキーム (`http://` / `https://`) から `S3Request.https` フ�
 スキームを省略した場合は HTTPS がデフォルトです。
 
 ```rust
-let config = S3Config::builder()
+let config = Config::builder()
     .region("us-east-1")
-    .credential(Credential::new("rustfsadmin", "rustfsadmin"))
+    .credentials_provider(Credentials::new(
+        "rustfsadmin",
+        "rustfsadmin",
+        None,
+        None,
+        "static",
+    ))
     .endpoint("http://localhost:9000")
-    .use_path_style(true)
+    .force_path_style(true)
     .build()?;
 
-let client = S3Client::new(config);
+let client = Client::from_conf(config);
 ```
 
 ## サンプル (tokio + rustls + shiguredo_http11)

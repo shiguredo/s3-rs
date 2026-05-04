@@ -4,7 +4,7 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectLockConfiguration.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::{
     DefaultRetention, GetObjectLockConfigurationOutput, ObjectLockConfiguration, ObjectLockRule,
@@ -13,12 +13,12 @@ use crate::types::{
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
 pub struct GetObjectLockConfigurationFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
 }
 
 impl<'a> GetObjectLockConfigurationFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

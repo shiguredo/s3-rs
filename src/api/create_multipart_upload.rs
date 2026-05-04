@@ -4,7 +4,7 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::CreateMultipartUploadOutput;
 
@@ -14,7 +14,7 @@ use super::{
 };
 
 pub struct CreateMultipartUploadFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     key: Option<String>,
     content_type: Option<String>,
@@ -44,7 +44,7 @@ pub struct CreateMultipartUploadFluentBuilder<'a> {
 }
 
 impl<'a> CreateMultipartUploadFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

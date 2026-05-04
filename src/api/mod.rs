@@ -112,8 +112,8 @@ pub use put_public_access_block::PutPublicAccessBlockFluentBuilder;
 pub use upload_part::UploadPartFluentBuilder;
 pub use upload_part_copy::UploadPartCopyFluentBuilder;
 
-use crate::client::S3Client;
-use crate::credential::Credential;
+use crate::client::Client;
+use crate::credential::Credentials;
 use crate::error::Error;
 use crate::signing::{
     PresignParams, SigningParams, UtcDateTime, build_canonical_query_string, compute_authorization,
@@ -229,13 +229,13 @@ impl S3Response {
 // 設定参照 (ライフタイム付き、Sans I/O で使用)
 // -------------------------------------------------------
 
-/// S3Client の設定への参照
-pub(crate) struct S3ClientConfig<'a> {
+/// `Client` の設定への参照
+pub(crate) struct ClientConfig<'a> {
     pub(crate) region: &'a str,
-    pub(crate) credential: &'a Credential,
+    pub(crate) credentials: &'a Credentials,
     /// スキームを除去したホスト名 (ポート含む場合あり)
     pub(crate) endpoint: Option<&'a str>,
-    pub(crate) use_path_style: bool,
+    pub(crate) force_path_style: bool,
     /// HTTPS を使用するかどうか (endpoint のスキームから判定)
     pub(crate) https: bool,
     /// TLS 証明書の検証を無視する
@@ -257,8 +257,8 @@ fn parse_endpoint_scheme(endpoint: &str) -> (bool, &str) {
     }
 }
 
-impl S3Client {
-    pub(crate) fn config_ref(&self) -> S3ClientConfig<'_> {
+impl Client {
+    pub(crate) fn config_ref(&self) -> ClientConfig<'_> {
         let (https, endpoint) = match self.config.endpoint.as_deref() {
             Some(ep) => {
                 let (https, host) = parse_endpoint_scheme(ep);
@@ -267,11 +267,11 @@ impl S3Client {
             None => (true, None),
         };
 
-        S3ClientConfig {
+        ClientConfig {
             region: &self.config.region,
-            credential: &self.config.credential,
+            credentials: &self.config.credentials_provider,
             endpoint,
-            use_path_style: self.config.use_path_style,
+            force_path_style: self.config.force_path_style,
             https,
             ignore_cert_check: self.config.ignore_cert_check,
         }
@@ -284,7 +284,7 @@ impl S3Client {
 
 /// 署名済みバケットリクエストを構築する
 pub(crate) fn build_signed_request(
-    config: &S3ClientConfig<'_>,
+    config: &ClientConfig<'_>,
     method: &str,
     bucket: &str,
     key: &str,
@@ -307,7 +307,7 @@ pub(crate) fn build_signed_request(
 
 /// 署名済みサービスレベルリクエストを構築する (バケットなし)
 pub(crate) fn build_signed_service_request(
-    config: &S3ClientConfig<'_>,
+    config: &ClientConfig<'_>,
     method: &str,
     path: &str,
     extra_headers: &[(&str, &str)],
@@ -328,7 +328,7 @@ pub(crate) fn build_signed_service_request(
 
 /// 署名済みリクエスト構築の共通処理
 fn build_signed_request_inner(
-    config: &S3ClientConfig<'_>,
+    config: &ClientConfig<'_>,
     method: &str,
     host: &str,
     path: String,
@@ -353,7 +353,7 @@ fn build_signed_request_inner(
     sign_headers.push(("host", host.to_string()));
     sign_headers.push(("x-amz-content-sha256", payload_hash.clone()));
     sign_headers.push(("x-amz-date", amz_date.clone()));
-    if let Some(token) = config.credential.session_token() {
+    if let Some(token) = config.credentials.session_token() {
         sign_headers.push(("x-amz-security-token", token.to_string()));
     }
     sign_headers.sort_by(|a, b| a.0.cmp(b.0));
@@ -364,7 +364,7 @@ fn build_signed_request_inner(
         .collect();
 
     let authorization = compute_authorization(&SigningParams {
-        credential: config.credential,
+        credentials: config.credentials,
         method,
         canonical_uri: &path,
         canonical_query_string: &canonical_query_string,
@@ -387,7 +387,7 @@ fn build_signed_request_inner(
     }
     headers.push(("x-amz-content-sha256".to_string(), payload_hash));
     headers.push(("x-amz-date".to_string(), amz_date));
-    if let Some(token) = config.credential.session_token() {
+    if let Some(token) = config.credentials.session_token() {
         headers.push(("x-amz-security-token".to_string(), token.to_string()));
     }
     headers.push(("Authorization".to_string(), authorization));
@@ -410,7 +410,7 @@ fn build_signed_request_inner(
 /// `extra_headers` は署名対象に含める追加 header (SSE-C 等)。
 /// リクエスト時にも同じ header を付与する必要がある。
 pub(crate) fn build_presigned_url(
-    config: &S3ClientConfig<'_>,
+    config: &ClientConfig<'_>,
     method: &str,
     bucket: &str,
     key: &str,
@@ -424,7 +424,7 @@ pub(crate) fn build_presigned_url(
     let date_stamp = datetime.date_stamp();
     let amz_date = datetime.iso8601();
     let scope = format!("{date_stamp}/{}/s3/aws4_request", config.region);
-    let credential_value = format!("{}/{scope}", config.credential.access_key_id);
+    let credential_value = format!("{}/{scope}", config.credentials.access_key_id);
     let expires_str = expires_in_secs.to_string();
 
     // 署名対象 header を構築する (host は必須)
@@ -442,7 +442,7 @@ pub(crate) fn build_presigned_url(
         .collect::<Vec<_>>()
         .join(";");
 
-    let session_token = config.credential.session_token().map(String::from);
+    let session_token = config.credentials.session_token().map(String::from);
     let mut query_params: Vec<(&str, &str)> = vec![
         ("X-Amz-Algorithm", "AWS4-HMAC-SHA256"),
         ("X-Amz-Credential", &credential_value),
@@ -456,7 +456,7 @@ pub(crate) fn build_presigned_url(
     query_params.extend_from_slice(extra_query_params);
 
     let signature = compute_presigned_signature(&PresignParams {
-        credential: config.credential,
+        credentials: config.credentials,
         method,
         canonical_uri: &path,
         query_params: &query_params,
@@ -474,7 +474,7 @@ pub(crate) fn build_presigned_url(
 // ホスト・パス計算
 // -------------------------------------------------------
 
-fn service_host(config: &S3ClientConfig<'_>) -> String {
+fn service_host(config: &ClientConfig<'_>) -> String {
     config
         .endpoint
         .map(String::from)
@@ -482,11 +482,11 @@ fn service_host(config: &S3ClientConfig<'_>) -> String {
 }
 
 /// HTTPS かつバケット名にドットを含む場合は path-style にフォールバックが必要
-fn use_path_style_for_bucket(config: &S3ClientConfig<'_>, bucket: &str) -> bool {
-    config.use_path_style || (config.https && bucket.contains('.'))
+fn use_path_style_for_bucket(config: &ClientConfig<'_>, bucket: &str) -> bool {
+    config.force_path_style || (config.https && bucket.contains('.'))
 }
 
-fn host_for_bucket(config: &S3ClientConfig<'_>, bucket: &str) -> String {
+fn host_for_bucket(config: &ClientConfig<'_>, bucket: &str) -> String {
     let base = service_host(config);
     if use_path_style_for_bucket(config, bucket) {
         base
@@ -518,7 +518,7 @@ fn extract_connect_host(host: &str) -> String {
 /// endpoint からポートを抽出する (明示的なポートがない場合は HTTPS なら 443、HTTP なら 80)
 ///
 /// IPv6 アドレス (`[::1]:9000`) を正しく処理する
-fn extract_port(config: &S3ClientConfig<'_>) -> u16 {
+fn extract_port(config: &ClientConfig<'_>) -> u16 {
     if let Some(endpoint) = config.endpoint
         && let Some(port) = parse_port_from_authority(endpoint)
     {
@@ -544,7 +544,7 @@ fn parse_port_from_authority(authority: &str) -> Option<u16> {
     }
 }
 
-fn path_for_key(config: &S3ClientConfig<'_>, bucket: &str, key: &str) -> String {
+fn path_for_key(config: &ClientConfig<'_>, bucket: &str, key: &str) -> String {
     let encoded_key = uri_encode_path(key);
     if use_path_style_for_bucket(config, bucket) {
         if encoded_key.is_empty() {

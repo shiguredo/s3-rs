@@ -4,19 +4,19 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::HeadBucketOutput;
 
 use super::{S3Request, build_signed_request, head_error_from_status, required};
 
 pub struct HeadBucketFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
 }
 
 impl<'a> HeadBucketFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,

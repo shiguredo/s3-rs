@@ -10,7 +10,7 @@ Model: Composer 2 Fast
 
 ## 概要
 
-既存オブジェクトに対するタグの取得・設定・削除を行う API を `S3Client` に追加する。バケットタグ（`GetBucketTagging` 等）とは別操作である。
+既存オブジェクトに対するタグの取得・設定・削除を行う API を `Client` に追加する。バケットタグ（`GetBucketTagging` 等）とは別操作である。
 
 3 API とも `versionId` クエリパラメータを受け取り、バージョニング有効バケットでは特定バージョンを対象にできる。aws-sdk-rust 互換の API 形状にするため、builder に `version_id` フィールドを含めること。
 

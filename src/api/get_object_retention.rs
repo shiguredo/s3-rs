@@ -4,21 +4,21 @@
 //!
 //! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectRetention.html>
 
-use crate::client::S3Client;
+use crate::client::Client;
 use crate::error::Error;
 use crate::types::{GetObjectRetentionOutput, ObjectLockRetention};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
 pub struct GetObjectRetentionFluentBuilder<'a> {
-    client: &'a S3Client,
+    client: &'a Client,
     bucket: Option<String>,
     key: Option<String>,
     version_id: Option<String>,
 }
 
 impl<'a> GetObjectRetentionFluentBuilder<'a> {
-    pub(crate) fn new(client: &'a S3Client) -> Self {
+    pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
             bucket: None,
