@@ -1,6 +1,7 @@
 # PutObject / UploadPart のチェックサムを個別フィールド化する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -134,3 +135,37 @@ CopyObject の入力には個別 checksum ヘッダーが定義されていな�
 
 - `[CHANGE] PutObject の checksum_value を廃止し checksum_crc32 / checksum_crc32_c / checksum_crc64_nvme / checksum_md5 / checksum_sha1 / checksum_sha256 / checksum_sha512 / checksum_xxhash128 / checksum_xxhash3 / checksum_xxhash64 の個別フィールドに分解する`
 - `[CHANGE] UploadPart の checksum_value を廃止し 10 種の個別チェックサムフィールドに分解する。個別 checksum 指定時に checksum_algorithm を無視する S3 仕様に合わせる`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/api/put_object.rs`**
+   - `checksum_value: Option<String>` を削除
+   - 個別 10 種のフィールド (`checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_md5` / `checksum_sha1` / `checksum_sha256` / `checksum_sha512` / `checksum_xxhash128` / `checksum_xxhash3` / `checksum_xxhash64`) を追加
+   - 各個別フィールドに `pub fn checksum_*(impl Into<String>)` および `set_checksum_*(Option<String>)` ビルダーメソッドを追加
+   - `build_request` のチェックサム処理を以下に変更:
+     - 個別フィールド指定あり: 該当ヘッダー (`x-amz-checksum-{algo}`) に値を設定
+     - `checksum_algorithm` 指定があれば `x-amz-sdk-checksum-algorithm` ヘッダーに設定 (整合性チェックは S3 サーバ側に任せる)
+     - 個別も `checksum_algorithm` も未指定: デフォルトで CRC32 を自動計算
+     - `presigned` も同様に個別フィールドを反映 (ボディがないため自動計算しない)
+   - 旧 `x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更 (aws-sdk-rust 仕様準拠)
+
+2. **`src/api/upload_part.rs`**
+   - 同様に 10 種の個別フィールドを追加し `checksum_value` を削除
+   - `build_request` の挙動は UploadPart 仕様に従い PutObject と分離:
+     - 個別フィールド指定あり: 該当ヘッダーに値を設定し、`checksum_algorithm` は S3 が無視するため `x-amz-sdk-checksum-algorithm` ヘッダーを送信しない
+     - 個別未指定 + `checksum_algorithm` 指定: 該当アルゴリズムで自動計算
+     - 全て未指定: デフォルトの CRC32 で自動計算
+   - 共通ロジックは `any_individual()` / `push_individual_checksum_headers()` の補助メソッドに分離
+
+3. **CopyObject は本 issue 対象外**
+   - S3 公式仕様で `x-amz-checksum-{algorithm}` 入力ヘッダーが定義されていないため `copy_object.rs` には個別フィールドを追加しない (issue spec 通り)
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --test minio test_checksum_algorithm`: passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass
