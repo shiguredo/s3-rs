@@ -377,10 +377,10 @@ pub(crate) async fn delete_recursive(
                 }
             } else {
                 for chunk in filtered.chunks(1000) {
-                    let mut delete_builder = client.delete_objects().bucket(bucket).quiet(true);
+                    let mut object_ids: Vec<ObjectIdentifier> = Vec::with_capacity(chunk.len());
                     for object in chunk {
                         if let Some(ref key) = object.key {
-                            delete_builder = delete_builder.object(ObjectIdentifier {
+                            object_ids.push(ObjectIdentifier {
                                 key: key.clone(),
                                 version_id: None,
                             });
@@ -389,7 +389,15 @@ pub(crate) async fn delete_recursive(
                             }
                         }
                     }
-                    let request = delete_builder.build_request(now())?;
+                    let delete = shiguredo_s3::Delete::builder()
+                        .set_objects(object_ids)
+                        .quiet(true)
+                        .build();
+                    let request = client
+                        .delete_objects()
+                        .bucket(bucket)
+                        .delete(delete)
+                        .build_request(now())?;
                     send(
                         tls_config,
                         request,

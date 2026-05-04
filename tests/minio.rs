@@ -627,14 +627,22 @@ async fn test_delete_objects() {
 
     // DeleteObjects で 3 つのオブジェクトを一括削除する
     // DeleteObject (単体) を 3 回呼ぶより効率的
-    let mut builder = client.delete_objects().bucket(bucket);
-    for key in &keys {
-        builder = builder.object(ObjectIdentifier {
-            key: key.clone(),
-            version_id: None,
-        });
-    }
-    let request = builder.build_request(now()).unwrap();
+    let delete = shiguredo_s3::Delete::builder()
+        .set_objects(
+            keys.iter()
+                .map(|k| ObjectIdentifier {
+                    key: k.clone(),
+                    version_id: None,
+                })
+                .collect(),
+        )
+        .build();
+    let request = client
+        .delete_objects()
+        .bucket(bucket)
+        .delete(delete)
+        .build_request(now())
+        .unwrap();
     let output = send(
         request,
         shiguredo_s3::api::DeleteObjectsFluentBuilder::parse_response,

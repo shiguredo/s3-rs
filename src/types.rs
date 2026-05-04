@@ -203,6 +203,65 @@ pub struct ObjectIdentifier {
     pub version_id: Option<String>,
 }
 
+/// `DeleteObjects` のリクエストボディ
+///
+/// AWS S3 API の `<Delete>` 要素 (`Object` の配列と任意の `Quiet`) に対応する。
+/// aws-sdk-rust の `aws_sdk_s3::types::Delete` と同じ構造。
+#[derive(Debug, Clone, Default)]
+pub struct Delete {
+    /// 削除対象オブジェクトの一覧
+    pub objects: Vec<ObjectIdentifier>,
+    /// quiet モードを有効にすると、エラーのあったオブジェクトのみレスポンスに含まれる
+    pub quiet: Option<bool>,
+}
+
+impl Delete {
+    pub fn builder() -> DeleteBuilder {
+        DeleteBuilder::default()
+    }
+}
+
+/// `Delete` のビルダー (aws-sdk-rust 互換)
+#[derive(Debug, Clone, Default)]
+pub struct DeleteBuilder {
+    objects: Vec<ObjectIdentifier>,
+    quiet: Option<bool>,
+}
+
+impl DeleteBuilder {
+    /// 削除対象オブジェクトを追加する
+    pub fn objects(mut self, object: ObjectIdentifier) -> Self {
+        self.objects.push(object);
+        self
+    }
+
+    /// 削除対象オブジェクトの配列を一括設定する (`set_*` バリアント)
+    pub fn set_objects(mut self, objects: Vec<ObjectIdentifier>) -> Self {
+        self.objects = objects;
+        self
+    }
+
+    /// quiet モードを設定する
+    pub fn quiet(mut self, quiet: bool) -> Self {
+        self.quiet = Some(quiet);
+        self
+    }
+
+    /// quiet を Option で設定する (`set_*` バリアント)
+    pub fn set_quiet(mut self, quiet: Option<bool>) -> Self {
+        self.quiet = quiet;
+        self
+    }
+
+    /// `Delete` を構築する
+    pub fn build(self) -> Delete {
+        Delete {
+            objects: self.objects,
+            quiet: self.quiet,
+        }
+    }
+}
+
 /// マルチパートアップロードの完了済みパート
 #[derive(Debug, Clone)]
 pub struct CompletedPart {
