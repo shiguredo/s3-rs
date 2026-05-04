@@ -121,6 +121,8 @@
   - @voluntas
 - [ADD] `GetObjectOutput` / `HeadObjectOutput` に `content_encoding` / `content_disposition` / `content_language` / `cache_control` / `expires` / `storage_class` / `parts_count` / `accept_ranges` / `replication_status` / `restore` / `expiration` / `server_side_encryption` / `sse_customer_algorithm` / `sse_customer_key_md5` / `ssekms_key_id` / `bucket_key_enabled` / `request_charged` を追加する。`GetObjectOutput` のみ `delete_marker` / `tag_count` を追加する
   - @voluntas
+- [ADD] `PutObjectOutput` / `UploadPartOutput` / `CompleteMultipartUploadOutput` / `CopyObjectOutput` に SSE / 個別チェックサム / `request_charged` 等のレスポンスフィールドを追加する (`expiration` / `server_side_encryption` / `ssekms_key_id` / `bucket_key_enabled` / `checksum_crc32` 〜 `checksum_sha256` / `checksum_type` 等。`CopyObjectOutput` には `ssekms_encryption_context` も含む)
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

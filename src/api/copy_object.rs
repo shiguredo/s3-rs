@@ -439,6 +439,28 @@ impl<'a> CopyObjectFluentBuilder<'a> {
             copy_source_version_id: response
                 .get_header("x-amz-copy-source-version-id")
                 .map(String::from),
+            expiration: response.get_header("x-amz-expiration").map(String::from),
+            server_side_encryption: response
+                .get_header("x-amz-server-side-encryption")
+                .map(crate::types::ServerSideEncryption::from),
+            sse_customer_algorithm: response
+                .get_header("x-amz-server-side-encryption-customer-algorithm")
+                .map(String::from),
+            sse_customer_key_md5: response
+                .get_header("x-amz-server-side-encryption-customer-key-md5")
+                .map(String::from),
+            ssekms_key_id: response
+                .get_header("x-amz-server-side-encryption-aws-kms-key-id")
+                .map(String::from),
+            ssekms_encryption_context: response
+                .get_header("x-amz-server-side-encryption-context")
+                .map(String::from),
+            bucket_key_enabled: response
+                .get_header("x-amz-server-side-encryption-bucket-key-enabled")
+                .and_then(|s| s.parse::<bool>().ok()),
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
         })
     }
 }

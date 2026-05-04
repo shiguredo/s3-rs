@@ -170,6 +170,19 @@ pub struct PutObjectOutput {
     pub e_tag: Option<String>,
     /// オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
+    pub expiration: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub sse_customer_algorithm: Option<String>,
+    pub sse_customer_key_md5: Option<String>,
+    pub ssekms_key_id: Option<String>,
+    pub bucket_key_enabled: Option<bool>,
+    pub request_charged: Option<String>,
+    pub checksum_crc32: Option<String>,
+    pub checksum_crc32_c: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
+    pub checksum_sha1: Option<String>,
+    pub checksum_sha256: Option<String>,
+    pub checksum_type: Option<String>,
 }
 
 /// DeleteObject の結果
@@ -191,6 +204,17 @@ pub struct CreateMultipartUploadOutput {
 #[derive(Debug)]
 pub struct UploadPartOutput {
     pub e_tag: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub sse_customer_algorithm: Option<String>,
+    pub sse_customer_key_md5: Option<String>,
+    pub ssekms_key_id: Option<String>,
+    pub bucket_key_enabled: Option<bool>,
+    pub request_charged: Option<String>,
+    pub checksum_crc32: Option<String>,
+    pub checksum_crc32_c: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
+    pub checksum_sha1: Option<String>,
+    pub checksum_sha256: Option<String>,
 }
 
 /// UploadPartCopy の結果
@@ -211,6 +235,17 @@ pub struct CompleteMultipartUploadOutput {
     pub e_tag: Option<String>,
     /// オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
+    pub expiration: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub ssekms_key_id: Option<String>,
+    pub bucket_key_enabled: Option<bool>,
+    pub request_charged: Option<String>,
+    pub checksum_crc32: Option<String>,
+    pub checksum_crc32_c: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
+    pub checksum_sha1: Option<String>,
+    pub checksum_sha256: Option<String>,
+    pub checksum_type: Option<String>,
 }
 
 /// AbortMultipartUpload の結果
@@ -228,6 +263,15 @@ pub struct CopyObjectOutput {
     pub version_id: Option<String>,
     /// コピー元オブジェクトのバージョン ID
     pub copy_source_version_id: Option<String>,
+    pub expiration: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub sse_customer_algorithm: Option<String>,
+    pub sse_customer_key_md5: Option<String>,
+    pub ssekms_key_id: Option<String>,
+    /// `x-amz-server-side-encryption-context`
+    pub ssekms_encryption_context: Option<String>,
+    pub bucket_key_enabled: Option<bool>,
+    pub request_charged: Option<String>,
 }
 
 /// CopyObject の結果の中身
