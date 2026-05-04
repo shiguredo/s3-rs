@@ -1,6 +1,7 @@
 # GetObjectOutput / HeadObjectOutput に取得系レスポンスフィールドを追加する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -111,3 +112,26 @@ pub request_charged: Option<String>,
 ## CHANGES.md への記載
 
 - `[ADD] GetObjectOutput / HeadObjectOutput に取得系レスポンスフィールドを追加する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` の `GetObjectOutput` / `HeadObjectOutput` にフィールド追加**
+   - 共通: `content_encoding`, `content_disposition`, `content_language`, `cache_control`, `expires` (Option<SystemTime>), `parts_count` (i32), `accept_ranges`, `replication_status`, `restore`, `expiration`, `server_side_encryption` (ServerSideEncryption enum), `sse_customer_algorithm`, `sse_customer_key_md5`, `ssekms_key_id`, `bucket_key_enabled` (bool), `request_charged`
+   - `GetObjectOutput` のみ: `delete_marker` (bool), `tag_count` (i32), `storage_class` (StorageClass enum)
+   - `HeadObjectOutput` の `storage_class` は既存のため変更なし
+
+2. **`src/api/get_object.rs` / `src/api/head_object.rs` の `parse_response` 拡張**
+   - レスポンスヘッダー (`Content-Encoding`, `Content-Disposition`, ..., `x-amz-mp-parts-count`, `x-amz-tagging-count`, `x-amz-server-side-encryption-bucket-key-enabled` 等) からフィールドを抽出
+   - `expires` は `parse_imf_fixdate` で `SystemTime` に変換
+   - `storage_class` / `server_side_encryption` は `From<&str>` で enum 化
+   - `parts_count` / `tag_count` / `delete_marker` / `bucket_key_enabled` は `parse::<T>().ok()` でパース失敗を None に落とす
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --test minio test_object_put_get_head_delete`: passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass
