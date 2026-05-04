@@ -81,6 +81,37 @@ pub struct GetObjectOutput {
     pub checksum_sha1: Option<String>,
     /// SHA256 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_sha256: Option<String>,
+    pub content_encoding: Option<String>,
+    pub content_disposition: Option<String>,
+    pub content_language: Option<String>,
+    pub cache_control: Option<String>,
+    /// `Expires` ヘッダー (IMF-fixdate)
+    pub expires: Option<SystemTime>,
+    /// `x-amz-storage-class` (STANDARD では省略されることがある)
+    pub storage_class: Option<StorageClass>,
+    /// `x-amz-mp-parts-count`
+    pub parts_count: Option<i32>,
+    /// `Accept-Ranges`
+    pub accept_ranges: Option<String>,
+    /// `x-amz-delete-marker` (true の場合は対象オブジェクトが削除マーカー)
+    pub delete_marker: Option<bool>,
+    /// `x-amz-replication-status`
+    pub replication_status: Option<String>,
+    /// `x-amz-restore` (Glacier 復元状態)
+    pub restore: Option<String>,
+    /// `x-amz-expiration` (ライフサイクル失効情報)
+    pub expiration: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub sse_customer_algorithm: Option<String>,
+    pub sse_customer_key_md5: Option<String>,
+    /// `x-amz-server-side-encryption-aws-kms-key-id`
+    pub ssekms_key_id: Option<String>,
+    /// `x-amz-server-side-encryption-bucket-key-enabled`
+    pub bucket_key_enabled: Option<bool>,
+    /// `x-amz-request-charged` (issue 0059 後続で `RequestCharged` 型化)
+    pub request_charged: Option<String>,
+    /// `x-amz-tagging-count`
+    pub tag_count: Option<i32>,
 }
 
 /// HeadObject の結果
@@ -106,6 +137,31 @@ pub struct HeadObjectOutput {
     pub checksum_sha1: Option<String>,
     /// SHA256 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_sha256: Option<String>,
+    pub content_encoding: Option<String>,
+    pub content_disposition: Option<String>,
+    pub content_language: Option<String>,
+    pub cache_control: Option<String>,
+    /// `Expires` ヘッダー (IMF-fixdate)
+    pub expires: Option<SystemTime>,
+    /// `x-amz-mp-parts-count`
+    pub parts_count: Option<i32>,
+    /// `Accept-Ranges`
+    pub accept_ranges: Option<String>,
+    /// `x-amz-replication-status`
+    pub replication_status: Option<String>,
+    /// `x-amz-restore` (Glacier 復元状態)
+    pub restore: Option<String>,
+    /// `x-amz-expiration` (ライフサイクル失効情報)
+    pub expiration: Option<String>,
+    pub server_side_encryption: Option<ServerSideEncryption>,
+    pub sse_customer_algorithm: Option<String>,
+    pub sse_customer_key_md5: Option<String>,
+    /// `x-amz-server-side-encryption-aws-kms-key-id`
+    pub ssekms_key_id: Option<String>,
+    /// `x-amz-server-side-encryption-bucket-key-enabled`
+    pub bucket_key_enabled: Option<bool>,
+    /// `x-amz-request-charged`
+    pub request_charged: Option<String>,
 }
 
 /// PutObject の結果

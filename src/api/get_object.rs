@@ -327,6 +327,50 @@ impl<'a> GetObjectFluentBuilder<'a> {
             checksum_sha256: response
                 .get_header("x-amz-checksum-sha256")
                 .map(String::from),
+            content_encoding: response.get_header("content-encoding").map(String::from),
+            content_disposition: response.get_header("content-disposition").map(String::from),
+            content_language: response.get_header("content-language").map(String::from),
+            cache_control: response.get_header("cache-control").map(String::from),
+            expires: response
+                .get_header("expires")
+                .map(crate::datetime::parse_imf_fixdate)
+                .transpose()?,
+            storage_class: response
+                .get_header("x-amz-storage-class")
+                .map(crate::types::StorageClass::from),
+            parts_count: response
+                .get_header("x-amz-mp-parts-count")
+                .and_then(|s| s.parse::<i32>().ok()),
+            accept_ranges: response.get_header("accept-ranges").map(String::from),
+            delete_marker: response
+                .get_header("x-amz-delete-marker")
+                .and_then(|s| s.parse::<bool>().ok()),
+            replication_status: response
+                .get_header("x-amz-replication-status")
+                .map(String::from),
+            restore: response.get_header("x-amz-restore").map(String::from),
+            expiration: response.get_header("x-amz-expiration").map(String::from),
+            server_side_encryption: response
+                .get_header("x-amz-server-side-encryption")
+                .map(crate::types::ServerSideEncryption::from),
+            sse_customer_algorithm: response
+                .get_header("x-amz-server-side-encryption-customer-algorithm")
+                .map(String::from),
+            sse_customer_key_md5: response
+                .get_header("x-amz-server-side-encryption-customer-key-md5")
+                .map(String::from),
+            ssekms_key_id: response
+                .get_header("x-amz-server-side-encryption-aws-kms-key-id")
+                .map(String::from),
+            bucket_key_enabled: response
+                .get_header("x-amz-server-side-encryption-bucket-key-enabled")
+                .and_then(|s| s.parse::<bool>().ok()),
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
+            tag_count: response
+                .get_header("x-amz-tagging-count")
+                .and_then(|s| s.parse::<i32>().ok()),
         })
     }
 
