@@ -99,6 +99,10 @@
   - @voluntas
 - [CHANGE] `last_modified` / `creation_date` / `initiated` / `last_modified_time` / `restore_expiry_date` の出力日時フィールドを `Option<String>` から `Option<SystemTime>` に変更する
   - @voluntas
+- [ADD] `Delete` / `DeleteBuilder` 型を追加する
+  - @voluntas
+- [CHANGE] `DeleteObjects` の入力を `Delete` 構造体経由に変更し、`DeleteObjectsFluentBuilder::object` / `quiet` メソッドを廃止する
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

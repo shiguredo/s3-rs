@@ -8,7 +8,7 @@
 use crate::client::Client;
 use crate::error::Error;
 use crate::types::{
-    ChecksumAlgorithm, DeleteError, DeleteObjectsOutput, DeletedObject, ObjectIdentifier,
+    ChecksumAlgorithm, Delete, DeleteError, DeleteObjectsOutput, DeletedObject, ObjectIdentifier,
 };
 
 use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
@@ -16,8 +16,7 @@ use super::{S3Request, base64_md5, build_signed_request, parse_error_response, r
 pub struct DeleteObjectsFluentBuilder<'a> {
     client: &'a Client,
     bucket: Option<String>,
-    objects: Vec<ObjectIdentifier>,
-    quiet: bool,
+    delete: Option<Delete>,
     checksum_algorithm: Option<ChecksumAlgorithm>,
 }
 
@@ -26,8 +25,7 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
         Self {
             client,
             bucket: None,
-            objects: Vec::new(),
-            quiet: false,
+            delete: None,
             checksum_algorithm: None,
         }
     }
@@ -37,15 +35,17 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
         self
     }
 
-    /// 削除対象オブジェクトを追加する
-    pub fn object(mut self, object: ObjectIdentifier) -> Self {
-        self.objects.push(object);
+    /// `Delete` (削除対象オブジェクトの一覧と quiet 設定) を指定する
+    ///
+    /// aws-sdk-rust の `DeleteObjectsFluentBuilder::delete(Delete)` と同じ。
+    pub fn delete(mut self, delete: Delete) -> Self {
+        self.delete = Some(delete);
         self
     }
 
-    /// quiet モードを設定する (true の場合、エラーのみレスポンスに含まれる)
-    pub fn quiet(mut self, quiet: bool) -> Self {
-        self.quiet = quiet;
+    /// `Delete` を Option で設定する (`set_*` バリアント)
+    pub fn set_delete(mut self, delete: Option<Delete>) -> Self {
+        self.delete = delete;
         self
     }
 
@@ -62,20 +62,24 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
 
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
+        let delete = self
+            .delete
+            .as_ref()
+            .ok_or_else(|| Error::InvalidInput("delete is required".to_string()))?;
 
-        if self.objects.is_empty() {
+        if delete.objects.is_empty() {
             return Err(Error::InvalidInput(
                 "at least one object is required".to_string(),
             ));
         }
 
-        if self.objects.len() > 1000 {
+        if delete.objects.len() > 1000 {
             return Err(Error::InvalidInput(
                 "at most 1000 objects are allowed per request".to_string(),
             ));
         }
 
-        let xml_body = build_delete_objects_xml(&self.objects, self.quiet);
+        let xml_body = build_delete_objects_xml(&delete.objects, delete.quiet.unwrap_or(false));
         let content_md5 = base64_md5(xml_body.as_bytes());
 
         let mut extra_headers: Vec<(&str, &str)> = vec![
