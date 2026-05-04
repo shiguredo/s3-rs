@@ -383,6 +383,9 @@ pub(crate) async fn delete_recursive(
                             object_ids.push(ObjectIdentifier {
                                 key: key.clone(),
                                 version_id: None,
+                                e_tag: None,
+                                last_modified_time: None,
+                                size: None,
                             });
                             if !quiet {
                                 eprintln!("delete: s3://{bucket}/{key}");

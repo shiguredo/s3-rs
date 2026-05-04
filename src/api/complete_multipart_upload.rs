@@ -250,6 +250,21 @@ fn build_complete_multipart_xml(multipart_upload: &Option<CompletedMultipartUplo
             if let Some(ref e_tag) = part.e_tag {
                 w.element("ETag", e_tag);
             }
+            if let Some(ref v) = part.checksum_crc32 {
+                w.element("ChecksumCRC32", v);
+            }
+            if let Some(ref v) = part.checksum_crc32_c {
+                w.element("ChecksumCRC32C", v);
+            }
+            if let Some(ref v) = part.checksum_crc64_nvme {
+                w.element("ChecksumCRC64NVME", v);
+            }
+            if let Some(ref v) = part.checksum_sha1 {
+                w.element("ChecksumSHA1", v);
+            }
+            if let Some(ref v) = part.checksum_sha256 {
+                w.element("ChecksumSHA256", v);
+            }
             w.end();
         }
     }

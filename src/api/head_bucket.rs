@@ -50,6 +50,16 @@ impl<'a> HeadBucketFluentBuilder<'a> {
 
         Ok(HeadBucketOutput {
             bucket_region: response.get_header("x-amz-bucket-region").map(String::from),
+            bucket_arn: response.get_header("x-amz-bucket-arn").map(String::from),
+            bucket_location_type: response
+                .get_header("x-amz-bucket-location-type")
+                .map(String::from),
+            bucket_location_name: response
+                .get_header("x-amz-bucket-location-name")
+                .map(String::from),
+            access_point_alias: response
+                .get_header("x-amz-access-point-alias")
+                .and_then(|s| s.parse::<bool>().ok()),
         })
     }
 }

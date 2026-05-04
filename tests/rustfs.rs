@@ -586,6 +586,9 @@ async fn test_delete_objects() {
                 .map(|k| ObjectIdentifier {
                     key: k.clone(),
                     version_id: None,
+                    e_tag: None,
+                    last_modified_time: None,
+                    size: None,
                 })
                 .collect(),
         )
@@ -715,10 +718,20 @@ async fn test_multipart_upload() {
                 CompletedPart {
                     e_tag: part1_output.e_tag,
                     part_number: Some(1),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
                 },
                 CompletedPart {
                     e_tag: part2_output.e_tag,
                     part_number: Some(2),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
                 },
             ]),
         })

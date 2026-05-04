@@ -146,6 +146,26 @@ fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> String
         if let Some(ref version_id) = obj.version_id {
             w.element("VersionId", version_id);
         }
+        if let Some(ref e_tag) = obj.e_tag {
+            w.element("ETag", e_tag);
+        }
+        if let Some(t) = obj.last_modified_time {
+            // S3 仕様では ISO 8601 (RFC 3339) フォーマットで送る
+            // ここではミリ秒を含めない秒精度
+            let secs = t
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let c = crate::datetime::civil_from_unix_timestamp(secs);
+            let formatted = format!(
+                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+                c.year, c.month, c.day, c.hour, c.minute, c.second
+            );
+            w.element("LastModifiedTime", &formatted);
+        }
+        if let Some(size) = obj.size {
+            w.element("Size", &size.to_string());
+        }
         w.end();
     }
     w.end();
