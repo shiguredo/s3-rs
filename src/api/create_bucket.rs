@@ -6,7 +6,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{CreateBucketConfiguration, CreateBucketOutput};
+use crate::types::{CreateBucketConfiguration, CreateBucketOutput, ObjectCannedAcl};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
@@ -14,7 +14,7 @@ pub struct CreateBucketFluentBuilder<'a> {
     client: &'a Client,
     bucket: Option<String>,
     create_bucket_configuration: Option<CreateBucketConfiguration>,
-    acl: Option<String>,
+    acl: Option<ObjectCannedAcl>,
 }
 
 impl<'a> CreateBucketFluentBuilder<'a> {
@@ -38,8 +38,13 @@ impl<'a> CreateBucketFluentBuilder<'a> {
     }
 
     /// ACL を指定する (private, public-read, public-read-write 等)
-    pub fn acl(mut self, acl: impl Into<String>) -> Self {
-        self.acl = Some(acl.into());
+    pub fn acl(mut self, input: ObjectCannedAcl) -> Self {
+        self.acl = Some(input);
+        self
+    }
+
+    pub fn set_acl(mut self, input: Option<ObjectCannedAcl>) -> Self {
+        self.acl = input;
         self
     }
 

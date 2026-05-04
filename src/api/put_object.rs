@@ -7,7 +7,9 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::PutObjectOutput;
+use crate::types::{
+    ChecksumAlgorithm, ObjectCannedAcl, PutObjectOutput, ServerSideEncryption, StorageClass,
+};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
@@ -25,10 +27,10 @@ pub struct PutObjectFluentBuilder<'a> {
     content_language: Option<String>,
     cache_control: Option<String>,
     expires: Option<String>,
-    checksum_algorithm: Option<String>,
+    checksum_algorithm: Option<ChecksumAlgorithm>,
     checksum_value: Option<String>,
     /// サーバサイド暗号化 (AES256 または aws:kms)
-    server_side_encryption: Option<String>,
+    server_side_encryption: Option<ServerSideEncryption>,
     /// SSE-KMS キー ID
     ssekms_key_id: Option<String>,
     /// SSE-C アルゴリズム (AES256)
@@ -36,11 +38,11 @@ pub struct PutObjectFluentBuilder<'a> {
     /// SSE-C キー (Base64)
     sse_customer_key: Option<String>,
     /// ACL (private, public-read 等)
-    acl: Option<String>,
+    acl: Option<ObjectCannedAcl>,
     /// カスタムメタデータ (x-amz-meta-*)
     metadata: Vec<(String, String)>,
     /// ストレージクラス (STANDARD, STANDARD_IA 等)
-    storage_class: Option<String>,
+    storage_class: Option<StorageClass>,
     /// 明示的な Content-Length
     content_length: Option<i64>,
     /// オブジェクトタグ (URL エンコードされたキーバリューペア)
@@ -126,9 +128,15 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
-    /// サーバサイド暗号化を指定する (AES256 または aws:kms)
-    pub fn server_side_encryption(mut self, sse: impl Into<String>) -> Self {
-        self.server_side_encryption = Some(sse.into());
+    /// サーバサイド暗号化を指定する (AES256 / aws:kms / aws:kms:dsse 等)
+    pub fn server_side_encryption(mut self, input: ServerSideEncryption) -> Self {
+        self.server_side_encryption = Some(input);
+        self
+    }
+
+    /// サーバサイド暗号化を Option で設定する (`set_*` バリアント)
+    pub fn set_server_side_encryption(mut self, input: Option<ServerSideEncryption>) -> Self {
+        self.server_side_encryption = input;
         self
     }
 
@@ -153,8 +161,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
     }
 
     /// ACL を指定する (private, public-read, public-read-write 等)
-    pub fn acl(mut self, acl: impl Into<String>) -> Self {
-        self.acl = Some(acl.into());
+    pub fn acl(mut self, input: ObjectCannedAcl) -> Self {
+        self.acl = Some(input);
+        self
+    }
+
+    /// ACL を Option で設定する (`set_*` バリアント)
+    pub fn set_acl(mut self, input: Option<ObjectCannedAcl>) -> Self {
+        self.acl = input;
         self
     }
 
@@ -165,8 +179,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
     }
 
     /// ストレージクラスを指定する (STANDARD, STANDARD_IA, GLACIER 等)
-    pub fn storage_class(mut self, storage_class: impl Into<String>) -> Self {
-        self.storage_class = Some(storage_class.into());
+    pub fn storage_class(mut self, input: StorageClass) -> Self {
+        self.storage_class = Some(input);
+        self
+    }
+
+    /// ストレージクラスを Option で設定する (`set_*` バリアント)
+    pub fn set_storage_class(mut self, input: Option<StorageClass>) -> Self {
+        self.storage_class = input;
         self
     }
 
@@ -198,8 +218,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
     ///
     /// 未指定の場合はデフォルトで CRC32 が使用される。
     /// チェックサムは常に自動計算されてヘッダーに付与される。
-    pub fn checksum_algorithm(mut self, algorithm: impl Into<String>) -> Self {
-        self.checksum_algorithm = Some(algorithm.into());
+    pub fn checksum_algorithm(mut self, input: ChecksumAlgorithm) -> Self {
+        self.checksum_algorithm = Some(input);
+        self
+    }
+
+    /// チェックサムアルゴリズムを Option で設定する (`set_*` バリアント)
+    pub fn set_checksum_algorithm(mut self, input: Option<ChecksumAlgorithm>) -> Self {
+        self.checksum_algorithm = input;
         self
     }
 
@@ -221,6 +247,8 @@ impl<'a> PutObjectFluentBuilder<'a> {
         if let Some(ref v) = self.storage_class {
             extra_headers.push(("x-amz-storage-class", v.as_str()));
         }
+        // ChecksumAlgorithm は as_str() が `&str` を返すので enum でも従来通り使える
+        // (acl / storage_class / server_side_encryption も同様)
         if let Some(ref v) = self.tagging {
             extra_headers.push(("x-amz-tagging", v.as_str()));
         }
@@ -280,14 +308,18 @@ impl<'a> PutObjectFluentBuilder<'a> {
         // - checksum_algorithm 指定あり + checksum_value 未指定 → ボディから自動計算する
         // - checksum_algorithm 未指定 → デフォルトで CRC32 を自動計算する
         let computed_checksum;
-        let algo_str = self.checksum_algorithm.as_deref().unwrap_or("CRC32");
-        extra_headers.push(("x-amz-checksum-algorithm", algo_str));
-        let algorithm: crate::checksum::ChecksumAlgorithm = algo_str.parse()?;
+        let default_algorithm = ChecksumAlgorithm::Crc32;
+        let algorithm = self
+            .checksum_algorithm
+            .as_ref()
+            .unwrap_or(&default_algorithm);
+        extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
+        let header_name = crate::checksum::header_name(algorithm)?;
         if let Some(ref v) = self.checksum_value {
-            extra_headers.push((algorithm.header_name(), v.as_str()));
+            extra_headers.push((header_name, v.as_str()));
         } else {
-            computed_checksum = crate::checksum::compute_checksum(algorithm, body);
-            extra_headers.push((algorithm.header_name(), &computed_checksum));
+            computed_checksum = crate::checksum::compute_checksum(algorithm, body)?;
+            extra_headers.push((header_name, &computed_checksum));
         }
 
         let meta_headers: Vec<(String, &str)> = self
@@ -353,10 +385,10 @@ impl<'a> PutObjectFluentBuilder<'a> {
             extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
         }
         if let Some(ref v) = self.checksum_value
-            && let Some(ref algo) = self.checksum_algorithm
+            && let Some(ref algorithm) = self.checksum_algorithm
         {
-            let algorithm: crate::checksum::ChecksumAlgorithm = algo.parse()?;
-            extra_headers.push((algorithm.header_name(), v.as_str()));
+            let header_name = crate::checksum::header_name(algorithm)?;
+            extra_headers.push((header_name, v.as_str()));
         }
 
         let url = build_presigned_url(

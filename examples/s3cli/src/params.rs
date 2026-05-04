@@ -30,7 +30,7 @@ impl UploadParams {
         mut builder: shiguredo_s3::api::PutObjectFluentBuilder<'a>,
     ) -> shiguredo_s3::api::PutObjectFluentBuilder<'a> {
         if let Some(ref v) = self.acl {
-            builder = builder.acl(v);
+            builder = builder.acl(shiguredo_s3::ObjectCannedAcl::from(v.as_str()));
         }
         if let Some(ref v) = self.cache_control {
             builder = builder.cache_control(v);
@@ -51,10 +51,11 @@ impl UploadParams {
             builder = builder.metadata(k, v);
         }
         if let Some(ref v) = self.storage_class {
-            builder = builder.storage_class(v);
+            builder = builder.storage_class(shiguredo_s3::StorageClass::from(v.as_str()));
         }
         if let Some(ref v) = self.sse {
-            builder = builder.server_side_encryption(v);
+            builder = builder
+                .server_side_encryption(shiguredo_s3::ServerSideEncryption::from(v.as_str()));
         }
         if let Some(ref v) = self.sse_kms_key_id {
             builder = builder.ssekms_key_id(v);
@@ -66,7 +67,7 @@ impl UploadParams {
             builder = builder.sse_customer_key(key);
         }
         if let Some(ref v) = self.checksum_algorithm {
-            builder = builder.checksum_algorithm(v);
+            builder = builder.checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::from(v.as_str()));
         }
         builder
     }
@@ -77,10 +78,10 @@ impl UploadParams {
         mut builder: shiguredo_s3::api::CreateMultipartUploadFluentBuilder<'a>,
     ) -> shiguredo_s3::api::CreateMultipartUploadFluentBuilder<'a> {
         if let Some(ref v) = self.acl {
-            builder = builder.acl(v);
+            builder = builder.acl(shiguredo_s3::ObjectCannedAcl::from(v.as_str()));
         }
         if let Some(ref v) = self.storage_class {
-            builder = builder.storage_class(v);
+            builder = builder.storage_class(shiguredo_s3::StorageClass::from(v.as_str()));
         }
         if let Some(ref v) = self.cache_control {
             builder = builder.cache_control(v);
@@ -101,7 +102,8 @@ impl UploadParams {
             builder = builder.metadata(k, v);
         }
         if let Some(ref v) = self.sse {
-            builder = builder.server_side_encryption(v);
+            builder = builder
+                .server_side_encryption(shiguredo_s3::ServerSideEncryption::from(v.as_str()));
         }
         if let Some(ref v) = self.sse_kms_key_id {
             builder = builder.ssekms_key_id(v);
@@ -127,7 +129,7 @@ impl UploadParams {
             builder = builder.sse_customer_key(key);
         }
         if let Some(ref v) = self.checksum_algorithm {
-            builder = builder.checksum_algorithm(v);
+            builder = builder.checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::from(v.as_str()));
         }
         builder
     }
@@ -152,13 +154,13 @@ impl UploadParams {
         mut builder: shiguredo_s3::api::CopyObjectFluentBuilder<'a>,
     ) -> shiguredo_s3::api::CopyObjectFluentBuilder<'a> {
         if let Some(ref v) = self.acl {
-            builder = builder.acl(v);
+            builder = builder.acl(shiguredo_s3::ObjectCannedAcl::from(v.as_str()));
         }
         if let Some(ref v) = self.storage_class {
-            builder = builder.storage_class(v);
+            builder = builder.storage_class(shiguredo_s3::StorageClass::from(v.as_str()));
         }
         if let Some(ref v) = self.metadata_directive {
-            builder = builder.metadata_directive(v);
+            builder = builder.metadata_directive(shiguredo_s3::MetadataDirective::from(v.as_str()));
         }
         if let Some(ref v) = self.cache_control {
             builder = builder.cache_control(v);
@@ -180,7 +182,8 @@ impl UploadParams {
         }
         // コピー先の SSE
         if let Some(ref v) = self.sse {
-            builder = builder.server_side_encryption(v);
+            builder = builder
+                .server_side_encryption(shiguredo_s3::ServerSideEncryption::from(v.as_str()));
         }
         if let Some(ref v) = self.sse_kms_key_id {
             builder = builder.ssekms_key_id(v);

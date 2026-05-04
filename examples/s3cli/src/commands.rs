@@ -711,7 +711,11 @@ pub(crate) async fn cmd_ls(
 /// AWS では STANDARD のとき `StorageClass` 要素が省略されることがある。
 /// 省略時は STANDARD とみなす。
 fn effective_storage_class(object: &shiguredo_s3::types::Object) -> &str {
-    object.storage_class.as_deref().unwrap_or("STANDARD")
+    object
+        .storage_class
+        .as_ref()
+        .map(|sc| sc.as_str())
+        .unwrap_or("STANDARD")
 }
 
 /// check-storage-class サブコマンド

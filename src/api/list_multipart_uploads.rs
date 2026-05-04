@@ -7,7 +7,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{CommonPrefix, ListMultipartUploadsOutput, MultipartUpload};
+use crate::types::{CommonPrefix, EncodingType, ListMultipartUploadsOutput, MultipartUpload};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
@@ -19,7 +19,7 @@ pub struct ListMultipartUploadsFluentBuilder<'a> {
     max_uploads: Option<i32>,
     key_marker: Option<String>,
     upload_id_marker: Option<String>,
-    encoding_type: Option<String>,
+    encoding_type: Option<EncodingType>,
 }
 
 impl<'a> ListMultipartUploadsFluentBuilder<'a> {
@@ -66,9 +66,14 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
         self
     }
 
-    /// エンコーディングタイプを指定する ("url")
-    pub fn encoding_type(mut self, encoding_type: impl Into<String>) -> Self {
-        self.encoding_type = Some(encoding_type.into());
+    /// エンコーディングタイプを指定する (`url`)
+    pub fn encoding_type(mut self, input: EncodingType) -> Self {
+        self.encoding_type = Some(input);
+        self
+    }
+
+    pub fn set_encoding_type(mut self, input: Option<EncodingType>) -> Self {
+        self.encoding_type = input;
         self
     }
 
@@ -93,7 +98,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             query_params.push(("upload-id-marker".into(), marker.clone()));
         }
         if let Some(ref encoding_type) = self.encoding_type {
-            query_params.push(("encoding-type".into(), encoding_type.clone()));
+            query_params.push(("encoding-type".into(), encoding_type.as_str().to_string()));
         }
 
         let query_refs: Vec<(&str, &str)> = query_params
@@ -157,7 +162,9 @@ fn extract_xml_uploads(text: &str) -> Vec<MultipartUpload> {
             upload_id: elem.get("UploadId").map(String::from),
             key: elem.get("Key").map(String::from),
             initiated: elem.get("Initiated").map(String::from),
-            storage_class: elem.get("StorageClass").map(String::from),
+            storage_class: elem
+                .get("StorageClass")
+                .map(crate::types::StorageClass::from),
         });
     });
     uploads

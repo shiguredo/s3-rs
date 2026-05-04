@@ -79,6 +79,18 @@
   - @voluntas
 - [CHANGE] `Config::use_path_style()` ゲッターを `force_path_style()` にリネームする
   - @voluntas
+- [ADD] `ChecksumAlgorithm` / `ChecksumMode` / `ServerSideEncryption` / `ObjectCannedAcl` / `StorageClass` / `MetadataDirective` / `TaggingDirective` / `EncodingType` の型付き enum を public 型として公開する
+  - @voluntas
+- [CHANGE] `PutObject` / `UploadPart` / `CopyObject` / `CreateMultipartUpload` / `CreateBucket` / `DeleteObjects` / `PutBucket*` 系の `acl` / `storage_class` / `server_side_encryption` / `checksum_algorithm` / `metadata_directive` / `tagging_directive` を文字列から対応する型付き enum に変更する
+  - @voluntas
+- [CHANGE] `GetObject` / `HeadObject` の `checksum_mode` を `ChecksumMode` enum に変更する
+  - @voluntas
+- [CHANGE] `ListObjectsV2` / `ListObjectVersions` / `ListMultipartUploads` の `encoding_type` を `EncodingType` enum に変更する
+  - @voluntas
+- [CHANGE] `Object` / `ObjectVersion` / `ListPartsOutput` / `MultipartUpload` / `HeadObjectOutput` / `Transition` / `NoncurrentVersionTransition` / `ListObjectVersionsOutput` の `storage_class` / `encoding_type` 出力フィールドを対応する型付き enum に変更する
+  - @voluntas
+- [CHANGE] 全 enum 化対象のビルダーに aws-sdk-rust 互換の `set_*` バリアント (Option を直接受ける) を追加する
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 

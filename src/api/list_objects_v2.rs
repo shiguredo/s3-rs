@@ -7,7 +7,7 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{CommonPrefix, ListObjectsV2Output, Object};
+use crate::types::{CommonPrefix, EncodingType, ListObjectsV2Output, Object};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
@@ -19,7 +19,7 @@ pub struct ListObjectsV2FluentBuilder<'a> {
     max_keys: Option<i32>,
     continuation_token: Option<String>,
     start_after: Option<String>,
-    encoding_type: Option<String>,
+    encoding_type: Option<EncodingType>,
 }
 
 impl<'a> ListObjectsV2FluentBuilder<'a> {
@@ -67,8 +67,13 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
     }
 
     /// エンコーディングタイプを指定する ("url")
-    pub fn encoding_type(mut self, encoding_type: impl Into<String>) -> Self {
-        self.encoding_type = Some(encoding_type.into());
+    pub fn encoding_type(mut self, input: EncodingType) -> Self {
+        self.encoding_type = Some(input);
+        self
+    }
+
+    pub fn set_encoding_type(mut self, input: Option<EncodingType>) -> Self {
+        self.encoding_type = input;
         self
     }
 
@@ -92,7 +97,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             query_params.push(("start-after".into(), start_after.clone()));
         }
         if let Some(ref encoding_type) = self.encoding_type {
-            query_params.push(("encoding-type".into(), encoding_type.clone()));
+            query_params.push(("encoding-type".into(), encoding_type.as_str().to_string()));
         }
 
         let query_refs: Vec<(&str, &str)> = query_params
@@ -159,7 +164,9 @@ fn extract_xml_objects(text: &str) -> Vec<Object> {
             last_modified: elem.get("LastModified").map(String::from),
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
-            storage_class: elem.get("StorageClass").map(String::from),
+            storage_class: elem
+                .get("StorageClass")
+                .map(crate::types::StorageClass::from),
         });
     });
     objects

@@ -376,7 +376,9 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                         transitions.push(Transition {
                             days: trans_days.take(),
                             date: trans_date.take(),
-                            storage_class: trans_storage_class.take(),
+                            storage_class: trans_storage_class
+                                .take()
+                                .map(|s| crate::types::StorageClass::from(s.as_str())),
                         });
                         ctx = Context::Rule;
                     }
@@ -421,7 +423,9 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                     {
                         nv_transitions.push(NoncurrentVersionTransition {
                             noncurrent_days: nv_trans_days.take(),
-                            storage_class: nv_trans_storage_class.take(),
+                            storage_class: nv_trans_storage_class
+                                .take()
+                                .map(|s| crate::types::StorageClass::from(s.as_str())),
                             newer_noncurrent_versions: nv_trans_newer.take(),
                         });
                         ctx = Context::Rule;

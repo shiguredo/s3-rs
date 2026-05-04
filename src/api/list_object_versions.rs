@@ -6,7 +6,9 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{CommonPrefix, DeleteMarkerEntry, ListObjectVersionsOutput, ObjectVersion};
+use crate::types::{
+    CommonPrefix, DeleteMarkerEntry, EncodingType, ListObjectVersionsOutput, ObjectVersion,
+};
 
 use super::{S3Request, build_signed_request, parse_error_response, required};
 
@@ -18,7 +20,7 @@ pub struct ListObjectVersionsFluentBuilder<'a> {
     key_marker: Option<String>,
     version_id_marker: Option<String>,
     max_keys: Option<i32>,
-    encoding_type: Option<String>,
+    encoding_type: Option<EncodingType>,
 }
 
 impl<'a> ListObjectVersionsFluentBuilder<'a> {
@@ -66,8 +68,13 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
     }
 
     /// エンコーディングタイプを指定する ("url")
-    pub fn encoding_type(mut self, encoding_type: impl Into<String>) -> Self {
-        self.encoding_type = Some(encoding_type.into());
+    pub fn encoding_type(mut self, input: EncodingType) -> Self {
+        self.encoding_type = Some(input);
+        self
+    }
+
+    pub fn set_encoding_type(mut self, input: Option<EncodingType>) -> Self {
+        self.encoding_type = input;
         self
     }
 
@@ -91,7 +98,7 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
             query_params.push(("max-keys".into(), max_keys.to_string()));
         }
         if let Some(ref encoding_type) = self.encoding_type {
-            query_params.push(("encoding-type".into(), encoding_type.clone()));
+            query_params.push(("encoding-type".into(), encoding_type.as_str().to_string()));
         }
 
         let query_refs: Vec<(&str, &str)> = query_params
@@ -148,7 +155,8 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
                 .and_then(|v| v.parse::<i32>().ok()),
             key_marker: crate::xml::extract_element(body_text, "KeyMarker"),
             version_id_marker: crate::xml::extract_element(body_text, "VersionIdMarker"),
-            encoding_type: crate::xml::extract_element(body_text, "EncodingType"),
+            encoding_type: crate::xml::extract_element(body_text, "EncodingType")
+                .map(|s| EncodingType::from(s.as_str())),
         })
     }
 }
@@ -163,7 +171,9 @@ fn extract_xml_versions(text: &str) -> Vec<ObjectVersion> {
             last_modified: elem.get("LastModified").map(String::from),
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
-            storage_class: elem.get("StorageClass").map(String::from),
+            storage_class: elem
+                .get("StorageClass")
+                .map(crate::types::StorageClass::from),
         });
     });
     versions

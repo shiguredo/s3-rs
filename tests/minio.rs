@@ -2110,7 +2110,7 @@ async fn test_copy_object_metadata_replace() {
         .bucket(bucket)
         .key(dst_key)
         .copy_source(&copy_source)
-        .metadata_directive("REPLACE")
+        .metadata_directive(shiguredo_s3::MetadataDirective::Replace)
         .content_type("application/octet-stream")
         .metadata("env", "replaced")
         .build_request()
@@ -2479,7 +2479,7 @@ async fn test_checksum_algorithm() {
         .bucket(bucket)
         .key("crc32c.txt")
         .body(b"crc32c-data".to_vec())
-        .checksum_algorithm("CRC32C")
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32C)
         .build_request()
         .unwrap();
     let output = send(
@@ -2495,7 +2495,7 @@ async fn test_checksum_algorithm() {
         .bucket(bucket)
         .key("sha256.txt")
         .body(b"sha256-data".to_vec())
-        .checksum_algorithm("SHA256")
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Sha256)
         .build_request()
         .unwrap();
     let output = send(
@@ -2742,7 +2742,7 @@ async fn test_put_object_acl() {
         .bucket(bucket)
         .key(key)
         .body(b"private data".to_vec())
-        .acl("private")
+        .acl(shiguredo_s3::ObjectCannedAcl::Private)
         .build_request()
         .unwrap();
     let output = send(
@@ -2795,7 +2795,7 @@ async fn test_put_object_storage_class() {
         .bucket(bucket)
         .key(key)
         .body(b"standard class data".to_vec())
-        .storage_class("STANDARD")
+        .storage_class(shiguredo_s3::StorageClass::Standard)
         .build_request()
         .unwrap();
     let output = send(
@@ -2833,7 +2833,7 @@ async fn test_put_object_storage_class() {
     .await;
     assert!(
         matches!(
-            head_output.storage_class.as_deref(),
+            head_output.storage_class.as_ref().map(|sc| sc.as_str()),
             None | Some("STANDARD")
         ),
         "unexpected storage_class: {:?}",
