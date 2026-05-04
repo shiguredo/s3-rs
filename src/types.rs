@@ -164,12 +164,31 @@ pub struct AbortMultipartUploadOutput {}
 /// CopyObject の結果
 #[derive(Debug)]
 pub struct CopyObjectOutput {
-    pub e_tag: Option<String>,
-    pub last_modified: Option<SystemTime>,
+    /// コピー結果 (ETag / LastModified / 各 checksum / checksum_type)
+    ///
+    /// AWS S3 API のレスポンス XML `<CopyObjectResult>` 要素に対応する。
+    pub copy_object_result: Option<CopyObjectResult>,
     /// コピー先オブジェクトのバージョン ID (バージョニング有効時)
     pub version_id: Option<String>,
     /// コピー元オブジェクトのバージョン ID
     pub copy_source_version_id: Option<String>,
+}
+
+/// CopyObject の結果の中身
+///
+/// AWS S3 API のレスポンス XML `<CopyObjectResult>` 要素に対応する。
+/// aws-sdk-rust の `aws_sdk_s3::types::CopyObjectResult` と同じ構造。
+#[derive(Debug, Clone)]
+pub struct CopyObjectResult {
+    pub e_tag: Option<String>,
+    pub last_modified: Option<SystemTime>,
+    pub checksum_crc32: Option<String>,
+    pub checksum_crc32_c: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
+    pub checksum_sha1: Option<String>,
+    pub checksum_sha256: Option<String>,
+    /// `<ChecksumType>` 要素 (issue 0064 後続で型化検討)
+    pub checksum_type: Option<String>,
 }
 
 /// DeleteObjects の結果

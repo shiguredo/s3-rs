@@ -414,12 +414,27 @@ impl<'a> CopyObjectFluentBuilder<'a> {
 
         let body_text = std::str::from_utf8(&response.body).ok();
 
-        Ok(CopyObjectOutput {
-            e_tag: body_text.and_then(|t| crate::xml::extract_element(t, "ETag")),
-            last_modified: body_text
-                .and_then(|t| crate::xml::extract_element(t, "LastModified"))
+        let copy_object_result = if let Some(t) = body_text {
+            // <CopyObjectResult> 要素配下のフィールドを抽出する
+            let last_modified = crate::xml::extract_element(t, "LastModified")
                 .map(|s| crate::datetime::parse_iso8601(s.as_str()))
-                .transpose()?,
+                .transpose()?;
+            Some(crate::types::CopyObjectResult {
+                e_tag: crate::xml::extract_element(t, "ETag"),
+                last_modified,
+                checksum_crc32: crate::xml::extract_element(t, "ChecksumCRC32"),
+                checksum_crc32_c: crate::xml::extract_element(t, "ChecksumCRC32C"),
+                checksum_crc64_nvme: crate::xml::extract_element(t, "ChecksumCRC64NVME"),
+                checksum_sha1: crate::xml::extract_element(t, "ChecksumSHA1"),
+                checksum_sha256: crate::xml::extract_element(t, "ChecksumSHA256"),
+                checksum_type: crate::xml::extract_element(t, "ChecksumType"),
+            })
+        } else {
+            None
+        };
+
+        Ok(CopyObjectOutput {
+            copy_object_result,
             version_id: response.get_header("x-amz-version-id").map(String::from),
             copy_source_version_id: response
                 .get_header("x-amz-copy-source-version-id")

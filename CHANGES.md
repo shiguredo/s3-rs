@@ -109,6 +109,10 @@
   - @voluntas
 - [CHANGE] `PutObject` / `UploadPart` の `x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更する (aws-sdk-rust 仕様準拠)
   - @voluntas
+- [ADD] `CopyObjectResult` 型を追加する (`e_tag` / `last_modified` / `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_sha1` / `checksum_sha256` / `checksum_type`)
+  - @voluntas
+- [CHANGE] `CopyObjectOutput` のフラット構造を `CopyObjectResult` ネスト構造に変更する (`e_tag` / `last_modified` を `copy_object_result` 配下に移動、aws-sdk-rust 互換)
+  - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
 
