@@ -43,18 +43,49 @@ pub(crate) fn extract_element(xml_str: &str, tag: &str) -> Option<String> {
     None
 }
 
-/// 親タグ内の子要素テキストを保持する構造体
+/// 親タグ内の子孫要素テキストを保持する構造体
+///
+/// 直接の子要素 (depth 2) のテキストに加え、ネストされた孫要素 (depth 3 以降)
+/// のテキストも `path` でアクセスできる。同名タグの複数出現にも対応する
+/// (`get_all`)。
 pub(crate) struct ChildElements {
-    children: Vec<(String, String)>,
+    /// (タグへのパス, テキスト) のリスト。
+    /// パスは ["Owner", "DisplayName"] のようなネスト構造を表す。
+    children: Vec<(Vec<String>, String)>,
 }
 
 impl ChildElements {
-    /// タグ名でテキストを取得する
+    /// 直接の子タグでテキストを取得する (最初に見つかったもの)
     pub(crate) fn get(&self, tag: &str) -> Option<&str> {
         self.children
             .iter()
-            .find(|(name, _)| name == tag)
+            .find(|(path, _)| path.len() == 1 && path[0] == tag)
             .map(|(_, value)| value.as_str())
+    }
+
+    /// 同名直接子タグの複数出現を全て取得する (`<ChecksumAlgorithm>` 等)
+    pub(crate) fn get_all(&self, tag: &str) -> Vec<&str> {
+        self.children
+            .iter()
+            .filter(|(path, _)| path.len() == 1 && path[0] == tag)
+            .map(|(_, value)| value.as_str())
+            .collect()
+    }
+
+    /// ネストされた孫要素のテキストを取得する
+    /// 例: `get_nested(&["Owner", "DisplayName"])`
+    pub(crate) fn get_nested(&self, path: &[&str]) -> Option<&str> {
+        self.children
+            .iter()
+            .find(|(p, _)| p.len() == path.len() && p.iter().zip(path).all(|(a, b)| a == b))
+            .map(|(_, value)| value.as_str())
+    }
+
+    /// 直接子タグが存在するかを返す (テキスト空でもネスト要素のみでも `true`)
+    pub(crate) fn has(&self, tag: &str) -> bool {
+        self.children
+            .iter()
+            .any(|(path, _)| !path.is_empty() && path[0] == tag)
     }
 
     /// タグ名でテキストを取得し、FromStr でパースする
@@ -73,9 +104,10 @@ where
     let reader = EventReader::from_str(xml_str);
     let mut inside_parent = false;
     let mut depth: u32 = 0;
-    let mut current_child_tag: Option<String> = None;
+    // 親要素配下の現在のタグスタック (depth 2 以降を記録)
+    let mut path_stack: Vec<String> = Vec::new();
     let mut current_text = String::new();
-    let mut children: Vec<(String, String)> = Vec::new();
+    let mut children: Vec<(Vec<String>, String)> = Vec::new();
 
     for event in reader {
         match event {
@@ -84,27 +116,29 @@ where
             {
                 inside_parent = true;
                 depth = 1;
+                path_stack.clear();
                 children.clear();
             }
             Ok(XmlEvent::StartElement { name, .. }) if inside_parent => {
                 depth += 1;
-                // 直接の子要素（depth == 2）のみ記録する
-                if depth == 2 {
-                    current_child_tag = Some(name.local_name.clone());
-                    current_text.clear();
-                }
+                // depth 2 以降の要素をパススタックに積む
+                path_stack.push(name.local_name.clone());
+                current_text.clear();
             }
-            Ok(XmlEvent::Characters(s)) if inside_parent && current_child_tag.is_some() => {
+            Ok(XmlEvent::Characters(s)) if inside_parent && !path_stack.is_empty() => {
                 current_text.push_str(&s);
             }
             Ok(XmlEvent::EndElement { name }) if inside_parent => {
-                if depth == 2 {
-                    if let Some(ref tag) = current_child_tag
-                        && name.local_name == *tag
+                if depth >= 2 {
+                    // パススタックの末尾と一致する終了タグなら、その時点までの
+                    // テキストをパスと共に記録する。テキストが空 (ネスト要素のみ)
+                    // でも記録する (`has()` で存在判定するため)。
+                    if let Some(top) = path_stack.last()
+                        && name.local_name == *top
                     {
-                        children.push((tag.clone(), current_text.clone()));
+                        children.push((path_stack.clone(), current_text.clone()));
+                        path_stack.pop();
                     }
-                    current_child_tag = None;
                     current_text.clear();
                 }
                 depth -= 1;
@@ -114,6 +148,7 @@ where
                         children: children.clone(),
                     });
                     children.clear();
+                    path_stack.clear();
                 }
             }
             Err(_) => return,

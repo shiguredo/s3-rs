@@ -1,6 +1,7 @@
 # Owner / RestoreStatus 型を新設し Object / ObjectVersion / ListBucketsOutput にフィールド追加する
 
 Created: 2026-05-04
+Completed: 2026-05-04
 Model: Opus 4.7
 
 ## 根拠
@@ -140,3 +141,46 @@ pub use types::{Owner, RestoreStatus};
 - `[ADD] Owner / RestoreStatus 型を追加する`
 - `[ADD] Object / ObjectVersion に owner / restore_status / checksum_algorithm / checksum_type を追加する`
 - `[ADD] ListBucketsOutput に owner を追加する`
+
+## 解決方法
+
+### 実施した変更
+
+1. **`src/types.rs` に `Owner` / `RestoreStatus` 型を新設**
+   - `Owner { display_name, id }` (aws-sdk-rust の `aws_sdk_s3::types::Owner` 互換)
+   - `RestoreStatus { is_restore_in_progress, restore_expiry_date: Option<SystemTime> }`
+   - `#[derive(Debug, Clone, PartialEq, Eq, Hash)]` を付与 (`#[non_exhaustive]` は AGENTS の Premature Optimization 観点で見送り、必要時に追加)
+
+2. **`Object` / `ObjectVersion` に 4 フィールドを追加**
+   - `owner: Option<Owner>`
+   - `restore_status: Option<RestoreStatus>`
+   - `checksum_algorithm: Option<Vec<ChecksumAlgorithm>>` (複数指定対応)
+   - `checksum_type: Option<String>` (issue 0059 後続で型化検討)
+
+3. **`ListBucketsOutput` に `owner: Option<Owner>` を追加**
+
+4. **`src/xml.rs` の `for_each_element` / `ChildElements` を拡張**
+   - パススタックを保持し、ネストされた孫要素 (depth 3 以降) のテキストも記録するように変更
+   - `ChildElements::get_nested(&[outer, inner])` でネスト要素にアクセス
+   - `ChildElements::get_all(tag)` で同名タグの複数出現を取得 (`<ChecksumAlgorithm>` 用)
+   - `ChildElements::has(tag)` で存在判定 (空テキスト/ネスト要素含む)
+
+5. **`src/api/list_objects_v2.rs` / `src/api/list_object_versions.rs` のパース拡張**
+   - `<Owner><DisplayName>...</DisplayName><ID>...</ID></Owner>` を `Owner` 型にパース
+   - `<RestoreStatus><IsRestoreInProgress>...</IsRestoreInProgress><RestoreExpiryDate>...</RestoreExpiryDate></RestoreStatus>` を `RestoreStatus` 型にパース
+   - `<ChecksumAlgorithm>` の複数出現を `Vec<ChecksumAlgorithm>` に集約
+   - `<ChecksumType>` を `Option<String>` でそのまま保持
+
+6. **`src/api/list_buckets.rs` のパース拡張**
+   - トップレベル `<Owner>` を `Option<Owner>` にパース (`<DisplayName>` / `<ID>` から構築)
+
+7. **`src/lib.rs` の `pub use` 更新**
+   - `Owner` / `RestoreStatus` を公開
+
+### 検証結果
+
+- `cargo check --workspace --all-targets`: 成功
+- `cargo clippy --workspace --all-targets`: 警告ゼロ
+- `cargo test --lib`: 28 tests passed
+- `cargo test --test minio test_list_objects_v2 test_list_objects_v2_pagination test_list_objects_v2_start_after test_bucket_lifecycle test_list_object_versions test_object_put_get_head_delete`: 6 件 passed
+- pre-commit hook (cargo fmt / clippy / test) すべて pass

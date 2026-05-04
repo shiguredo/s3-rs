@@ -160,6 +160,38 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
 fn extract_xml_objects(text: &str) -> Vec<Object> {
     let mut objects = Vec::new();
     crate::xml::for_each_element(text, "Contents", |elem| {
+        let owner = if elem.has("Owner") {
+            Some(crate::types::Owner {
+                display_name: elem.get_nested(&["Owner", "DisplayName"]).map(String::from),
+                id: elem.get_nested(&["Owner", "ID"]).map(String::from),
+            })
+        } else {
+            None
+        };
+        let restore_status = if elem.has("RestoreStatus") {
+            Some(crate::types::RestoreStatus {
+                is_restore_in_progress: elem
+                    .get_nested(&["RestoreStatus", "IsRestoreInProgress"])
+                    .and_then(|s| s.parse::<bool>().ok()),
+                restore_expiry_date: elem
+                    .get_nested(&["RestoreStatus", "RestoreExpiryDate"])
+                    .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
+            })
+        } else {
+            None
+        };
+        let checksum_algorithm = {
+            let all = elem.get_all("ChecksumAlgorithm");
+            if all.is_empty() {
+                None
+            } else {
+                Some(
+                    all.into_iter()
+                        .map(crate::types::ChecksumAlgorithm::from)
+                        .collect(),
+                )
+            }
+        };
         objects.push(Object {
             key: elem.get("Key").map(String::from),
             last_modified: elem
@@ -170,6 +202,10 @@ fn extract_xml_objects(text: &str) -> Vec<Object> {
             storage_class: elem
                 .get("StorageClass")
                 .map(crate::types::StorageClass::from),
+            owner,
+            restore_status,
+            checksum_algorithm,
+            checksum_type: elem.get("ChecksumType").map(String::from),
         });
     });
     objects

@@ -338,6 +338,12 @@ pub struct ObjectVersion {
     pub e_tag: Option<String>,
     pub size: Option<i64>,
     pub storage_class: Option<StorageClass>,
+    pub owner: Option<Owner>,
+    pub restore_status: Option<RestoreStatus>,
+    /// 各オブジェクトに有効なチェックサムアルゴリズムのリスト
+    pub checksum_algorithm: Option<Vec<ChecksumAlgorithm>>,
+    /// `<ChecksumType>` 要素 (issue 0059 後続で型化検討)
+    pub checksum_type: Option<String>,
 }
 
 /// 削除マーカーのメタデータ
@@ -357,6 +363,31 @@ pub struct Object {
     pub e_tag: Option<String>,
     pub size: Option<i64>,
     pub storage_class: Option<StorageClass>,
+    pub owner: Option<Owner>,
+    pub restore_status: Option<RestoreStatus>,
+    /// 各オブジェクトに有効なチェックサムアルゴリズムのリスト
+    pub checksum_algorithm: Option<Vec<ChecksumAlgorithm>>,
+    /// `<ChecksumType>` 要素 (issue 0059 後続で型化検討)
+    pub checksum_type: Option<String>,
+}
+
+/// バケット / オブジェクトのオーナー情報
+///
+/// AWS S3 API のレスポンス XML `<Owner>` 要素に対応する。
+/// aws-sdk-rust の `aws_sdk_s3::types::Owner` と同じ構造。
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Owner {
+    pub display_name: Option<String>,
+    pub id: Option<String>,
+}
+
+/// オブジェクトの復元状態 (Glacier / Deep Archive)
+///
+/// AWS S3 API のレスポンス XML `<RestoreStatus>` 要素に対応する。
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RestoreStatus {
+    pub is_restore_in_progress: Option<bool>,
+    pub restore_expiry_date: Option<SystemTime>,
 }
 
 /// 共通プレフィックス
@@ -401,6 +432,8 @@ pub struct ListBucketsOutput {
     pub continuation_token: Option<String>,
     /// 今回のリクエストで使用したプレフィックスフィルタ
     pub prefix: Option<String>,
+    /// バケット一覧の所有者情報
+    pub owner: Option<Owner>,
 }
 
 /// バケット情報
