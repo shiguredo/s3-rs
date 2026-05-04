@@ -28,9 +28,9 @@ impl<'a> DeleteBucketEncryptionFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "DELETE",
             bucket,
@@ -38,7 +38,8 @@ impl<'a> DeleteBucketEncryptionFluentBuilder<'a> {
             &[],
             b"",
             Some(&[("encryption", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

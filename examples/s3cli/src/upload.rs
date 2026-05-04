@@ -13,6 +13,7 @@ use shiguredo_s3::types::{CompletedMultipartUpload, CompletedPart, PutObjectOutp
 
 use crate::params::UploadParams;
 use crate::transport::{ConnectionPool, execute_pooled, send, send_pooled};
+use crate::util::now;
 
 /// S3 パートの最小サイズ (5 MB)
 pub(crate) const MIN_PART_SIZE: usize = 5 * 1024 * 1024;
@@ -102,7 +103,7 @@ pub(crate) async fn upload_multipart(
             builder = builder.content_type(*ct);
         }
         builder = sse.apply_to_put(builder);
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         return send(
             tls_config,
             request,
@@ -117,7 +118,7 @@ pub(crate) async fn upload_multipart(
         create_builder = create_builder.content_type(*ct);
     }
     create_builder = sse.apply_to_create_multipart(create_builder);
-    let create_request = create_builder.build_request()?;
+    let create_request = create_builder.build_request(now())?;
 
     // リクエストからホスト情報を取得して接続プールを構築する
     let pool = Arc::new(ConnectionPool::new(
@@ -148,7 +149,7 @@ pub(crate) async fn upload_multipart(
                 .multipart_upload(CompletedMultipartUpload {
                     parts: Some(completed_parts),
                 })
-                .build_request()?;
+                .build_request(now())?;
             let output = send_pooled(
                 &pool,
                 complete_request,
@@ -167,7 +168,7 @@ pub(crate) async fn upload_multipart(
                 .bucket(*bucket)
                 .key(*key)
                 .upload_id(&upload_id)
-                .build_request()
+                .build_request(now())
                 && let Err(abort_err) = execute_pooled(&pool, abort_request).await
             {
                 eprintln!("warning: failed to abort multipart upload: {abort_err}");
@@ -297,7 +298,7 @@ async fn upload_single_part(
         .upload_id(upload_id)
         .part_number(part_number)
         .body(chunk);
-    let request = sse.apply_to_upload_part(builder).build_request()?;
+    let request = sse.apply_to_upload_part(builder).build_request(now())?;
     let response = execute_pooled(pool, request).await?;
     let output = shiguredo_s3::api::UploadPartFluentBuilder::parse_response(&response)?;
     Ok(CompletedPart {

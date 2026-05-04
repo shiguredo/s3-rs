@@ -56,7 +56,7 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let xml_body = build_cors_xml(&self.cors_rules);
@@ -74,7 +74,7 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
             extra_headers.push((header_name, &computed_checksum));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -82,7 +82,8 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
             &extra_headers,
             xml_body.as_bytes(),
             Some(&[("cors", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<PutBucketCorsOutput, Error> {

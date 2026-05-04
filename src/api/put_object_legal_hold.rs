@@ -51,7 +51,7 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
 
@@ -67,7 +67,7 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
             ("content-md5", content_md5.as_str()),
         ];
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -75,7 +75,8 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
             &extra_headers,
             xml_body.as_bytes(),
             Some(&query_params),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<PutObjectLegalHoldOutput, Error> {

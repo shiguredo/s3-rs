@@ -283,6 +283,10 @@ impl Client {
 // -------------------------------------------------------
 
 /// 署名済みバケットリクエストを構築する
+///
+/// `now` は `x-amz-date` ヘッダーおよびクレデンシャルスコープに使う現在時刻。
+/// Sans I/O 原則のため呼び出し側で `SystemTime::now()` を取得して渡す。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_signed_request(
     config: &ClientConfig<'_>,
     method: &str,
@@ -291,7 +295,8 @@ pub(crate) fn build_signed_request(
     extra_headers: &[(&str, &str)],
     body: &[u8],
     query_params: Option<&[(&str, &str)]>,
-) -> S3Request {
+    now: std::time::SystemTime,
+) -> Result<S3Request, Error> {
     let host = host_for_bucket(config, bucket);
     let path = path_for_key(config, bucket, key);
     build_signed_request_inner(
@@ -302,6 +307,7 @@ pub(crate) fn build_signed_request(
         extra_headers,
         body,
         query_params,
+        now,
     )
 }
 
@@ -313,7 +319,8 @@ pub(crate) fn build_signed_service_request(
     extra_headers: &[(&str, &str)],
     body: &[u8],
     query_params: Option<&[(&str, &str)]>,
-) -> S3Request {
+    now: std::time::SystemTime,
+) -> Result<S3Request, Error> {
     let host = service_host(config);
     build_signed_request_inner(
         config,
@@ -323,10 +330,12 @@ pub(crate) fn build_signed_service_request(
         extra_headers,
         body,
         query_params,
+        now,
     )
 }
 
 /// 署名済みリクエスト構築の共通処理
+#[allow(clippy::too_many_arguments)]
 fn build_signed_request_inner(
     config: &ClientConfig<'_>,
     method: &str,
@@ -335,10 +344,11 @@ fn build_signed_request_inner(
     extra_headers: &[(&str, &str)],
     body: &[u8],
     query_params: Option<&[(&str, &str)]>,
-) -> S3Request {
+    now: std::time::SystemTime,
+) -> Result<S3Request, Error> {
     let connect_host = extract_connect_host(host);
     let port = extract_port(config);
-    let datetime = UtcDateTime::now();
+    let datetime = UtcDateTime::from_system_time(now)?;
     let amz_date = datetime.iso8601();
     let payload_hash = hex_sha256(body);
 
@@ -392,7 +402,7 @@ fn build_signed_request_inner(
     }
     headers.push(("Authorization".to_string(), authorization));
 
-    S3Request {
+    Ok(S3Request {
         method: method.to_string(),
         uri,
         headers,
@@ -402,13 +412,15 @@ fn build_signed_request_inner(
         https: config.https,
         ignore_cert_check: config.ignore_cert_check,
         expect_no_body: method == "HEAD",
-    }
+    })
 }
 
 /// Presigned URL を生成する
 ///
 /// `extra_headers` は署名対象に含める追加 header (SSE-C 等)。
 /// リクエスト時にも同じ header を付与する必要がある。
+/// `now` は `X-Amz-Date` クエリパラメータおよびクレデンシャルスコープに使う現在時刻。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_presigned_url(
     config: &ClientConfig<'_>,
     method: &str,
@@ -417,10 +429,11 @@ pub(crate) fn build_presigned_url(
     expires_in_secs: u64,
     extra_query_params: &[(&str, &str)],
     extra_headers: &[(&str, &str)],
-) -> String {
+    now: std::time::SystemTime,
+) -> Result<String, Error> {
     let host = host_for_bucket(config, bucket);
     let path = path_for_key(config, bucket, key);
-    let datetime = UtcDateTime::now();
+    let datetime = UtcDateTime::from_system_time(now)?;
     let date_stamp = datetime.date_stamp();
     let amz_date = datetime.iso8601();
     let scope = format!("{date_stamp}/{}/s3/aws4_request", config.region);
@@ -467,7 +480,9 @@ pub(crate) fn build_presigned_url(
 
     let canonical_query_string = build_canonical_query_string(&query_params);
     let scheme = if config.https { "https" } else { "http" };
-    format!("{scheme}://{host}{path}?{canonical_query_string}&X-Amz-Signature={signature}")
+    Ok(format!(
+        "{scheme}://{host}{path}?{canonical_query_string}&X-Amz-Signature={signature}"
+    ))
 }
 
 // -------------------------------------------------------
@@ -691,4 +706,117 @@ pub(crate) fn compute_sse_c_key_md5(base64_key: &str) -> Result<String, Error> {
         .map_err(|_| Error::InvalidInput("SSE-C key must be valid Base64".to_string()))?;
     let hash = Md5::digest(&key_bytes);
     Ok(Base64::encode_string(hash.as_slice()))
+}
+
+#[cfg(test)]
+mod sans_io_tests {
+    use super::*;
+    use crate::client::{Client, Config};
+    use crate::credential::Credentials;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn fixed_now() -> SystemTime {
+        UNIX_EPOCH + Duration::from_secs(1234567890) // 2009-02-13T23:31:30Z
+    }
+
+    fn build_test_client() -> Client {
+        let config = Config::builder()
+            .region("us-east-1")
+            .credentials_provider(Credentials::new(
+                "AKIAIOSFODNN7EXAMPLE",
+                "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                None,
+                None,
+                "test",
+            ))
+            .build()
+            .expect("Config::build");
+        Client::from_conf(config)
+    }
+
+    /// 同じ `now` を渡せば `build_request` は決定的な署名値を返す
+    ///
+    /// Sans I/O 原則の核心。同一入力に対して同一出力 (参照透過性) を満たす。
+    #[test]
+    fn test_build_request_is_deterministic_for_fixed_now() {
+        let client = build_test_client();
+        let now = fixed_now();
+
+        let a = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .build_request(now)
+            .expect("build_request");
+        let b = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .build_request(now)
+            .expect("build_request");
+
+        // ヘッダーは順序付き Vec なので等値性が成り立つ
+        assert_eq!(a.method, b.method);
+        assert_eq!(a.uri, b.uri);
+        assert_eq!(a.headers, b.headers);
+        assert_eq!(a.body, b.body);
+    }
+
+    /// 異なる `now` を渡せば `x-amz-date` が変わり、署名値も変わる
+    #[test]
+    fn test_build_request_varies_with_now() {
+        let client = build_test_client();
+        let a = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .build_request(UNIX_EPOCH + Duration::from_secs(1234567890))
+            .expect("build_request");
+        let b = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .build_request(UNIX_EPOCH + Duration::from_secs(1234567891))
+            .expect("build_request");
+
+        // x-amz-date は秒精度で異なるためヘッダー全体も異なる
+        assert_ne!(a.headers, b.headers);
+    }
+
+    /// 同じ `now` を渡せば `presigned` も決定的な URL を返す
+    #[test]
+    fn test_presigned_is_deterministic_for_fixed_now() {
+        let client = build_test_client();
+        let now = fixed_now();
+
+        let a = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .presigned(3600, now)
+            .expect("presigned");
+        let b = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .presigned(3600, now)
+            .expect("presigned");
+
+        assert_eq!(a.url, b.url);
+        assert_eq!(a.headers, b.headers);
+        assert_eq!(a.body, b.body);
+    }
+
+    /// `UNIX_EPOCH` 前の時刻は `Error::InvalidInput` で弾く
+    #[test]
+    fn test_build_request_rejects_pre_epoch_now() {
+        let client = build_test_client();
+        let pre_epoch = UNIX_EPOCH - Duration::from_secs(1);
+        let result = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .build_request(pre_epoch);
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+    }
 }

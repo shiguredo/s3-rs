@@ -36,7 +36,7 @@ impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let mut extra_headers: Vec<(&str, &str)> = Vec::new();
@@ -44,7 +44,7 @@ impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
             extra_headers.push(("x-amz-expected-bucket-owner", owner.as_str()));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "DELETE",
             bucket,
@@ -52,7 +52,8 @@ impl<'a> DeleteBucketTaggingFluentBuilder<'a> {
             &extra_headers,
             b"",
             Some(&[("tagging", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

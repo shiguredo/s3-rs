@@ -77,7 +77,7 @@ impl<'a> ListPartsFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
@@ -115,7 +115,7 @@ impl<'a> ListPartsFluentBuilder<'a> {
             ));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
@@ -123,7 +123,8 @@ impl<'a> ListPartsFluentBuilder<'a> {
             &extra_headers,
             b"",
             Some(&query_refs),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<ListPartsOutput, Error> {
@@ -159,7 +160,9 @@ fn extract_xml_parts(text: &str) -> Vec<Part> {
     crate::xml::for_each_element(text, "Part", |elem| {
         parts.push(Part {
             part_number: elem.get_parsed::<i32>("PartNumber"),
-            last_modified: elem.get("LastModified").map(String::from),
+            last_modified: elem
+                .get("LastModified")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
         });

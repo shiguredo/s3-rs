@@ -53,7 +53,7 @@ impl<'a> ListBucketsFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let max_buckets_str = self.max_buckets.map(|v| v.to_string());
 
         let mut params: Vec<(&str, &str)> = Vec::new();
@@ -70,14 +70,15 @@ impl<'a> ListBucketsFluentBuilder<'a> {
             params.push(("bucket-region", v.as_str()));
         }
 
-        Ok(build_signed_service_request(
+        build_signed_service_request(
             &self.client.config_ref(),
             "GET",
             "/",
             &[],
             b"",
             Some(params.as_slice()),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<ListBucketsOutput, Error> {
@@ -104,7 +105,9 @@ fn extract_xml_buckets(text: &str) -> Vec<Bucket> {
     crate::xml::for_each_element(text, "Bucket", |elem| {
         buckets.push(Bucket {
             name: elem.get("Name").map(String::from),
-            creation_date: elem.get("CreationDate").map(String::from),
+            creation_date: elem
+                .get("CreationDate")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
             bucket_region: elem.get("BucketRegion").map(String::from),
             bucket_arn: elem.get("BucketArn").map(String::from),
         });

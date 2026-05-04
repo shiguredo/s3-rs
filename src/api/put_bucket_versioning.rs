@@ -50,7 +50,7 @@ impl<'a> PutBucketVersioningFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let status = required(self.status.as_deref(), "status")?;
 
@@ -79,7 +79,7 @@ impl<'a> PutBucketVersioningFluentBuilder<'a> {
             extra_headers.push((header_name, &computed_checksum));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -87,7 +87,8 @@ impl<'a> PutBucketVersioningFluentBuilder<'a> {
             &extra_headers,
             xml_body.as_bytes(),
             Some(&[("versioning", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

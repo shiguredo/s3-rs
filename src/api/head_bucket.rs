@@ -28,10 +28,10 @@ impl<'a> HeadBucketFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "HEAD",
             bucket,
@@ -39,7 +39,8 @@ impl<'a> HeadBucketFluentBuilder<'a> {
             &[],
             b"",
             None,
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<HeadBucketOutput, Error> {

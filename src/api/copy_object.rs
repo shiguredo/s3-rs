@@ -281,7 +281,7 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let copy_source = required(self.copy_source.as_deref(), "copy_source")?;
@@ -392,7 +392,7 @@ impl<'a> CopyObjectFluentBuilder<'a> {
             extra_headers.push((name.as_str(), *value));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -400,7 +400,8 @@ impl<'a> CopyObjectFluentBuilder<'a> {
             &extra_headers,
             b"",
             None,
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<CopyObjectOutput, Error> {
@@ -415,7 +416,10 @@ impl<'a> CopyObjectFluentBuilder<'a> {
 
         Ok(CopyObjectOutput {
             e_tag: body_text.and_then(|t| crate::xml::extract_element(t, "ETag")),
-            last_modified: body_text.and_then(|t| crate::xml::extract_element(t, "LastModified")),
+            last_modified: body_text
+                .and_then(|t| crate::xml::extract_element(t, "LastModified"))
+                .map(|s| crate::datetime::parse_iso8601(s.as_str()))
+                .transpose()?,
             version_id: response.get_header("x-amz-version-id").map(String::from),
             copy_source_version_id: response
                 .get_header("x-amz-copy-source-version-id")

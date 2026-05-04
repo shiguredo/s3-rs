@@ -72,7 +72,7 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let xml_body = build_notification_xml(
@@ -87,7 +87,7 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
             extra_headers.push(("x-amz-skip-destination-validation", "true"));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -95,7 +95,8 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
             &extra_headers,
             xml_body.as_bytes(),
             Some(&[("notification", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(

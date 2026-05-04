@@ -15,7 +15,7 @@ use crate::upload::{
     DEFAULT_CONCURRENCY, MultipartUploadParams, UploadData, calculate_part_size, upload_multipart,
 };
 use crate::util::{
-    build_client, human_readable_size, is_s3_uri, parse_filters, parse_s3_uri,
+    build_client, human_readable_size, is_s3_uri, now, parse_filters, parse_s3_uri,
     resolve_content_type, should_include,
 };
 
@@ -332,7 +332,7 @@ pub(crate) async fn cmd_cp(
                     .bucket(&dst_bucket)
                     .key(&dst_key)
                     .copy_source(&copy_source);
-                let request = upload_params.apply_to_copy(builder).build_request()?;
+                let request = upload_params.apply_to_copy(builder).build_request(now())?;
                 send(
                     &tls_config,
                     request,
@@ -475,7 +475,7 @@ pub(crate) async fn cmd_mv(
                         .delete_object()
                         .bucket(&bucket)
                         .key(&key)
-                        .build_request()?;
+                        .build_request(now())?;
                     send(
                         &tls_config,
                         request,
@@ -523,7 +523,7 @@ pub(crate) async fn cmd_mv(
                     .bucket(&dst_bucket)
                     .key(&dst_key)
                     .copy_source(&copy_source);
-                let request = upload_params.apply_to_copy(builder).build_request()?;
+                let request = upload_params.apply_to_copy(builder).build_request(now())?;
                 send(
                     &tls_config,
                     request,
@@ -534,7 +534,7 @@ pub(crate) async fn cmd_mv(
                     .delete_object()
                     .bucket(&src_bucket)
                     .key(&src_key)
-                    .build_request()?;
+                    .build_request(now())?;
                 send(
                     &tls_config,
                     request,
@@ -602,7 +602,7 @@ pub(crate) async fn cmd_ls(
             if let Some(ref token) = continuation_token {
                 builder = builder.continuation_token(token);
             }
-            let request = builder.build_request()?;
+            let request = builder.build_request(now())?;
             let output = send(
                 &tls_config,
                 request,
@@ -612,7 +612,10 @@ pub(crate) async fn cmd_ls(
 
             for bucket in &output.buckets {
                 let name = bucket.name.as_deref().unwrap_or("");
-                let date = bucket.creation_date.as_deref().unwrap_or("");
+                let date = bucket
+                    .creation_date
+                    .map(format_systemtime_rfc3339)
+                    .unwrap_or_default();
                 println!("{date} {name}");
             }
 
@@ -649,7 +652,7 @@ pub(crate) async fn cmd_ls(
             builder = builder.max_keys(ps);
         }
 
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             &tls_config,
             request,
@@ -671,7 +674,10 @@ pub(crate) async fn cmd_ls(
             for object in contents {
                 let key = object.key.as_deref().unwrap_or("");
                 let size = object.size.unwrap_or(0);
-                let last_modified = object.last_modified.as_deref().unwrap_or("");
+                let last_modified = object
+                    .last_modified
+                    .map(format_systemtime_rfc3339)
+                    .unwrap_or_default();
 
                 let size_str = if human_readable {
                     format!("{:>10}", human_readable_size(size))
@@ -769,7 +775,7 @@ pub(crate) async fn cmd_check_storage_class(
             builder = builder.max_keys(ps);
         }
 
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             &tls_config,
             request,
@@ -872,7 +878,7 @@ pub(crate) async fn cmd_rm(
             .delete_object()
             .bucket(&bucket)
             .key(&key)
-            .build_request()?;
+            .build_request(now())?;
         send(
             &tls_config,
             request,
@@ -919,7 +925,7 @@ pub(crate) async fn cmd_mb(
                 location_constraint: Some(region),
             });
     }
-    let request = builder.build_request()?;
+    let request = builder.build_request(now())?;
     send(
         &tls_config,
         request,
@@ -961,7 +967,10 @@ pub(crate) async fn cmd_rb(
         delete_recursive(&client, &tls_config, &bucket, "", &[], false, false).await?;
     }
 
-    let request = client.delete_bucket().bucket(&bucket).build_request()?;
+    let request = client
+        .delete_bucket()
+        .bucket(&bucket)
+        .build_request(now())?;
     send(
         &tls_config,
         request,
@@ -1010,7 +1019,10 @@ async fn collect_s3_objects(
     tls_config: &Arc<rustls::ClientConfig>,
     bucket: &str,
     prefix: &str,
-) -> Result<Vec<(String, i64, String)>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<
+    Vec<(String, i64, Option<std::time::SystemTime>)>,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     let mut objects = Vec::new();
     let mut continuation_token: Option<String> = None;
 
@@ -1019,7 +1031,7 @@ async fn collect_s3_objects(
         if let Some(ref token) = continuation_token {
             builder = builder.continuation_token(token);
         }
-        let request = builder.build_request()?;
+        let request = builder.build_request(now())?;
         let output = send(
             tls_config,
             request,
@@ -1038,7 +1050,7 @@ async fn collect_s3_objects(
                     objects.push((
                         relative.to_string(),
                         object.size.unwrap_or(0),
-                        object.last_modified.clone().unwrap_or_default(),
+                        object.last_modified,
                     ));
                 }
             }
@@ -1055,53 +1067,30 @@ async fn collect_s3_objects(
     Ok(objects)
 }
 
-/// ISO 8601 形式の日時文字列を SystemTime に変換する
-fn parse_s3_timestamp(s: &str) -> Option<std::time::SystemTime> {
-    // "2024-01-15T12:30:45.000Z" 形式
-    let s = s.trim_end_matches('Z');
-    let (date_part, time_part) = s.split_once('T')?;
-    let mut date_iter = date_part.split('-');
-    let year: i64 = date_iter.next()?.parse().ok()?;
-    let month: u64 = date_iter.next()?.parse().ok()?;
-    let day: u64 = date_iter.next()?.parse().ok()?;
+/// `SystemTime` を ISO 8601 (RFC 3339) 文字列に整形する (秒精度、UTC)
+fn format_systemtime_rfc3339(t: std::time::SystemTime) -> String {
+    let secs = t
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // 簡易的な分解 (Howard Hinnant の civil_from_days と同等)
+    let days = (secs / 86400) as i64;
+    let time_of_day = (secs % 86400) as u32;
+    let hour = time_of_day / 3600;
+    let minute = (time_of_day % 3600) / 60;
+    let second = time_of_day % 60;
 
-    let time_part = time_part.split('.').next()?;
-    let mut time_iter = time_part.split(':');
-    let hour: u64 = time_iter.next()?.parse().ok()?;
-    let min: u64 = time_iter.next()?.parse().ok()?;
-    let sec: u64 = time_iter.next()?.parse().ok()?;
-
-    // 簡易的なエポック秒計算
-    let mut days: i64 = 0;
-    for y in 1970..year {
-        days += if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
-            366
-        } else {
-            365
-        };
-    }
-    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let month_days = [
-        31,
-        if is_leap { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    for d in month_days.iter().take(month as usize - 1) {
-        days += *d as i64;
-    }
-    days += day as i64 - 1;
-
-    let secs = days as u64 * 86400 + hour * 3600 + min * 60 + sec;
-    Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = (z - era * 146097) as u32;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
 /// 同期時にファイルをスキップすべきか判定する
@@ -1210,7 +1199,7 @@ pub(crate) async fn cmd_sync(
                         *local_size,
                         s3_size,
                         Some(*local_mtime),
-                        parse_s3_timestamp(s3_mtime),
+                        *s3_mtime,
                         size_only,
                         exact_timestamps,
                     ) {
@@ -1261,7 +1250,7 @@ pub(crate) async fn cmd_sync(
                                 .delete_object()
                                 .bucket(&bucket)
                                 .key(&key)
-                                .build_request()?;
+                                .build_request(now())?;
                             send(
                                 &tls_config,
                                 request,
@@ -1292,7 +1281,7 @@ pub(crate) async fn cmd_sync(
                     if should_skip_sync(
                         meta.len() as i64,
                         *s3_size,
-                        parse_s3_timestamp(s3_mtime.as_str()),
+                        *s3_mtime,
                         Some(local_mtime),
                         size_only,
                         exact_timestamps,
@@ -1360,8 +1349,8 @@ pub(crate) async fn cmd_sync(
                     if should_skip_sync(
                         *src_size,
                         dst_size,
-                        parse_s3_timestamp(src_mtime.as_str()),
-                        parse_s3_timestamp(dst_mtime.as_str()),
+                        *src_mtime,
+                        *dst_mtime,
                         size_only,
                         exact_timestamps,
                     ) {
@@ -1391,7 +1380,7 @@ pub(crate) async fn cmd_sync(
                         .bucket(&dst_bucket)
                         .key(&dst_key)
                         .copy_source(&copy_source);
-                    let request = upload_params.apply_to_copy(builder).build_request()?;
+                    let request = upload_params.apply_to_copy(builder).build_request(now())?;
                     send(
                         &tls_config,
                         request,
@@ -1428,7 +1417,7 @@ pub(crate) async fn cmd_sync(
                                 .delete_object()
                                 .bucket(&dst_bucket)
                                 .key(&key)
-                                .build_request()?;
+                                .build_request(now())?;
                             send(
                                 &tls_config,
                                 request,
@@ -1483,7 +1472,7 @@ pub(crate) fn cmd_presign(mut args: noargs::RawArgs) -> noargs::Result<()> {
         .get_object()
         .bucket(&bucket)
         .key(&key)
-        .presigned(expires_in)?;
+        .presigned(expires_in, now())?;
 
     println!("{}", presigned.url);
 

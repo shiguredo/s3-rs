@@ -77,7 +77,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
         let mut query_params: Vec<(String, String)> = vec![("uploads".into(), "".into())];
@@ -106,7 +106,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "GET",
             bucket,
@@ -114,7 +114,8 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             &[],
             b"",
             Some(&query_refs),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(
@@ -161,7 +162,9 @@ fn extract_xml_uploads(text: &str) -> Vec<MultipartUpload> {
         uploads.push(MultipartUpload {
             upload_id: elem.get("UploadId").map(String::from),
             key: elem.get("Key").map(String::from),
-            initiated: elem.get("Initiated").map(String::from),
+            initiated: elem
+                .get("Initiated")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
             storage_class: elem
                 .get("StorageClass")
                 .map(crate::types::StorageClass::from),

@@ -90,7 +90,7 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
@@ -142,7 +142,7 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             ));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "POST",
             bucket,
@@ -150,7 +150,8 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             &extra_headers,
             xml_body.as_bytes(),
             Some(&query_params),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(
@@ -178,7 +179,11 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
     ///
     /// CompleteMultipartUpload は POST ボディに completed parts の XML が必須のため、
     /// `PresignedRequest::body` に XML を含めて返す。
-    pub fn presigned(self, expires_in_secs: u64) -> Result<super::PresignedRequest, Error> {
+    pub fn presigned(
+        self,
+        expires_in_secs: u64,
+        now: std::time::SystemTime,
+    ) -> Result<super::PresignedRequest, Error> {
         validate_presign_expires(expires_in_secs)?;
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -192,7 +197,8 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             expires_in_secs,
             &[("uploadId", upload_id)],
             &[],
-        );
+            now,
+        )?;
         Ok(super::PresignedRequest {
             url,
             method: "POST".to_string(),

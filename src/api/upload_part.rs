@@ -110,7 +110,7 @@ impl<'a> UploadPartFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
@@ -171,7 +171,7 @@ impl<'a> UploadPartFluentBuilder<'a> {
             ));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -179,7 +179,8 @@ impl<'a> UploadPartFluentBuilder<'a> {
             &extra_headers,
             body,
             Some(&query_params),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<UploadPartOutput, Error> {
@@ -193,7 +194,11 @@ impl<'a> UploadPartFluentBuilder<'a> {
     }
 
     /// Presigned リクエストを生成する (Sans I/O)
-    pub fn presigned(self, expires_in_secs: u64) -> Result<super::PresignedRequest, Error> {
+    pub fn presigned(
+        self,
+        expires_in_secs: u64,
+        now: std::time::SystemTime,
+    ) -> Result<super::PresignedRequest, Error> {
         validate_presign_expires(expires_in_secs)?;
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -250,7 +255,8 @@ impl<'a> UploadPartFluentBuilder<'a> {
             expires_in_secs,
             &extra_query_params,
             &extra_headers,
-        );
+            now,
+        )?;
         let headers = extra_headers
             .iter()
             .map(|&(k, v)| (k.to_string(), v.to_string()))

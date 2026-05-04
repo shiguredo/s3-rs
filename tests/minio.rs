@@ -28,9 +28,7 @@ use shiguredo_s3::types::{
     CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
     ServerSideEncryptionRule, Tag,
 };
-use shiguredo_s3::{
-    Client, Config, Credentials, HttpDate, PresignedRequest, S3Request, S3Response,
-};
+use shiguredo_s3::{Client, Config, Credentials, PresignedRequest, S3Request, S3Response};
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
@@ -74,6 +72,14 @@ async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
         .expect("failed to get host port");
 
     (container, port)
+}
+
+/// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
+///
+/// shiguredo_s3 は Sans I/O のため `build_request` / `presigned` に
+/// 現在時刻を引数で渡す。テスト側で副作用を 1 箇所に閉じ込める目的。
+fn now() -> std::time::SystemTime {
+    std::time::SystemTime::now()
 }
 
 /// テスト用の Client を構築する
@@ -246,7 +252,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -278,7 +284,7 @@ async fn test_bucket_lifecycle() {
             noncurrent_version_transitions: None,
             abort_incomplete_multipart_upload: None,
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -290,7 +296,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .get_bucket_lifecycle_configuration()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -310,7 +316,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .delete_bucket_lifecycle()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketLifecycleFluentBuilder::parse_response).await;
 
@@ -318,7 +324,7 @@ async fn test_bucket_lifecycle() {
     let request = client
         .get_bucket_lifecycle_configuration()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(
@@ -347,7 +353,7 @@ async fn test_object_put_get_head_delete() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -363,7 +369,7 @@ async fn test_object_put_get_head_delete() {
         .key(key)
         .body(body.to_vec())
         .content_type("text/plain")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put_output = send(
         request,
@@ -378,7 +384,7 @@ async fn test_object_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -395,7 +401,7 @@ async fn test_object_put_get_head_delete() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let head_output = send(
         request,
@@ -412,7 +418,7 @@ async fn test_object_put_get_head_delete() {
         .delete_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -425,7 +431,7 @@ async fn test_object_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -446,7 +452,7 @@ async fn test_list_objects_v2() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -462,7 +468,7 @@ async fn test_list_objects_v2() {
             .bucket(bucket)
             .key(&key)
             .body(format!("content-{i}").into_bytes())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -476,7 +482,7 @@ async fn test_list_objects_v2() {
         .list_objects_v2()
         .bucket(bucket)
         .prefix("dir/")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -492,7 +498,7 @@ async fn test_list_objects_v2() {
         .list_objects_v2()
         .bucket(bucket)
         .delimiter("/")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -523,7 +529,7 @@ async fn test_copy_object() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -537,7 +543,7 @@ async fn test_copy_object() {
         .bucket(bucket)
         .key(src_key)
         .body(body.to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -553,7 +559,7 @@ async fn test_copy_object() {
         .bucket(bucket)
         .key(dst_key)
         .copy_source(&copy_source)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let copy_output = send(
         request,
@@ -568,7 +574,7 @@ async fn test_copy_object() {
         .get_object()
         .bucket(bucket)
         .key(dst_key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -594,7 +600,7 @@ async fn test_delete_objects() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -610,7 +616,7 @@ async fn test_delete_objects() {
             .bucket(bucket)
             .key(key)
             .body(b"data".to_vec())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -628,7 +634,7 @@ async fn test_delete_objects() {
             version_id: None,
         });
     }
-    let request = builder.build_request().unwrap();
+    let request = builder.build_request(now()).unwrap();
     let output = send(
         request,
         shiguredo_s3::api::DeleteObjectsFluentBuilder::parse_response,
@@ -643,7 +649,7 @@ async fn test_delete_objects() {
     let request = client
         .list_objects_v2()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -674,7 +680,7 @@ async fn test_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -688,7 +694,7 @@ async fn test_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -712,7 +718,7 @@ async fn test_multipart_upload() {
         .upload_id(&upload_id)
         .part_number(1)
         .body(part1_data.clone())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let part1_output = send(
         request,
@@ -728,7 +734,7 @@ async fn test_multipart_upload() {
         .upload_id(&upload_id)
         .part_number(2)
         .body(part2_data.clone())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let part2_output = send(
         request,
@@ -755,7 +761,7 @@ async fn test_multipart_upload() {
                 },
             ]),
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     let complete_output = send(
         request,
@@ -770,7 +776,7 @@ async fn test_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -805,7 +811,7 @@ async fn test_abort_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -818,7 +824,7 @@ async fn test_abort_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -833,7 +839,7 @@ async fn test_abort_multipart_upload() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -846,7 +852,7 @@ async fn test_abort_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -868,7 +874,7 @@ async fn test_list_parts() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -881,7 +887,7 @@ async fn test_list_parts() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -902,7 +908,7 @@ async fn test_list_parts() {
             .upload_id(&upload_id)
             .part_number(part_number)
             .body(data)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -917,7 +923,7 @@ async fn test_list_parts() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListPartsFluentBuilder::parse_response).await;
     // レスポンスの upload_id が一致することを確認する
@@ -939,7 +945,7 @@ async fn test_list_parts() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -964,7 +970,7 @@ async fn test_list_multipart_uploads() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -981,7 +987,7 @@ async fn test_list_multipart_uploads() {
             .create_multipart_upload()
             .bucket(bucket)
             .key(*key)
-            .build_request()
+            .build_request(now())
             .unwrap();
         let output = send(
             request,
@@ -995,7 +1001,7 @@ async fn test_list_multipart_uploads() {
     let request = client
         .list_multipart_uploads()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListMultipartUploadsFluentBuilder::parse_response).await;
     let uploads = output.uploads.expect("uploads should exist");
@@ -1011,7 +1017,7 @@ async fn test_list_multipart_uploads() {
             .bucket(bucket)
             .key(*key)
             .upload_id(upload_id)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -1024,7 +1030,7 @@ async fn test_list_multipart_uploads() {
     let request = client
         .list_multipart_uploads()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListMultipartUploadsFluentBuilder::parse_response).await;
     assert!(output.uploads.is_none());
@@ -1050,7 +1056,7 @@ async fn test_bucket_versioning() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1062,7 +1068,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert!(output.status.is_none());
@@ -1072,7 +1078,7 @@ async fn test_bucket_versioning() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Enabled")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -1080,7 +1086,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert_eq!(output.status.as_deref(), Some("Enabled"));
@@ -1090,7 +1096,7 @@ async fn test_bucket_versioning() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Suspended")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -1098,7 +1104,7 @@ async fn test_bucket_versioning() {
     let request = client
         .get_bucket_versioning()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketVersioningFluentBuilder::parse_response).await;
     assert_eq!(output.status.as_deref(), Some("Suspended"));
@@ -1123,7 +1129,7 @@ async fn test_bucket_tagging() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1147,7 +1153,7 @@ async fn test_bucket_tagging() {
                 })
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketTaggingFluentBuilder::parse_response).await;
 
@@ -1155,7 +1161,7 @@ async fn test_bucket_tagging() {
     let request = client
         .get_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketTaggingFluentBuilder::parse_response).await;
     // タグが 2 件返ることを確認する
@@ -1179,7 +1185,7 @@ async fn test_bucket_tagging() {
     let request = client
         .delete_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketTaggingFluentBuilder::parse_response).await;
 
@@ -1187,7 +1193,7 @@ async fn test_bucket_tagging() {
     let request = client
         .get_bucket_tagging()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1216,7 +1222,7 @@ async fn test_presigned_put_get_head_delete() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1230,7 +1236,7 @@ async fn test_presigned_put_get_head_delete() {
         .bucket(bucket)
         .key(key)
         .content_type("text/plain")
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "PUT");
     // presigned URL にボディを付けて送信する
@@ -1248,7 +1254,7 @@ async fn test_presigned_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "GET");
     let response = execute_presigned(&presigned).await;
@@ -1260,7 +1266,7 @@ async fn test_presigned_put_get_head_delete() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "HEAD");
     let response = execute_presigned(&presigned).await;
@@ -1272,7 +1278,7 @@ async fn test_presigned_put_get_head_delete() {
         .delete_object()
         .bucket(bucket)
         .key(key)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "DELETE");
     let response = execute_presigned(&presigned).await;
@@ -1283,7 +1289,7 @@ async fn test_presigned_put_get_head_delete() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1307,7 +1313,7 @@ async fn test_presigned_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1321,7 +1327,7 @@ async fn test_presigned_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -1342,7 +1348,7 @@ async fn test_presigned_multipart_upload() {
         .key(key)
         .upload_id(&upload_id)
         .part_number(1)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "PUT");
     let mut part1_presigned = presigned;
@@ -1362,7 +1368,7 @@ async fn test_presigned_multipart_upload() {
         .key(key)
         .upload_id(&upload_id)
         .part_number(2)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     let mut part2_presigned = presigned;
     part2_presigned.body = part2_data.clone();
@@ -1392,7 +1398,7 @@ async fn test_presigned_multipart_upload() {
                 },
             ]),
         })
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "POST");
     // CompleteMultipartUpload の presigned URL はボディに XML を含む
@@ -1409,7 +1415,7 @@ async fn test_presigned_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let get_output = send(
         request,
@@ -1437,7 +1443,7 @@ async fn test_presigned_expires_validation() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1450,7 +1456,7 @@ async fn test_presigned_expires_validation() {
         .get_object()
         .bucket(bucket)
         .key("test.txt")
-        .presigned(0);
+        .presigned(0, now());
     assert!(result.is_err());
 
     // 604801 秒 (7 日 + 1 秒) はエラーになる
@@ -1458,7 +1464,7 @@ async fn test_presigned_expires_validation() {
         .get_object()
         .bucket(bucket)
         .key("test.txt")
-        .presigned(604801);
+        .presigned(604801, now());
     assert!(result.is_err());
 
     // 1 秒 (最小値) は成功する
@@ -1466,7 +1472,7 @@ async fn test_presigned_expires_validation() {
         .get_object()
         .bucket(bucket)
         .key("test.txt")
-        .presigned(1);
+        .presigned(1, now());
     assert!(result.is_ok());
 
     // 604800 秒 (7 日 = 最大値) は成功する
@@ -1474,7 +1480,7 @@ async fn test_presigned_expires_validation() {
         .get_object()
         .bucket(bucket)
         .key("test.txt")
-        .presigned(604800);
+        .presigned(604800, now());
     assert!(result.is_ok());
 }
 
@@ -1494,7 +1500,7 @@ async fn test_presigned_abort_multipart_upload() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1507,7 +1513,7 @@ async fn test_presigned_abort_multipart_upload() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -1522,7 +1528,7 @@ async fn test_presigned_abort_multipart_upload() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .presigned(3600)
+        .presigned(3600, now())
         .unwrap();
     assert_eq!(presigned.method, "DELETE");
     let response = execute_presigned(&presigned).await;
@@ -1537,7 +1543,7 @@ async fn test_presigned_abort_multipart_upload() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1560,7 +1566,7 @@ async fn test_public_access_block_not_supported() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1576,7 +1582,7 @@ async fn test_public_access_block_not_supported() {
         .ignore_public_acls(true)
         .block_public_policy(true)
         .restrict_public_buckets(true)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(
@@ -1605,7 +1611,7 @@ async fn test_bucket_policy() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1622,7 +1628,7 @@ async fn test_bucket_policy() {
         .put_bucket_policy()
         .bucket(bucket)
         .policy(&policy)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketPolicyFluentBuilder::parse_response).await;
 
@@ -1631,7 +1637,7 @@ async fn test_bucket_policy() {
     let request = client
         .get_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, GetBucketPolicyFluentBuilder::parse_response).await;
     assert!(output.policy.is_some());
@@ -1640,7 +1646,7 @@ async fn test_bucket_policy() {
     let request = client
         .delete_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, DeleteBucketPolicyFluentBuilder::parse_response).await;
 
@@ -1648,7 +1654,7 @@ async fn test_bucket_policy() {
     let request = client
         .get_bucket_policy()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -1672,7 +1678,7 @@ async fn test_conditional_headers_etag() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1685,7 +1691,7 @@ async fn test_conditional_headers_etag() {
         .bucket(bucket)
         .key(key)
         .body(b"conditional".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put_output = send(
         request,
@@ -1700,7 +1706,7 @@ async fn test_conditional_headers_etag() {
         .bucket(bucket)
         .key(key)
         .if_match(&etag)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -1711,7 +1717,7 @@ async fn test_conditional_headers_etag() {
         .bucket(bucket)
         .key(key)
         .if_match("\"invalid-etag\"")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 412);
@@ -1722,7 +1728,7 @@ async fn test_conditional_headers_etag() {
         .bucket(bucket)
         .key(key)
         .if_none_match(&etag)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 304);
@@ -1733,7 +1739,7 @@ async fn test_conditional_headers_etag() {
         .bucket(bucket)
         .key(key)
         .if_none_match("\"different-etag\"")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -1755,7 +1761,7 @@ async fn test_conditional_headers_date() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1768,7 +1774,7 @@ async fn test_conditional_headers_date() {
         .bucket(bucket)
         .key(key)
         .body(b"date-conditional".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1778,26 +1784,26 @@ async fn test_conditional_headers_date() {
 
     // If-Modified-Since に十分古い日時を指定すると 200 が返る
     // (オブジェクトはその日時より後に作成されている)
-    let old_date = HttpDate::from_unix_timestamp(0);
+    let old_date = std::time::SystemTime::UNIX_EPOCH;
     let request = client
         .get_object()
         .bucket(bucket)
         .key(key)
         .if_modified_since(old_date)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
 
     // If-Unmodified-Since に十分古い日時を指定すると 412 が返る
     // (オブジェクトはその日時より後に変更されている)
-    let old_date = HttpDate::from_unix_timestamp(0);
+    let old_date = std::time::SystemTime::UNIX_EPOCH;
     let request = client
         .get_object()
         .bucket(bucket)
         .key(key)
         .if_unmodified_since(old_date)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 412);
@@ -1818,7 +1824,7 @@ async fn test_head_object_conditional_headers() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1831,7 +1837,7 @@ async fn test_head_object_conditional_headers() {
         .bucket(bucket)
         .key(key)
         .body(b"head-conditional".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put_output = send(
         request,
@@ -1846,7 +1852,7 @@ async fn test_head_object_conditional_headers() {
         .bucket(bucket)
         .key(key)
         .if_match(&etag)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -1857,7 +1863,7 @@ async fn test_head_object_conditional_headers() {
         .bucket(bucket)
         .key(key)
         .if_none_match(&etag)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 304);
@@ -1880,7 +1886,7 @@ async fn test_range_request() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1893,7 +1899,7 @@ async fn test_range_request() {
         .bucket(bucket)
         .key(key)
         .body(body.to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1907,7 +1913,7 @@ async fn test_range_request() {
         .bucket(bucket)
         .key(key)
         .range("bytes=0-4")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 206);
@@ -1919,7 +1925,7 @@ async fn test_range_request() {
         .bucket(bucket)
         .key(key)
         .range("bytes=10-15")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 206);
@@ -1941,7 +1947,7 @@ async fn test_custom_metadata() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1957,7 +1963,7 @@ async fn test_custom_metadata() {
         .body(b"with metadata".to_vec())
         .metadata("author", "test-user")
         .metadata("version", "42")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -1970,7 +1976,7 @@ async fn test_custom_metadata() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -1989,7 +1995,7 @@ async fn test_custom_metadata() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2018,7 +2024,7 @@ async fn test_system_metadata() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2035,7 +2041,7 @@ async fn test_system_metadata() {
         .content_type("application/json")
         .content_disposition("attachment; filename=\"test.json\"")
         .cache_control("max-age=3600")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2048,7 +2054,7 @@ async fn test_system_metadata() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -2079,7 +2085,7 @@ async fn test_copy_object_metadata_replace() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2095,7 +2101,7 @@ async fn test_copy_object_metadata_replace() {
         .body(b"copy with replace".to_vec())
         .content_type("text/plain")
         .metadata("env", "original")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2113,7 +2119,7 @@ async fn test_copy_object_metadata_replace() {
         .metadata_directive(shiguredo_s3::MetadataDirective::Replace)
         .content_type("application/octet-stream")
         .metadata("env", "replaced")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2127,7 +2133,7 @@ async fn test_copy_object_metadata_replace() {
         .head_object()
         .bucket(bucket)
         .key(dst_key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2158,7 +2164,7 @@ async fn test_list_objects_v2_pagination() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2174,7 +2180,7 @@ async fn test_list_objects_v2_pagination() {
             .bucket(bucket)
             .key(&key)
             .body(format!("data-{i}").into_bytes())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -2188,7 +2194,7 @@ async fn test_list_objects_v2_pagination() {
         .list_objects_v2()
         .bucket(bucket)
         .max_keys(2)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2208,7 +2214,7 @@ async fn test_list_objects_v2_pagination() {
         .bucket(bucket)
         .max_keys(2)
         .continuation_token(&token)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2228,7 +2234,7 @@ async fn test_list_objects_v2_pagination() {
         .bucket(bucket)
         .max_keys(2)
         .continuation_token(&token)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2256,7 +2262,7 @@ async fn test_list_objects_v2_start_after() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2271,7 +2277,7 @@ async fn test_list_objects_v2_start_after() {
             .bucket(bucket)
             .key(key)
             .body(b"data".to_vec())
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -2285,7 +2291,7 @@ async fn test_list_objects_v2_start_after() {
         .list_objects_v2()
         .bucket(bucket)
         .start_after("a.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2317,7 +2323,7 @@ async fn test_versioned_object_operations() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2329,7 +2335,7 @@ async fn test_versioned_object_operations() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Enabled")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -2339,7 +2345,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .body(b"version-1".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put1 = send(
         request,
@@ -2354,7 +2360,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .body(b"version-2".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     let put2 = send(
         request,
@@ -2372,7 +2378,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .version_id(&version_id_1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2386,7 +2392,7 @@ async fn test_versioned_object_operations() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2401,7 +2407,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .version_id(&version_id_1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2416,7 +2422,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .version_id(&version_id_1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2430,7 +2436,7 @@ async fn test_versioned_object_operations() {
         .bucket(bucket)
         .key(key)
         .version_id(&version_id_1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert_eq!(response.status_code, 404);
@@ -2440,7 +2446,7 @@ async fn test_versioned_object_operations() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2465,7 +2471,7 @@ async fn test_checksum_algorithm() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2480,7 +2486,7 @@ async fn test_checksum_algorithm() {
         .key("crc32c.txt")
         .body(b"crc32c-data".to_vec())
         .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32C)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2496,7 +2502,7 @@ async fn test_checksum_algorithm() {
         .key("sha256.txt")
         .body(b"sha256-data".to_vec())
         .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Sha256)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2510,7 +2516,7 @@ async fn test_checksum_algorithm() {
         .get_object()
         .bucket(bucket)
         .key("crc32c.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2523,7 +2529,7 @@ async fn test_checksum_algorithm() {
         .get_object()
         .bucket(bucket)
         .key("sha256.txt")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2551,7 +2557,7 @@ async fn test_list_multipart_uploads_filter_params() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2567,7 +2573,7 @@ async fn test_list_multipart_uploads_filter_params() {
             .create_multipart_upload()
             .bucket(bucket)
             .key(*key)
-            .build_request()
+            .build_request(now())
             .unwrap();
         let output = send(
             request,
@@ -2582,7 +2588,7 @@ async fn test_list_multipart_uploads_filter_params() {
         .list_multipart_uploads()
         .bucket(bucket)
         .max_uploads(1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -2591,7 +2597,7 @@ async fn test_list_multipart_uploads_filter_params() {
         .list_multipart_uploads()
         .bucket(bucket)
         .prefix("file")
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(response.is_success());
@@ -2603,7 +2609,7 @@ async fn test_list_multipart_uploads_filter_params() {
             .bucket(bucket)
             .key(*key)
             .upload_id(upload_id)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -2628,7 +2634,7 @@ async fn test_list_parts_pagination() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2641,7 +2647,7 @@ async fn test_list_parts_pagination() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -2661,7 +2667,7 @@ async fn test_list_parts_pagination() {
             .upload_id(&upload_id)
             .part_number(part_number)
             .body(data)
-            .build_request()
+            .build_request(now())
             .unwrap();
         send(
             request,
@@ -2677,7 +2683,7 @@ async fn test_list_parts_pagination() {
         .key(key)
         .upload_id(&upload_id)
         .max_parts(1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListPartsFluentBuilder::parse_response).await;
     let parts = output.parts.expect("parts should exist");
@@ -2691,7 +2697,7 @@ async fn test_list_parts_pagination() {
         .key(key)
         .upload_id(&upload_id)
         .part_number_marker(1)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(request, ListPartsFluentBuilder::parse_response).await;
     let parts = output.parts.expect("parts should exist");
@@ -2705,7 +2711,7 @@ async fn test_list_parts_pagination() {
         .bucket(bucket)
         .key(key)
         .upload_id(&upload_id)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2728,7 +2734,7 @@ async fn test_put_object_acl() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2743,7 +2749,7 @@ async fn test_put_object_acl() {
         .key(key)
         .body(b"private data".to_vec())
         .acl(shiguredo_s3::ObjectCannedAcl::Private)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2757,7 +2763,7 @@ async fn test_put_object_acl() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2781,7 +2787,7 @@ async fn test_put_object_storage_class() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2796,7 +2802,7 @@ async fn test_put_object_storage_class() {
         .key(key)
         .body(b"standard class data".to_vec())
         .storage_class(shiguredo_s3::StorageClass::Standard)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2810,7 +2816,7 @@ async fn test_put_object_storage_class() {
         .get_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2824,7 +2830,7 @@ async fn test_put_object_storage_class() {
         .head_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let head_output = send(
         request,
@@ -2859,7 +2865,7 @@ async fn test_object_tagging() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2873,7 +2879,7 @@ async fn test_object_tagging() {
         .bucket(bucket)
         .key(key)
         .body(b"hello".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2898,7 +2904,7 @@ async fn test_object_tagging() {
                 })
                 .build(),
         )
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2911,7 +2917,7 @@ async fn test_object_tagging() {
         .get_object_tagging()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2929,7 +2935,7 @@ async fn test_object_tagging() {
         .delete_object_tagging()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2942,7 +2948,7 @@ async fn test_object_tagging() {
         .get_object_tagging()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -2970,7 +2976,7 @@ async fn test_upload_part_copy() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2984,7 +2990,7 @@ async fn test_upload_part_copy() {
         .bucket(bucket)
         .key(src_key)
         .body(body.to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -2997,7 +3003,7 @@ async fn test_upload_part_copy() {
         .create_multipart_upload()
         .bucket(bucket)
         .key(dst_key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let create_output = send(
         request,
@@ -3014,7 +3020,7 @@ async fn test_upload_part_copy() {
         .upload_id(&upload_id)
         .part_number(1)
         .copy_source(format!("{bucket}/{src_key}"))
-        .build_request()
+        .build_request(now())
         .unwrap();
     let copy_output = send(
         request,
@@ -3035,7 +3041,7 @@ async fn test_upload_part_copy() {
                 part_number: Some(1),
             }]),
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3048,7 +3054,7 @@ async fn test_upload_part_copy() {
         .get_object()
         .bucket(bucket)
         .key(dst_key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -3074,7 +3080,7 @@ async fn test_list_object_versions() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3087,7 +3093,7 @@ async fn test_list_object_versions() {
         .put_bucket_versioning()
         .bucket(bucket)
         .status("Enabled")
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(request, PutBucketVersioningFluentBuilder::parse_response).await;
 
@@ -3097,7 +3103,7 @@ async fn test_list_object_versions() {
         .bucket(bucket)
         .key(key)
         .body(b"v1".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3110,7 +3116,7 @@ async fn test_list_object_versions() {
         .bucket(bucket)
         .key(key)
         .body(b"v2".to_vec())
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3123,7 +3129,7 @@ async fn test_list_object_versions() {
         .delete_object()
         .bucket(bucket)
         .key(key)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3135,7 +3141,7 @@ async fn test_list_object_versions() {
     let request = client
         .list_object_versions()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     let output = send(
         request,
@@ -3167,7 +3173,7 @@ async fn test_bucket_cors_not_supported() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3187,7 +3193,7 @@ async fn test_bucket_cors_not_supported() {
             max_age_seconds: None,
             expose_headers: None,
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     assert!(
@@ -3211,7 +3217,7 @@ async fn test_bucket_encryption() {
     let request = client
         .create_bucket()
         .bucket(bucket)
-        .build_request()
+        .build_request(now())
         .unwrap();
     send(
         request,
@@ -3230,7 +3236,7 @@ async fn test_bucket_encryption() {
             }),
             bucket_key_enabled: None,
         })
-        .build_request()
+        .build_request(now())
         .unwrap();
     let response = execute(request).await;
     // MinIO は KMS 未設定時に 501 を返すか、設定済みなら 200 を返す

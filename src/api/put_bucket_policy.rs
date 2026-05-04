@@ -49,7 +49,7 @@ impl<'a> PutBucketPolicyFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let policy = required(self.policy.as_deref(), "policy")?;
 
@@ -67,7 +67,7 @@ impl<'a> PutBucketPolicyFluentBuilder<'a> {
             extra_headers.push((header_name, &computed_checksum));
         }
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "PUT",
             bucket,
@@ -75,7 +75,8 @@ impl<'a> PutBucketPolicyFluentBuilder<'a> {
             &extra_headers,
             policy.as_bytes(),
             Some(&[("policy", "")]),
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<PutBucketPolicyOutput, Error> {

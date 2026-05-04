@@ -6,7 +6,9 @@
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{ChecksumMode, HeadObjectOutput, HttpDate};
+use std::time::SystemTime;
+
+use crate::types::{ChecksumMode, HeadObjectOutput};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, required, validate_presign_expires,
@@ -20,8 +22,8 @@ pub struct HeadObjectFluentBuilder<'a> {
     part_number: Option<i32>,
     if_match: Option<String>,
     if_none_match: Option<String>,
-    if_modified_since: Option<HttpDate>,
-    if_unmodified_since: Option<HttpDate>,
+    if_modified_since: Option<SystemTime>,
+    if_unmodified_since: Option<SystemTime>,
     sse_customer_algorithm: Option<String>,
     sse_customer_key: Option<String>,
     version_id: Option<String>,
@@ -88,16 +90,26 @@ impl<'a> HeadObjectFluentBuilder<'a> {
     /// 指定日時以降に変更されている場合のみメタデータを返す
     ///
     /// 変更されていない場合は 304 Not Modified が返される。
-    pub fn if_modified_since(mut self, date: HttpDate) -> Self {
-        self.if_modified_since = Some(date);
+    pub fn if_modified_since(mut self, input: SystemTime) -> Self {
+        self.if_modified_since = Some(input);
+        self
+    }
+
+    pub fn set_if_modified_since(mut self, input: Option<SystemTime>) -> Self {
+        self.if_modified_since = input;
         self
     }
 
     /// 指定日時以降に変更されていない場合のみメタデータを返す
     ///
     /// 変更されている場合は 412 Precondition Failed が返される。
-    pub fn if_unmodified_since(mut self, date: HttpDate) -> Self {
-        self.if_unmodified_since = Some(date);
+    pub fn if_unmodified_since(mut self, input: SystemTime) -> Self {
+        self.if_unmodified_since = Some(input);
+        self
+    }
+
+    pub fn set_if_unmodified_since(mut self, input: Option<SystemTime>) -> Self {
+        self.if_unmodified_since = input;
         self
     }
 
@@ -134,7 +146,7 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
-    pub fn build_request(&self) -> Result<S3Request, Error> {
+    pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
 
@@ -148,11 +160,15 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         if let Some(ref v) = self.if_none_match {
             extra_headers.push(("if-none-match", v.as_str()));
         }
-        if let Some(ref v) = self.if_modified_since {
-            extra_headers.push(("if-modified-since", v.as_str()));
+        let if_modified_since_str;
+        if let Some(t) = self.if_modified_since {
+            if_modified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push(("if-modified-since", if_modified_since_str.as_str()));
         }
-        if let Some(ref v) = self.if_unmodified_since {
-            extra_headers.push(("if-unmodified-since", v.as_str()));
+        let if_unmodified_since_str;
+        if let Some(t) = self.if_unmodified_since {
+            if_unmodified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push(("if-unmodified-since", if_unmodified_since_str.as_str()));
         }
         if let Some(ref v) = self.checksum_mode {
             extra_headers.push(("x-amz-checksum-mode", v.as_str()));
@@ -194,7 +210,7 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             Some(query_params.as_slice())
         };
 
-        Ok(build_signed_request(
+        build_signed_request(
             &self.client.config_ref(),
             "HEAD",
             bucket,
@@ -202,7 +218,8 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             &extra_headers,
             b"",
             query,
-        ))
+            now,
+        )
     }
 
     pub fn parse_response(response: &super::S3Response) -> Result<HeadObjectOutput, Error> {
@@ -222,7 +239,10 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             content_type: response.get_header("content-type").map(String::from),
             content_length: response.content_length().map(|v| v as i64),
             e_tag: response.get_header("etag").map(String::from),
-            last_modified: response.get_header("last-modified").map(String::from),
+            last_modified: response
+                .get_header("last-modified")
+                .map(crate::datetime::parse_imf_fixdate)
+                .transpose()?,
             storage_class: response
                 .get_header("x-amz-storage-class")
                 .map(crate::types::StorageClass::from),
@@ -245,7 +265,11 @@ impl<'a> HeadObjectFluentBuilder<'a> {
     }
 
     /// Presigned リクエストを生成する (Sans I/O)
-    pub fn presigned(self, expires_in_secs: u64) -> Result<super::PresignedRequest, Error> {
+    pub fn presigned(
+        self,
+        expires_in_secs: u64,
+        now: std::time::SystemTime,
+    ) -> Result<super::PresignedRequest, Error> {
         validate_presign_expires(expires_in_secs)?;
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
@@ -286,7 +310,8 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             expires_in_secs,
             &extra_query_params,
             &extra_headers,
-        );
+            now,
+        )?;
         let headers = extra_headers
             .iter()
             .map(|&(k, v)| (k.to_string(), v.to_string()))
