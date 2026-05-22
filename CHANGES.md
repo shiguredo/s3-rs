@@ -144,3 +144,5 @@
   - @voluntas
 - docs/AWS_SDK_RUST.md の対応方針表を再分類する (「未対応 (互換性のため対応予定)」「入力は対応予定無し、出力は対応」「対応予定無し」維持の 3 カテゴリに整理)
   - @voluntas
+- RustFS 統合テストで使うアクセスキー / シークレットキーを `rustfsadmin` から `devadmin` に変更する (上流 `rustfs/rustfs` の `docker-compose.yml` で使用されている値に追従。最新の RustFS は `rustfsadmin` をデフォルト資格情報として non-loopback リスナーで拒否するためコンテナが起動しなくなっていた)
+  - @Hexa

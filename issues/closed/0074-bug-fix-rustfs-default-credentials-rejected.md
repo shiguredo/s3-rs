@@ -1,6 +1,7 @@
 # RustFS 統合テストが `rustfs/rustfs:latest` の更新でデフォルト資格情報拒否により全件失敗する
 
 - Created: 2026-05-22
+- Completed: 2026-05-22
 - Model: Opus 4.7 1M
 
 ## 概要
@@ -46,3 +47,7 @@ Starting: /usr/bin/rustfs  /data
 ## 補足
 
 本 issue は AWS S3 API 仕様ではなく RustFS テスト基盤の問題のため、`AWS S3 API Reference` の URL は記載しない。
+
+## 解決方法
+
+`tests/rustfs.rs` の `ACCESS_KEY` / `SECRET_KEY` 定数を `rustfsadmin` から `devadmin` に変更し、上流 `rustfs/rustfs` リポジトリの `docker-compose.yml` で使用されている値に追従した。あわせて両定数のコメントを「`rustfs/rustfs` リポジトリの docker-compose.yml で使用されている値に合わせている」に更新した。`CHANGES.md` の `### misc` セクションにも変更内容を追記した。`latest` タグの追従は維持し、起動時の `[FATAL]` が解消されることを `cargo test --test rustfs` で確認した (18 件 PASS, 9.43s)。

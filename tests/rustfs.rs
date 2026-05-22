@@ -47,12 +47,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 // -------------------------------------------------------
 
 /// RustFS のアクセスキー
-/// docker-compose.yml のデフォルト値に合わせている
-const ACCESS_KEY: &str = "rustfsadmin";
+/// rustfs/rustfs リポジトリの docker-compose.yml で使用されている値に合わせている
+const ACCESS_KEY: &str = "devadmin";
 
 /// RustFS のシークレットキー
-/// docker-compose.yml のデフォルト値に合わせている
-const SECRET_KEY: &str = "rustfsadmin";
+/// rustfs/rustfs リポジトリの docker-compose.yml で使用されている値に合わせている
+const SECRET_KEY: &str = "devadmin";
 
 // -------------------------------------------------------
 // テスト用ヘルパー
