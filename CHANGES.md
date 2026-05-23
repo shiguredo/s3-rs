@@ -134,6 +134,10 @@
 
 ### misc
 
+- 依存クレートを更新する (`shiguredo_http11` 2026.2 → 2026.5)
+  - @voluntas
+- s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.5.0 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
+  - @voluntas
 - 依存クレートを更新する (`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11、`shiguredo_http11` 2026.1 → 2026.2)
   - @voluntas
 - `crc-fast` を `~1.9` に固定する (1.10 が MSRV 1.89 を要求するため `rust-version = "1.88"` を維持する)

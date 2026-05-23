@@ -14,7 +14,7 @@
 //! MalformedXML (400) を返す。aws-cli でも同じ結果になることを確認済み。
 //! 該当テストでは 400 が返ることを明示的に検証する。
 
-use shiguredo_http11::ResponseDecoder;
+use shiguredo_http11::{HttpHead, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
     DeleteBucketTaggingFluentBuilder, GetBucketEncryptionFluentBuilder,
@@ -102,7 +102,8 @@ fn build_client(port: u16) -> Client {
 /// S3Request を HTTP/1.1 で送信して S3Response を返す
 ///
 /// shiguredo_http11 の ResponseDecoder を使って TCP ストリームからレスポンスを読む。
-/// HEAD レスポンスのようにボディを持たないレスポンスは expect_no_body フラグで制御する。
+/// HEAD レスポンスのようにボディを持たないレスポンスは
+/// `ResponseDecoder::set_request_method` でリクエストメソッドを通知する。
 async fn execute(s3_request: S3Request) -> S3Response {
     let addr = format!("{}:{}", s3_request.host, s3_request.port);
     let tcp = tokio::net::TcpStream::connect(&addr)
@@ -117,10 +118,7 @@ async fn execute(s3_request: S3Request) -> S3Response {
         .expect("failed to write request");
 
     let mut decoder = ResponseDecoder::new();
-    if s3_request.expect_no_body {
-        // HEAD レスポンスはボディなしなので EOF を待たずにパースする
-        decoder.set_expect_no_body(true);
-    }
+    decoder.set_request_method(&s3_request.method);
 
     let mut buf = [0u8; 8192];
     loop {
@@ -142,22 +140,25 @@ async fn execute(s3_request: S3Request) -> S3Response {
 
 /// S3Request を shiguredo_http11 の Request に変換してエンコードする
 fn encode_request(s3_request: &S3Request) -> Vec<u8> {
-    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri);
+    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri)
+        .expect("failed to build request");
     for (name, value) in &s3_request.headers {
-        request.add_header(name, value);
+        request
+            .add_header(name, value)
+            .expect("failed to add header");
     }
     if !s3_request.body.is_empty() {
-        request.body = Some(s3_request.body.clone());
+        request.set_body(s3_request.body.clone());
     }
-    request.try_encode().expect("failed to encode request")
+    request.encode().expect("failed to encode request")
 }
 
 /// shiguredo_http11 の Response を S3Response に変換する
 fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
     S3Response {
-        status_code: response.status_code,
-        headers: response.headers,
-        body: response.body.unwrap_or_default(),
+        status_code: response.status_code(),
+        headers: response.headers().to_vec(),
+        body: response.body_bytes().unwrap_or_default().to_vec(),
     }
 }
 
@@ -181,19 +182,23 @@ async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
         .await
         .expect("failed to connect for presigned request");
 
-    let mut request = shiguredo_http11::Request::new(&presigned.method, &uri);
-    request.add_header("host", authority);
+    let mut request = shiguredo_http11::Request::new(&presigned.method, &uri)
+        .expect("failed to build presigned request");
+    request
+        .add_header("host", authority)
+        .expect("failed to add host header");
     for (name, value) in &presigned.headers {
-        request.add_header(name, value);
+        request
+            .add_header(name, value)
+            .expect("failed to add presigned header");
     }
     if !presigned.body.is_empty() {
-        request.body = Some(presigned.body.clone());
+        request.set_body(presigned.body.clone());
     }
     let encoded = request
-        .try_encode()
+        .encode()
         .expect("failed to encode presigned request");
 
-    let expect_no_body = presigned.method == "HEAD";
     let (mut reader, mut writer) = tokio::io::split(tcp);
     writer
         .write_all(&encoded)
@@ -201,9 +206,7 @@ async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
         .expect("failed to write presigned request");
 
     let mut decoder = ResponseDecoder::new();
-    if expect_no_body {
-        decoder.set_expect_no_body(true);
-    }
+    decoder.set_request_method(&presigned.method);
 
     let mut buf = [0u8; 8192];
     loop {

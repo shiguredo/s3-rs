@@ -5,7 +5,7 @@
 use std::sync::{Arc, Mutex};
 
 use rustls::pki_types::ServerName;
-use shiguredo_http11::ResponseDecoder;
+use shiguredo_http11::{HttpHead, ResponseDecoder};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
@@ -79,14 +79,14 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 pub(crate) fn encode_request(
     s3_request: &S3Request,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri);
+    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri)?;
     for (name, value) in &s3_request.headers {
-        request.add_header(name, value);
+        request.add_header(name, value)?;
     }
     if !s3_request.body.is_empty() {
-        request.body = Some(s3_request.body.clone());
+        request.set_body(s3_request.body.clone());
     }
-    Ok(request.try_encode()?)
+    Ok(request.encode()?)
 }
 
 /// S3Request を送信して S3Response を返す
@@ -101,9 +101,7 @@ pub(crate) async fn execute(
     let encoded = encode_request(&s3_request)?;
 
     let mut decoder = ResponseDecoder::new();
-    if s3_request.expect_no_body {
-        decoder.set_expect_no_body(true);
-    }
+    decoder.set_request_method(&s3_request.method);
 
     if s3_request.https {
         let server_name: ServerName<'_> = ServerName::try_from(s3_request.host.clone())
@@ -145,9 +143,9 @@ pub(crate) async fn read_response<R: AsyncReadExt + Unpin>(
 /// shiguredo_http11::Response を S3Response に変換する
 fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
     S3Response {
-        status_code: response.status_code,
-        headers: response.headers,
-        body: response.body.unwrap_or_default(),
+        status_code: response.status_code(),
+        headers: response.headers().to_vec(),
+        body: response.body_bytes().unwrap_or_default().to_vec(),
     }
 }
 
@@ -234,12 +232,10 @@ impl ConnectionPool {
 pub(crate) async fn execute_on_stream(
     stream: &mut PooledStream,
     encoded: &[u8],
-    expect_no_body: bool,
+    request_method: &str,
 ) -> Result<S3Response, Box<dyn std::error::Error + Send + Sync>> {
     let mut decoder = ResponseDecoder::new();
-    if expect_no_body {
-        decoder.set_expect_no_body(true);
-    }
+    decoder.set_request_method(request_method);
     match stream {
         PooledStream::Tls(tls) => {
             tls.write_all(encoded).await?;
@@ -261,7 +257,7 @@ pub(crate) async fn execute_pooled(
 ) -> Result<S3Response, Box<dyn std::error::Error + Send + Sync>> {
     let encoded = encode_request(&s3_request)?;
     let mut stream = pool.acquire().await?;
-    let result = execute_on_stream(&mut stream, &encoded, s3_request.expect_no_body).await;
+    let result = execute_on_stream(&mut stream, &encoded, &s3_request.method).await;
     if result.is_ok() {
         pool.release(stream);
     }
