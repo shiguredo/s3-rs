@@ -50,6 +50,4 @@ issue 0059 で主要 8 種を enum 化したが、Object Lock / Versioning / Own
 
 ## 解決方法
 
-1. `types.rs` に enum 定義
-2. builder / parse / XML serialize を更新
-3. `lib.rs` re-export 追加
+issue 0059 の設計方針（「全 enum を一気に導入するのは Premature Optimization のため、利用頻度の高い 8 種に絞る」「残りは関連機能対応時に併せて導入する」）と矛盾するため不要と判断。ObjectLock 本格対応や Directory Bucket 対応などの関連機能を実装する際に、その一部として enum 化を導入するのが正しいタイミング。

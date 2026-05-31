@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-05-25
 - Model: Composer 2.5
-- Branch: feature/fix-cors-rule-id-roundtrip
+- Polished: 2026-05-31
 
 ## 目的
 
@@ -21,9 +21,21 @@ CORS ルール ID は運用上ルール識別に使われる。PUT 後 GET で I
 
 ## 設計方針
 
-- `build_cors_xml` で `rule.id` が `Some` のとき `<ID>` を出力する
-- `extract_cors_rules` に `"ID"` 分岐を追加する
-- aws-sdk-rust の `CorsRule.id` と同じ意味論とする
+### ID 要素の XML シリアライズ
+
+`build_cors_xml` で `rule.id` が `Some` のとき `<ID>` を出力する。AWS S3 API の XML スキーマでは `<ID>` は `<AllowedOrigin>` より前に配置されるため、`w.start("CORSRule")` の直後に出力する。
+
+### ID 要素の XML パース
+
+`extract_cors_rules` に `let mut id: Option<String> = None;` を宣言し、`CORSRule` スタート時に `None` にリセットする。`"ID"` 分岐を追加し、`id = Some(current_text.clone())` を設定する。`CorsRule` 構築時に `id` フィールドに設定する。
+
+### ID のバリデーション
+
+AWS S3 API Reference の「The value cannot be longer than 255 characters.」に基づき、`CorsRuleBuilder::id` で 255 文字超えの場合に `Error::InvalidInput` を返すバリデーションを追加する。空文字列は許容する（AWS S3 API 仕様で禁止されていないため）。
+
+### 0075 との関係
+
+issue 0075 で `extract_cors_rules` の戻り値を `Result<Vec<CorsRule>, Error>` に変更する。0076 は 0075 の完了後に実装し、`ID` パース失敗時は `Error::InvalidResponse` を返す。
 
 ## AWS S3 API Reference
 
@@ -36,10 +48,12 @@ CORS ルール ID は運用上ルール識別に使われる。PUT 後 GET で I
 
 - ID 付き CORS ルールを PUT し GET すると同一 ID が返る
 - ID なしルールの既存挙動が維持される
+- 255 文字超えの ID で `Error::InvalidResponse` が返る
 - MinIO / RustFS 統合テストで CORS ラウンドトリップを検証する
 
 ## 解決方法
 
-1. `build_cors_xml` に `if let Some(ref id) = rule.id { w.element("ID", id); }` を追加
-2. `extract_cors_rules` に `"ID" => id = Some(current_text.clone())` を追加
-3. 統合テストで ID 付きルールの PUT / GET を追加
+1. `types.rs` の `CorsRuleBuilder::id` に 255 文字制限バリデーションを追加
+2. `put_bucket_cors.rs` の `build_cors_xml` で `w.start("CORSRule")` の直後に `ID` を出力
+3. `get_bucket_cors.rs` の `extract_cors_rules` に `id` 変数と `"ID"` 分岐を追加
+4. 統合テストで ID 付きルールの PUT / GET を追加

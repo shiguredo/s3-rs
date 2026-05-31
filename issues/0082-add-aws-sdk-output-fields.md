@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-05-25
 - Model: Composer 2.5
-- Branch: feature/add-aws-sdk-output-fields
+- Polished: 2026-05-31
 
 ## 目的
 
