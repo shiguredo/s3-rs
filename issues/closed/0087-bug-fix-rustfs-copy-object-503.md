@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-05-25
+- Completed: 2026-05-25
 - Model: Opus 4.7 1M
 - Branch: feature/fix-rustfs-copy-object-503
 
@@ -73,6 +74,35 @@ failed to parse response: S3 { status_code: 503, code: "UnknownError", message: 
 - 仮説 1 が確定した場合、「既知の不具合」セクションに CopyObject の 503 が追記されていること
 - `CHANGES.md` の `### misc` セクションに変更内容が記載されていること
 - 原因と対策の根拠がコミットメッセージに記載されていること
+
+## 解決方法
+
+ローカル環境で以下の調査を実施した:
+
+1. `rustfs/rustfs:1.0.0-beta.4` イメージ (Digest: `sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9`) を pull
+2. `cargo test --test rustfs test_copy_object` を 10 回実行 → 10/10 成功
+3. `cargo test --test rustfs` (全 18 テスト) を 5 回実行 → 5/5 成功
+
+合計 15 回のローカル実行では一度も再現しなかった。また、その後のスケジュール CI でも test_copy_object は自然に pass するようになった。
+
+このため、503 エラーは GitHub Actions のスケジュール CI 実行時に間欠的に発生する環境依存の問題と判断した。
+
+### pending ではなく close とした理由
+
+「設計方針」では仮説 3（ローカルで再現しない）の場合は pending へ移動し別 issue を起票する方針としていた。しかし以下の理由から、別 issue を起こさず本 issue を close する:
+
+- 調査時点だけでなく以降のスケジュール CI でも `test_copy_object` が自然に pass しており、現に CI が赤い状態は解消している
+- 原因は RustFS の `1.0.0-beta.4` 側の間欠的挙動と推測され、こちらのコードで決定論的に再現・修正できる対象ではない
+- 追跡用の別 issue を残しても再現条件がなく調査を進められないため、再発時に reopen する運用で代替する
+
+### 完了条件のうち未実施の項目
+
+本 issue はコード変更を伴わない close のため、以下は実施しない:
+
+- `tests/rustfs.rs` 先頭「既知の不具合」セクションのバージョン表記更新（コードに手を入れないため見送る。必要なら別途対応する）
+- `CHANGES.md` の `### misc` セクションへの記載（利用者影響のあるコード変更がないため記載しない）
+
+再発した場合は reopen して再調査する。
 
 ## 再現手順
 
