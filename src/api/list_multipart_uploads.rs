@@ -152,6 +152,11 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             } else {
                 Some(common_prefixes)
             },
+            encoding_type: crate::xml::extract_element(body_text, "EncodingType")?
+                .map(|v| EncodingType::from(v.as_str())),
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
         })
     }
 }

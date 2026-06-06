@@ -145,6 +145,8 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             } else {
                 Some(common_prefixes)
             },
+            encoding_type: crate::xml::extract_element(body_text, "EncodingType")?
+                .map(|v| EncodingType::from(v.as_str())),
             key_count: crate::xml::extract_element(body_text, "KeyCount")?
                 .and_then(|v| v.parse::<i32>().ok()),
             continuation_token: crate::xml::extract_element(body_text, "ContinuationToken")?,
