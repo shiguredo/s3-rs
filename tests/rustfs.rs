@@ -18,7 +18,7 @@
 //! - ListMultipartUploads: 進行中アップロードが空リストで返る
 //! - DeletePublicAccessBlock 後の GetPublicAccessBlock: 404 ではなく 500 が返る
 
-use shiguredo_http11::{HttpHead, ResponseDecoder};
+use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
     DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
@@ -159,11 +159,13 @@ async fn execute(s3_request: S3Request) -> S3Response {
 
 /// S3Request を shiguredo_http11 の Request に変換してエンコードする
 fn encode_request(s3_request: &S3Request) -> Vec<u8> {
-    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri)
-        .expect("failed to build request");
+    let method = Method::new(&s3_request.method).expect("failed to parse method");
+    let mut request =
+        shiguredo_http11::Request::new(method, &s3_request.uri).expect("failed to build request");
     for (name, value) in &s3_request.headers {
+        let header_name = HeaderName::new(name).expect("failed to parse header name");
         request
-            .add_header(name, value)
+            .add_header(header_name, value)
             .expect("failed to add header");
     }
     if !s3_request.body.is_empty() {
@@ -174,9 +176,14 @@ fn encode_request(s3_request: &S3Request) -> Vec<u8> {
 
 /// shiguredo_http11 の Response を S3Response に変換する
 fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(name, value)| (name.to_string(), value.clone()))
+        .collect();
     S3Response {
         status_code: response.status_code(),
-        headers: response.headers().to_vec(),
+        headers,
         body: response.body_bytes().unwrap_or_default().to_vec(),
     }
 }

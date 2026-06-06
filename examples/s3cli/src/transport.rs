@@ -5,7 +5,7 @@
 use std::sync::{Arc, Mutex};
 
 use rustls::pki_types::ServerName;
-use shiguredo_http11::{HttpHead, ResponseDecoder};
+use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::TlsConnector;
 
@@ -79,9 +79,11 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 pub(crate) fn encode_request(
     s3_request: &S3Request,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri)?;
+    let method = Method::new(&s3_request.method)?;
+    let mut request = shiguredo_http11::Request::new(method, &s3_request.uri)?;
     for (name, value) in &s3_request.headers {
-        request.add_header(name, value)?;
+        let header_name = HeaderName::new(name)?;
+        request.add_header(header_name, value)?;
     }
     if !s3_request.body.is_empty() {
         request.set_body(s3_request.body.clone());
@@ -142,9 +144,14 @@ pub(crate) async fn read_response<R: AsyncReadExt + Unpin>(
 
 /// shiguredo_http11::Response を S3Response に変換する
 fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(name, value)| (name.to_string(), value.clone()))
+        .collect();
     S3Response {
         status_code: response.status_code(),
-        headers: response.headers().to_vec(),
+        headers,
         body: response.body_bytes().unwrap_or_default().to_vec(),
     }
 }

@@ -14,7 +14,7 @@
 //! MalformedXML (400) を返す。aws-cli でも同じ結果になることを確認済み。
 //! 該当テストでは 400 が返ることを明示的に検証する。
 
-use shiguredo_http11::{HttpHead, ResponseDecoder};
+use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
     DeleteBucketTaggingFluentBuilder, GetBucketEncryptionFluentBuilder,
@@ -140,11 +140,13 @@ async fn execute(s3_request: S3Request) -> S3Response {
 
 /// S3Request を shiguredo_http11 の Request に変換してエンコードする
 fn encode_request(s3_request: &S3Request) -> Vec<u8> {
-    let mut request = shiguredo_http11::Request::new(&s3_request.method, &s3_request.uri)
-        .expect("failed to build request");
+    let method = Method::new(&s3_request.method).expect("failed to parse method");
+    let mut request =
+        shiguredo_http11::Request::new(method, &s3_request.uri).expect("failed to build request");
     for (name, value) in &s3_request.headers {
+        let header_name = HeaderName::new(name).expect("failed to parse header name");
         request
-            .add_header(name, value)
+            .add_header(header_name, value)
             .expect("failed to add header");
     }
     if !s3_request.body.is_empty() {
@@ -155,9 +157,14 @@ fn encode_request(s3_request: &S3Request) -> Vec<u8> {
 
 /// shiguredo_http11 の Response を S3Response に変換する
 fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(name, value)| (name.to_string(), value.clone()))
+        .collect();
     S3Response {
         status_code: response.status_code(),
-        headers: response.headers().to_vec(),
+        headers,
         body: response.body_bytes().unwrap_or_default().to_vec(),
     }
 }
@@ -182,14 +189,16 @@ async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
         .await
         .expect("failed to connect for presigned request");
 
-    let mut request = shiguredo_http11::Request::new(&presigned.method, &uri)
-        .expect("failed to build presigned request");
+    let method = Method::new(&presigned.method).expect("failed to parse presigned method");
+    let mut request =
+        shiguredo_http11::Request::new(method, &uri).expect("failed to build presigned request");
     request
         .add_header("host", authority)
         .expect("failed to add host header");
     for (name, value) in &presigned.headers {
+        let header_name = HeaderName::new(name).expect("failed to parse presigned header name");
         request
-            .add_header(name, value)
+            .add_header(header_name, value)
             .expect("failed to add presigned header");
     }
     if !presigned.body.is_empty() {
