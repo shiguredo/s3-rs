@@ -436,6 +436,9 @@ impl<'a> GetObjectFluentBuilder<'a> {
             tag_count: response
                 .get_header("x-amz-tagging-count")
                 .and_then(|s| s.parse::<i32>().ok()),
+            website_redirect_location: response
+                .get_header("x-amz-website-redirect-location")
+                .map(String::from),
         })
     }
 

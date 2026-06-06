@@ -331,6 +331,9 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             request_charged: response
                 .get_header("x-amz-request-charged")
                 .map(String::from),
+            website_redirect_location: response
+                .get_header("x-amz-website-redirect-location")
+                .map(String::from),
         })
     }
 

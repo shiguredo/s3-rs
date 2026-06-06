@@ -18,6 +18,16 @@
 - [ADD] ConfigBuilder に `set_region`、`set_credentials_provider`、`set_endpoint`、`set_force_path_style`、`set_ignore_cert_check` を追加する
   - @voluntas
 - [ADD] HeadObjectFluentBuilder / DeleteObjectFluentBuilder / ListPartsFluentBuilder に `set_*` メソッドを追加する
+- [ADD] DeleteObjectOutput に `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] CreateMultipartUploadOutput に `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] ListObjectsV2Output に `encoding_type` フィールドを追加する
+  - @voluntas
+- [ADD] ListMultipartUploadsOutput に `encoding_type` および `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] GetObjectOutput / HeadObjectOutput に `website_redirect_location` フィールドを追加する
+>>>>>>> origin/develop
   - @voluntas
 
 - [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する

@@ -174,6 +174,8 @@ pub struct GetObjectOutput {
     pub request_charged: Option<String>,
     /// `x-amz-tagging-count`
     pub tag_count: Option<i32>,
+    /// `x-amz-website-redirect-location`
+    pub website_redirect_location: Option<String>,
 }
 
 /// HeadObject の結果
@@ -224,6 +226,8 @@ pub struct HeadObjectOutput {
     pub bucket_key_enabled: Option<bool>,
     /// `x-amz-request-charged`
     pub request_charged: Option<String>,
+    /// `x-amz-website-redirect-location`
+    pub website_redirect_location: Option<String>,
 }
 
 /// PutObject の結果
@@ -252,6 +256,8 @@ pub struct PutObjectOutput {
 pub struct DeleteObjectOutput {
     pub delete_marker: Option<bool>,
     pub version_id: Option<String>,
+    /// `x-amz-request-charged`
+    pub request_charged: Option<String>,
 }
 
 /// CreateMultipartUpload の結果
@@ -260,6 +266,8 @@ pub struct CreateMultipartUploadOutput {
     pub bucket: Option<String>,
     pub key: Option<String>,
     pub upload_id: Option<String>,
+    /// `x-amz-request-charged`
+    pub request_charged: Option<String>,
 }
 
 /// UploadPart の結果
@@ -477,6 +485,8 @@ pub struct ListObjectsV2Output {
     pub delimiter: Option<String>,
     pub max_keys: Option<i32>,
     pub common_prefixes: Option<Vec<CommonPrefix>>,
+    /// `<EncodingType>` 要素 (url)
+    pub encoding_type: Option<EncodingType>,
     pub key_count: Option<i32>,
     pub continuation_token: Option<String>,
     pub next_continuation_token: Option<String>,
@@ -1010,6 +1020,10 @@ pub struct ListMultipartUploadsOutput {
     pub is_truncated: Option<bool>,
     pub uploads: Option<Vec<MultipartUpload>>,
     pub common_prefixes: Option<Vec<CommonPrefix>>,
+    /// `<EncodingType>` 要素 (url)
+    pub encoding_type: Option<EncodingType>,
+    /// `x-amz-request-charged`
+    pub request_charged: Option<String>,
 }
 
 /// 進行中のマルチパートアップロード
