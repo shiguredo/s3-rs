@@ -11,7 +11,15 @@
 
 ## develop
 
+- [CHANGE] `extract_metadata()` でメタデータキーを小文字化していた挙動を修正し、元のヘッダー名のキーケースを保持するように変更する
+  - @voluntas
 - [CHANGE] PutObjectLegalHold の `legal_hold_status` 未指定時の暗黙 "ON" フォールバックを廃止し、必須パラメータに変更する
+  - @voluntas
+- [FIX] `required()` が空文字列を受理する問題を修正し、空文字列の場合に `Error::InvalidInput` を返すようにする
+  - @voluntas
+- [FIX] `ConfigBuilder::build()` が空リージョン文字列を受理する問題を修正する
+  - @voluntas
+- [FIX] `CopyObject` / `UploadPartCopy` の `copy_source` で先頭 `/` が二重になる問題を修正し、`strip_prefix('/')` で正規化する
   - @voluntas
 - [FIX] PutBucketEncryption / PutBucketCors / PutBucketLifecycleConfiguration / PutBucketOwnershipControls でルール空のままリクエストを構築できる問題を修正する
   - @voluntas

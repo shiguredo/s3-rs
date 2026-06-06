@@ -118,11 +118,14 @@ impl ConfigBuilder {
 
     /// `Config` を構築する
     ///
-    /// region と credentials_provider が未設定の場合はエラーを返す
+    /// region と credentials_provider が未設定または空文字列の場合はエラーを返す
     pub fn build(self) -> Result<Config, Error> {
         let region = self
             .region
             .ok_or_else(|| Error::InvalidInput("region is required".to_string()))?;
+        if region.is_empty() {
+            return Err(Error::InvalidInput("region must not be empty".to_string()));
+        }
         let credentials_provider = self
             .credentials_provider
             .ok_or_else(|| Error::InvalidInput("credentials_provider is required".to_string()))?;

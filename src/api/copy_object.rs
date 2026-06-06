@@ -286,9 +286,9 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         let key = required(self.key.as_deref(), "key")?;
         let copy_source = required(self.copy_source.as_deref(), "copy_source")?;
 
-        // AWS SDK は copy_source をそのままヘッダーに設定する
-        // 利用者がエンコード済みの値を渡す前提
-        let copy_source_header = format!("/{copy_source}");
+        // 先頭の / を正規化して二重スラッシュを防ぐ
+        let copy_source_normalized = copy_source.strip_prefix('/').unwrap_or(copy_source);
+        let copy_source_header = format!("/{copy_source_normalized}");
         let mut extra_headers = vec![("x-amz-copy-source", copy_source_header.as_str())];
 
         if let Some(ref v) = self.tagging {
