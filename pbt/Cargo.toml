@@ -1,0 +1,11 @@
+[package]
+name = "pbt"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[dev-dependencies]
+# Property-Based Testing (proptest)
+proptest = "1.6"
+shiguredo_s3 = { path = ".." }

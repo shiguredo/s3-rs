@@ -22,3 +22,25 @@ pub use types::{
     RestoreStatus, ServerSideEncryption, ServerSideEncryptionByDefault, ServerSideEncryptionRule,
     StorageClass, TaggingDirective, validate_imf_fixdate,
 };
+
+/// `unix_timestamp_from_civil` → `civil_from_unix_timestamp` のラウンドトリップ (PBT 用)
+#[doc(hidden)]
+pub fn datetime_round_trip(
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+) -> Result<(i32, u32, u32, u32, u32, u32), Error> {
+    let secs = crate::datetime::unix_timestamp_from_civil(year, month, day, hour, minute, second)?;
+    let civil = crate::datetime::civil_from_unix_timestamp(secs)?;
+    Ok((
+        civil.year,
+        civil.month,
+        civil.day,
+        civil.hour,
+        civil.minute,
+        civil.second,
+    ))
+}
