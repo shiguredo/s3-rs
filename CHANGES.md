@@ -27,7 +27,6 @@
 - [ADD] ListMultipartUploadsOutput に `encoding_type` および `request_charged` フィールドを追加する
   - @voluntas
 - [ADD] GetObjectOutput / HeadObjectOutput に `website_redirect_location` フィールドを追加する
->>>>>>> origin/develop
   - @voluntas
 
 - [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
@@ -198,6 +197,8 @@
 
 ### misc
 
+- proptest (PBT) のインフラを導入する (`pbt/` Cargo.toml、`prop_datetime` ラウンドトリップテスト)
+  - @voluntas
 - 依存クレートを更新する (`shiguredo_http11` 2026.2 → 2026.5)
   - @voluntas
 - s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.5.0 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
