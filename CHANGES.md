@@ -155,6 +155,8 @@
   - @voluntas
 - [FIX] datetime モジュールの日時検証・オーバーフロー不備を修正する
   - @voluntas
+- [FIX] xml インフラのエラーハンドリングを統一し破損 XML や非 UTF-8 ボディを正しく扱う
+  - @voluntas
 
 ### misc
 

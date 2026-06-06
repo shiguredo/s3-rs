@@ -236,8 +236,8 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(UploadPartCopyOutput {
-            e_tag: crate::xml::extract_element(body_text, "ETag"),
-            last_modified: crate::xml::extract_element(body_text, "LastModified")
+            e_tag: crate::xml::extract_element(body_text, "ETag")?,
+            last_modified: crate::xml::extract_element(body_text, "LastModified")?
                 .map(|s| crate::datetime::parse_iso8601(s.as_str()))
                 .transpose()?,
             copy_source_version_id: response

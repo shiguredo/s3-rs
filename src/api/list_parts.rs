@@ -134,28 +134,31 @@ impl<'a> ListPartsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let parts = extract_xml_parts(body_text);
+        let parts = extract_xml_parts(body_text)?;
 
         Ok(ListPartsOutput {
-            bucket: crate::xml::extract_element(body_text, "Bucket"),
-            key: crate::xml::extract_element(body_text, "Key"),
-            upload_id: crate::xml::extract_element(body_text, "UploadId"),
-            part_number_marker: crate::xml::extract_element(body_text, "PartNumberMarker")
+            bucket: crate::xml::extract_element(body_text, "Bucket")?,
+            key: crate::xml::extract_element(body_text, "Key")?,
+            upload_id: crate::xml::extract_element(body_text, "UploadId")?,
+            part_number_marker: crate::xml::extract_element(body_text, "PartNumberMarker")?
                 .and_then(|v| v.parse::<i32>().ok()),
-            next_part_number_marker: crate::xml::extract_element(body_text, "NextPartNumberMarker")
+            next_part_number_marker: crate::xml::extract_element(
+                body_text,
+                "NextPartNumberMarker",
+            )?
+            .and_then(|v| v.parse::<i32>().ok()),
+            max_parts: crate::xml::extract_element(body_text, "MaxParts")?
                 .and_then(|v| v.parse::<i32>().ok()),
-            max_parts: crate::xml::extract_element(body_text, "MaxParts")
-                .and_then(|v| v.parse::<i32>().ok()),
-            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")
+            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
                 .and_then(|v| v.parse::<bool>().ok()),
             parts: if parts.is_empty() { None } else { Some(parts) },
-            storage_class: crate::xml::extract_element(body_text, "StorageClass")
+            storage_class: crate::xml::extract_element(body_text, "StorageClass")?
                 .map(|s| crate::types::StorageClass::from(s.as_str())),
         })
     }
 }
 
-fn extract_xml_parts(text: &str) -> Vec<Part> {
+fn extract_xml_parts(text: &str) -> Result<Vec<Part>, Error> {
     let mut parts = Vec::new();
     crate::xml::for_each_element(text, "Part", |elem| {
         parts.push(Part {
@@ -166,6 +169,6 @@ fn extract_xml_parts(text: &str) -> Vec<Part> {
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
         });
-    });
-    parts
+    })?;
+    Ok(parts)
 }

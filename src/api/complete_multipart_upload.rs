@@ -164,13 +164,13 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         // S3 は 200 OK でもボディに <Error> を返すことがある
         check_body_error(response)?;
 
-        let body_text = std::str::from_utf8(&response.body).ok();
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(CompleteMultipartUploadOutput {
-            location: body_text.and_then(|t| crate::xml::extract_element(t, "Location")),
-            bucket: body_text.and_then(|t| crate::xml::extract_element(t, "Bucket")),
-            key: body_text.and_then(|t| crate::xml::extract_element(t, "Key")),
-            e_tag: body_text.and_then(|t| crate::xml::extract_element(t, "ETag")),
+            location: crate::xml::extract_element(body_text, "Location")?,
+            bucket: crate::xml::extract_element(body_text, "Bucket")?,
+            key: crate::xml::extract_element(body_text, "Key")?,
+            e_tag: crate::xml::extract_element(body_text, "ETag")?,
             version_id: response.get_header("x-amz-version-id").map(String::from),
             expiration: response.get_header("x-amz-expiration").map(String::from),
             server_side_encryption: response

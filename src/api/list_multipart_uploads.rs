@@ -127,20 +127,20 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let uploads = extract_xml_uploads(body_text);
-        let common_prefixes = extract_xml_common_prefixes(body_text);
+        let uploads = extract_xml_uploads(body_text)?;
+        let common_prefixes = extract_xml_common_prefixes(body_text)?;
 
         Ok(ListMultipartUploadsOutput {
-            bucket: crate::xml::extract_element(body_text, "Bucket"),
-            key_marker: crate::xml::extract_element(body_text, "KeyMarker"),
-            upload_id_marker: crate::xml::extract_element(body_text, "UploadIdMarker"),
-            next_key_marker: crate::xml::extract_element(body_text, "NextKeyMarker"),
-            next_upload_id_marker: crate::xml::extract_element(body_text, "NextUploadIdMarker"),
-            prefix: crate::xml::extract_element(body_text, "Prefix"),
-            delimiter: crate::xml::extract_element(body_text, "Delimiter"),
-            max_uploads: crate::xml::extract_element(body_text, "MaxUploads")
+            bucket: crate::xml::extract_element(body_text, "Bucket")?,
+            key_marker: crate::xml::extract_element(body_text, "KeyMarker")?,
+            upload_id_marker: crate::xml::extract_element(body_text, "UploadIdMarker")?,
+            next_key_marker: crate::xml::extract_element(body_text, "NextKeyMarker")?,
+            next_upload_id_marker: crate::xml::extract_element(body_text, "NextUploadIdMarker")?,
+            prefix: crate::xml::extract_element(body_text, "Prefix")?,
+            delimiter: crate::xml::extract_element(body_text, "Delimiter")?,
+            max_uploads: crate::xml::extract_element(body_text, "MaxUploads")?
                 .and_then(|v| v.parse::<i32>().ok()),
-            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")
+            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
                 .and_then(|v| v.parse::<bool>().ok()),
             uploads: if uploads.is_empty() {
                 None
@@ -156,7 +156,7 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
     }
 }
 
-fn extract_xml_uploads(text: &str) -> Vec<MultipartUpload> {
+fn extract_xml_uploads(text: &str) -> Result<Vec<MultipartUpload>, Error> {
     let mut uploads = Vec::new();
     crate::xml::for_each_element(text, "Upload", |elem| {
         uploads.push(MultipartUpload {
@@ -169,16 +169,16 @@ fn extract_xml_uploads(text: &str) -> Vec<MultipartUpload> {
                 .get("StorageClass")
                 .map(crate::types::StorageClass::from),
         });
-    });
-    uploads
+    })?;
+    Ok(uploads)
 }
 
-fn extract_xml_common_prefixes(text: &str) -> Vec<CommonPrefix> {
+fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
     let mut prefixes = Vec::new();
     crate::xml::for_each_element(text, "CommonPrefixes", |elem| {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
-    });
-    prefixes
+    })?;
+    Ok(prefixes)
 }

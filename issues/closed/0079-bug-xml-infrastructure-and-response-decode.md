@@ -4,6 +4,7 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/fix-xml-infra-error-handling
 
 ## 目的
@@ -72,3 +73,12 @@
   - 巨大ボディの XML
   - 非 UTF-8 ボディ
   - mixed content を含む XML
+
+## 解決方法
+
+1. `extract_element` と `for_each_element` を `Result` 化し、パースエラー時に `Error::InvalidResponse` を返す
+2. `for_each_element` の path_stack/depth desync を修正
+3. `complete_multipart_upload.rs` と `copy_object.rs` の `from_utf8().ok()` を `xml_body_text()` に置換
+4. `check_body_error` で 10MB 超ボディの `<Error>` を先頭 8KB スキャンで検出
+5. `extract_element` の mixed content をエラー化
+6. `parse_s3_error` を `Result` 化

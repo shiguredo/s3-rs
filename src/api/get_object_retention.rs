@@ -69,8 +69,8 @@ impl<'a> GetObjectRetentionFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
-        let mode = crate::xml::extract_element(body_text, "Mode");
-        let retain_until_date = crate::xml::extract_element(body_text, "RetainUntilDate");
+        let mode = crate::xml::extract_element(body_text, "Mode")?;
+        let retain_until_date = crate::xml::extract_element(body_text, "RetainUntilDate")?;
 
         let retention = match (mode, retain_until_date) {
             (Some(m), Some(d)) => Some(ObjectLockRetention {

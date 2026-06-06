@@ -82,17 +82,16 @@ impl<'a> GetObjectTaggingFluentBuilder<'a> {
             return Err(parse_error_response(response));
         }
 
-        let body_text = std::str::from_utf8(&response.body)
-            .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))?;
+        let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetObjectTaggingOutput {
             version_id: response.get_header("x-amz-version-id").map(String::from),
-            tag_set: extract_xml_tags(body_text),
+            tag_set: extract_xml_tags(body_text)?,
         })
     }
 }
 
-fn extract_xml_tags(text: &str) -> Vec<Tag> {
+fn extract_xml_tags(text: &str) -> Result<Vec<Tag>, Error> {
     let mut tags = Vec::new();
     crate::xml::for_each_element(text, "Tag", |elem| {
         if let (Some(key), Some(value)) = (elem.get("Key"), elem.get("Value")) {
@@ -101,6 +100,6 @@ fn extract_xml_tags(text: &str) -> Vec<Tag> {
                 value: value.to_string(),
             });
         }
-    });
-    tags
+    })?;
+    Ok(tags)
 }
