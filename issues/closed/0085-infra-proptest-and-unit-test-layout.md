@@ -4,7 +4,17 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/add-proptest-and-test-layout
+
+## 解決方法
+
+サブ issue 1「proptest 導入」のみを対応した。
+`s3-rs` の `lib.rs` に `#[doc(hidden)] pub fn datetime_round_trip()` ヘルパーを追加し、
+`pbt/tests/prop_datetime.rs` から `proptest!` マクロでラウンドトリッププロパティを検証する。
+`pbt/Cargo.toml` を新規作成し、ルート `Cargo.toml` の workspace members に `pbt` を追加した。
+
+残りのサブ issue (署名テスト強化、fuzz CI smoke 実行、カバレッジ計測) は別途対応する。
 
 ## 目的
 
