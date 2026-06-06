@@ -11,6 +11,18 @@
 
 ## develop
 
+- [CHANGE] PutObjectLegalHold の `legal_hold_status` 未指定時の暗黙 "ON" フォールバックを廃止し、必須パラメータに変更する
+  - @voluntas
+- [FIX] PutBucketEncryption / PutBucketCors / PutBucketLifecycleConfiguration / PutBucketOwnershipControls でルール空のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutBucketEncryption で `sse_algorithm` が空文字列のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutObjectRetention で `mode` と `retain_until_date` の両方が未設定のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutObjectLockConfiguration で `object_lock_configuration` 未指定のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutBucketWebsite で全フィールド未指定のままリクエストを構築できる問題と `redirect_all_requests_to` と他フィールドの同時指定を検出しない問題を修正する
+  - @voluntas
 - [ADD] GetObjectLegalHold / PutObjectLegalHold / GetObjectRetention / PutObjectRetention / GetObjectLockConfiguration / PutObjectLockConfiguration API を追加する
   - @voluntas
 - [ADD] GetBucketOwnershipControls / PutBucketOwnershipControls / DeleteBucketOwnershipControls API を追加する

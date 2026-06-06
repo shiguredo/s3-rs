@@ -73,6 +73,12 @@ impl<'a> PutObjectRetentionFluentBuilder<'a> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
 
+        if self.mode.is_none() && self.retain_until_date.is_none() {
+            return Err(Error::InvalidInput(
+                "mode or retain_until_date is required".to_string(),
+            ));
+        }
+
         let mut query_params: Vec<(&str, &str)> = vec![("retention", "")];
         if let Some(ref vid) = self.version_id {
             query_params.push(("versionId", vid.as_str()));

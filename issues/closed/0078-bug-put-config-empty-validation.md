@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-06-06
 - Model: Composer 2.5
 - Polished: 2026-06-06
 - Branch: feature/fix-put-config-empty-validation
@@ -97,3 +98,16 @@ AWS S3 API Reference によると、`Retention` 要素は必須だが `Mode` と
 - `PutBucketWebsite` で `redirect_all_requests_to` と他のフィールドが同時指定された場合に `Error::InvalidInput` が返る
 - CHANGES.md に `[CHANGE]`（`PutObjectLegalHold` の暗黙デフォルト廃止）と `[ADD]`（全バリデーション追加）を追記する
 - 各 API の `build_request` を呼び出し `Error::InvalidInput` が返ることを検証する単体テストを追加する
+
+## 解決方法
+
+各 `build_request` に以下のバリデーションを追加した:
+
+1. `PutBucketEncryption`: `rules` が空の場合、および各ルールの `sse_algorithm` が空文字列の場合に `Error::InvalidInput` を返す
+2. `PutBucketCors`: `cors_rules` が空の場合に `Error::InvalidInput` を返す
+3. `PutBucketLifecycleConfiguration`: `rules` が空の場合に `Error::InvalidInput` を返す
+4. `PutBucketOwnershipControls`: `rules` が空の場合に `Error::InvalidInput` を返す
+5. `PutObjectRetention`: `mode` と `retain_until_date` の両方が未設定の場合に `Error::InvalidInput` を返す
+6. `PutObjectLockConfiguration`: `object_lock_configuration` が `None` の場合に `Error::InvalidInput` を返す
+7. `PutBucketWebsite`: 全フィールド (`IndexDocument`, `ErrorDocument`, `RedirectAllRequestsTo`, `RoutingRules`) が未指定の場合に `Error::InvalidInput` を返す。また `redirect_all_requests_to` と他のフィールドが同時指定された場合も `Error::InvalidInput` を返す
+8. `PutObjectLegalHold`: `unwrap_or("ON")` のデフォルトを廃止し、`legal_hold_status` 未設定時に `Error::InvalidInput` を返すように変更

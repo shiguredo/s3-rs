@@ -60,7 +60,12 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
             query_params.push(("versionId", vid.as_str()));
         }
 
-        let xml_body = build_legal_hold_xml(self.legal_hold_status.as_deref().unwrap_or("ON"));
+        let status = required(
+            self.legal_hold_status.as_deref(),
+            "legal_hold_status is required",
+        )?;
+
+        let xml_body = build_legal_hold_xml(status);
         let content_md5 = base64_md5(xml_body.as_bytes());
         let extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
