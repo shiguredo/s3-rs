@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-06-06
 - Model: Composer 2.5
 - Polished: 2026-06-06
 - Branch: feature/fix-presigned-build-request-parity
@@ -60,3 +61,13 @@ GetObject の `if-match`, `if-none-match`, `if-modified-since`, `if-unmodified-s
 - 上記 API で builder 設定が presigned 署名に反映される
 - 意図的な差異（CRC32 自動計算不可等）は doc comment に記載される
 - presigned 統合テスト（MinIO）で主要パラメータを検証する
+
+## 解決方法
+
+各 API の `presigned()` メソッドに、`build_request()` と同等のヘッダー/クエリパラメータを追加した:
+
+- **PutObject**: `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、content関連 (`content-encoding`、`content-disposition`、`content-language`、`cache-control`、`expires`)、`content_length`、`storage_class` を `extra_headers` に追加。doc comment に CRC32 自動計算不可を明記。
+- **GetObject**: `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` を `extra_headers` に追加。`part_number` に `1..=10000` 範囲検証を追加。
+- **CreateMultipartUpload**: `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`checksum_algorithm`、content関連ヘッダー、`storage_class` を `extra_headers` に追加。
+- **CompleteMultipartUpload**: `content-type: application/xml`、`if_match`、`if_none_match`、SSE-C ヘッダーを `extra_headers` に追加。
+- **UploadPart**: `content_length` を `extra_headers` に追加。

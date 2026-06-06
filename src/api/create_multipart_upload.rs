@@ -300,8 +300,38 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
         let key = required(self.key.as_deref(), "key")?;
 
         let mut extra_headers = Vec::new();
+        if let Some(ref v) = self.acl {
+            extra_headers.push(("x-amz-acl", v.as_str()));
+        }
+        if let Some(ref v) = self.storage_class {
+            extra_headers.push(("x-amz-storage-class", v.as_str()));
+        }
+        if let Some(ref v) = self.tagging {
+            extra_headers.push(("x-amz-tagging", v.as_str()));
+        }
         if let Some(ref ct) = self.content_type {
             extra_headers.push(("content-type", ct.as_str()));
+        }
+        if let Some(ref v) = self.content_encoding {
+            extra_headers.push(("content-encoding", v.as_str()));
+        }
+        if let Some(ref v) = self.content_disposition {
+            extra_headers.push(("content-disposition", v.as_str()));
+        }
+        if let Some(ref v) = self.content_language {
+            extra_headers.push(("content-language", v.as_str()));
+        }
+        if let Some(ref v) = self.cache_control {
+            extra_headers.push(("cache-control", v.as_str()));
+        }
+        if let Some(ref v) = self.expires {
+            extra_headers.push(("expires", v.as_str()));
+        }
+        if let Some(ref v) = self.server_side_encryption {
+            extra_headers.push(("x-amz-server-side-encryption", v.as_str()));
+        }
+        if let Some(ref v) = self.ssekms_key_id {
+            extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
         }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
@@ -318,6 +348,18 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
                 "x-amz-server-side-encryption-customer-key-md5",
                 &computed_key_md5,
             ));
+        }
+        if let Some(ref v) = self.checksum_algorithm {
+            extra_headers.push(("x-amz-checksum-algorithm", v.as_str()));
+        }
+        // カスタムメタデータ用のヘッダー名を保持する
+        let meta_headers: Vec<(String, &str)> = self
+            .metadata
+            .iter()
+            .map(|(k, v)| (format!("x-amz-meta-{k}"), v.as_str()))
+            .collect();
+        for (name, value) in &meta_headers {
+            extra_headers.push((name.as_str(), *value));
         }
 
         let url = build_presigned_url(
