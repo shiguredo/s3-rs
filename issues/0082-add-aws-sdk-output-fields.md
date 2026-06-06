@@ -1,9 +1,10 @@
 # aws-sdk-rust 互換 Output 型フィールドの追加
 
-- Priority: High
+- Priority: Medium
 - Created: 2026-05-25
 - Model: Composer 2.5
-- Polished: 2026-05-31
+- Polished: 2026-06-06
+- Branch: feature/add-aws-sdk-output-fields
 
 ## 目的
 
@@ -11,7 +12,7 @@
 
 ## 優先度根拠
 
-CHANGES.md ## develop に `[ADD]` 記載の API が実装されていても、Output 型が aws-sdk-rust と一致しないと移行時にフィールドアクセスがコンパイルエラーまたは silent None になる。
+CHANGES.md の `develop` に `[ADD]` 記載の API が実装されていても、Output 型が aws-sdk-rust と一致しないと移行時にフィールドアクセスがコンパイルエラーまたは silent None になる。ただし欠落フィールドの多くは必須ではなく、既存の実運用への影響が限定的なため Medium とする。
 
 ## 現状
 
@@ -20,14 +21,14 @@ CHANGES.md ## develop に `[ADD]` 記載の API が実装されていても、Ou
 | Output | 欠落フィールド |
 |--------|----------------|
 | `DeleteObjectOutput` | `request_charged` |
-| `CreateMultipartUploadOutput` | SSE 系, `request_charged`, `abort_date`, `abort_rule_id`, `checksum_algorithm` 等 |
+| `CreateMultipartUploadOutput` | SSE 系, `request_charged`, `abort_date`, `abort_rule_id`, `checksum_algorithm` |
 | `ListObjectsV2Output` | `encoding_type` |
 | `ListPartsOutput` | `abort_date`, `abort_rule_id`, `checksum_algorithm`, `request_charged` |
 | `ListMultipartUploadsOutput` | `encoding_type`, `request_charged` |
 | `GetBucketLifecycleConfigurationOutput` | `transition_default_minimum_object_size` |
 | `GetObjectOutput` / `HeadObjectOutput` | `website_redirect_location` |
 
-**注**: `ListBucketsOutput.owner` / `Bucket.bucket_region` / `ObjectIdentifier.e_tag` 等は issue 0065 / 0068 で意図的に追加済み。**削除しない**。
+注: `ListBucketsOutput.owner` / `Bucket.bucket_region` / `ObjectIdentifier.e_tag` 等は issue 0065 / 0068 で対応済み。
 
 ## 設計方針
 
@@ -48,11 +49,5 @@ CHANGES.md ## develop に `[ADD]` 記載の API が実装されていても、Ou
 
 - 上記 Output 型にフィールドが追加される
 - `parse_response` が実レスポンスから値を設定する
-- CHANGES.md ## develop に `[ADD]` エントリを追記
-- 統合テストで主要フィールドを検証
-
-## 解決方法
-
-1. `types.rs` にフィールド追加
-2. 各 `parse_response` 拡張
-3. MinIO / RustFS 統合テスト追加
+- CHANGES.md の `develop` に `[ADD]` エントリを追記する
+- 統合テストで主要フィールドを検証する

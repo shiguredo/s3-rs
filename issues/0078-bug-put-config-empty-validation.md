@@ -3,7 +3,8 @@
 - Priority: High
 - Created: 2026-05-25
 - Model: Composer 2.5
-- Polished: 2026-05-31
+- Polished: 2026-06-06
+- Branch: feature/fix-put-config-empty-validation
 
 ## 目的
 
@@ -21,20 +22,20 @@ Sans I/O ライブラリとして builder 段階で失敗原因を明確にす�
 | `PutBucketCors` | `cors_rules` 空で XML 構築 |
 | `PutBucketLifecycleConfiguration` | `rules` 空で XML 構築 |
 | `PutBucketOwnershipControls` | `rules` 空で XML 構築 |
-| `PutObjectRetention` | `mode` / `retain_until_date` 未設定で空 XML |
+| `PutObjectRetention` | `mode` と `retain_until_date` の両方が未設定で空 XML |
 | `PutObjectLockConfiguration` | `object_lock_configuration` が `None` で空 XML |
-
-注: `PutBucketTagging` / `PutObjectTagging` は既に `build_request` で `required()` による検証が行われているため対象外。
-| `PutBucketWebsite` | 全未指定で空 XML |
-| `PutObjectLegalHold` | `legal_hold_status` 未指定時 `unwrap_or("ON")` |
+| `PutBucketWebsite` | 全フィールド未指定で空 XML |
+| `PutObjectLegalHold` | `legal_hold_status` 未指定時に `unwrap_or("ON")` で暗黙 ON |
 | `ServerSideEncryptionByDefaultBuilder` | `sse_algorithm` 未設定で空文字列 |
 | `DeleteBuilder` | `objects` 空で `build()` 可能（注: `build_request` 側で既に検証済み） |
 
+注: `PutBucketTagging` / `PutObjectTagging` は既に `build_request` で `required()` による検証が行われているため対象外。
+
 相互排他未検証:
 
-- `PutBucketWebsite`: `redirect_all_requests_to` と `IndexDocument` / `ErrorDocument` / `RoutingRules` の同時指定
-- `PutBucketLifecycleConfiguration`: `Filter` 内の `Prefix` と `Tag` の矛盾する組み合わせ
-- `PutObjectLockConfiguration`: `DefaultRetention` の `days` と `years` 同時指定
+- `PutBucketWebsite`: `redirect_all_requests_to` と `IndexDocument` / `ErrorDocument` / `RoutingRules` の同時指定（S3 サーバーでエラーにならないケースがあるため要対応）
+- `PutBucketLifecycleConfiguration`: `Filter` 内の `Prefix` と `Tag` の矛盾する組み合わせ（S3 サーバーが適切にエラーを返すため対応不要）
+- `PutObjectLockConfiguration`: `DefaultRetention` の `days` と `years` 同時指定（S3 サーバーが適切にエラーを返すため対応不要）
 
 ## 設計方針
 
@@ -46,28 +47,28 @@ Sans I/O ライブラリとして builder 段階で失敗原因を明確にす�
 - `PutBucketCors`: `cors_rules` が空
 - `PutBucketLifecycleConfiguration`: `rules` が空
 - `PutBucketOwnershipControls`: `rules` が空
-- `PutObjectRetention`: `mode` と `retain_until_date` の両方が未設定
+- `PutObjectRetention`: `mode` と `retain_until_date` の両方が未設定 — 少なくともどちらか一方は必須
 - `PutBucketWebsite`: `IndexDocument` / `ErrorDocument` / `RedirectAllRequestsTo` / `RoutingRules` の全てが未指定
-- `PutObjectLegalHold`: `legal_hold_status` が未設定
+- `PutObjectLegalHold`: `legal_hold_status` が未設定 — 暗黙 "ON" を廃止し必須化
 - `PutObjectLockConfiguration`: `object_lock_configuration` が `None`
 
 注: `PutObjectLockConfiguration` の `object_lock_enabled` は AWS S3 API Reference で Required: No のため、未設定チェックの対象外とする。
 
-### `ServerSideEncryptionByDefaultBuilder::build` の扱い
+### `ServerSideEncryptionByDefaultBuilder` の空 `sse_algorithm` 対応
 
-`build()` を `Result<_, Error>` 化するか、呼び出し側 (`PutBucketEncryption::build_request`) で検証する。`build()` は現在 `Self` を返しており、`Result<_, Error>` への変更は後方互換のない変更となる。呼び出し側で検証する方針を優先する。具体的には、`PutBucketEncryption::build_request` で `sse_algorithm` が空文字列の場合に `Error::InvalidInput` を返す。
+`ServerSideEncryptionByDefaultBuilder::build()` の戻り値を `Result<_, Error>` に変更するか、呼び出し側（`PutBucketEncryption::build_request`）で検証する。`build()` の `Result` 化は後方互換のない変更となるため、呼び出し側で `sse_algorithm` が空文字列の場合に `Error::InvalidInput` を返す方針を優先する。
 
 ### `PutObjectLegalHold` の暗黙デフォルト廃止
 
-`legal_hold_status` 未指定時に `"ON"` にフォールバックする現行挙動を廃止し、必須化する。これは後方互換のない変更であるため、`CHANGES.md` に `[CHANGE]` として記載する。
+`legal_hold_status` 未指定時に `"ON"` にフォールバックする現行挙動 (`put_object_legal_hold.rs:63` の `unwrap_or("ON")`) を廃止し、必須化する。後方互換のない変更であるため、CHANGES.md に `[CHANGE]` として記載する。
 
 ### `PutObjectRetention` の必須/任意
 
-AWS S3 API Reference によると、`Retention` 要素は必須だが `Mode` と `RetainUntilDate` はそれぞれ任意。空の `Retention` 要素は S3 サーバーで拒否されるため、少なくともどちらか一方は必須とする。
+AWS S3 API Reference によると、`Retention` 要素は必須だが `Mode` と `RetainUntilDate` はそれぞれ Required: No。空の `Retention` 要素は S3 サーバーで拒否されるため、少なくともどちらか一方は必須とする。
 
 ### 相互排他の検証
 
-`PutBucketWebsite` の `redirect_all_requests_to` と `IndexDocument` / `ErrorDocument` / `RoutingRules` の同時指定をエラーにする。他の 2 つ（`PutBucketLifecycleConfiguration` の Filter 矛盾、`PutObjectLockConfiguration` の days / years 同時指定）は S3 サーバーで適切にエラーが返るため、クライアント側検証は不要（現状維持）。判断基準: `PutBucketWebsite` の相互排他は S3 サーバーでエラーにならないケースがあるためクライアント側で検証する。
+`PutBucketWebsite` の `redirect_all_requests_to` と `IndexDocument` / `ErrorDocument` / `RoutingRules` の同時指定をエラーにする。他の 2 つ（`PutBucketLifecycleConfiguration` の Filter 矛盾、`PutObjectLockConfiguration` の days / years 同時指定）は S3 サーバーで適切にエラーが返るため、クライアント側検証は不要（現状維持）。
 
 ## AWS S3 API Reference
 
@@ -90,20 +91,9 @@ AWS S3 API Reference によると、`Retention` 要素は必須だが `Mode` と
 
 ## 完了条件
 
-- 上記 API で空 XML / 必須未設定が builder 段階でエラーになる
+- 上記 API で空 XML / 必須未設定が builder 段階で `Error::InvalidInput` になる
 - 正常系の統合テストが通る
 - `PutObjectLegalHold` が未指定時に暗黙 ON にならない
-- CHANGES.md に `[CHANGE]` エントリ（`PutObjectLegalHold` の暗黙デフォルト廃止）と `[ADD]` エントリ（バリデーション追加）を追記する
-- 各 API の単体テストでエラーパスを検証する（モックを使わず、builder の `build_request` を呼び出して `Error::InvalidInput` が返されることを検証）
-
-## 解決方法
-
-1. `put_bucket_encryption.rs` の `build_request` で `rules` 空チェックと `sse_algorithm` 空チェックを追加
-2. `put_bucket_cors.rs` の `build_request` で `cors_rules` 空チェックを追加
-3. `put_bucket_lifecycle_configuration.rs` の `build_request` で `rules` 空チェックを追加
-4. `put_bucket_ownership_controls.rs` の `build_request` で `rules` 空チェックを追加
-5. `put_object_retention.rs` の `build_request` で `mode` と `retain_until_date` の両方未設定チェックを追加
-6. `put_object_lock_configuration.rs` の `build_request` で `object_lock_configuration` が `None` の場合のチェックを追加
-7. `put_bucket_website.rs` の `build_request` で全フィールド未指定チェックと相互排他チェックを追加
-8. `put_object_legal_hold.rs` の `build_request` で `legal_hold_status` 未指定チェックを追加（暗黙 `"ON"` 廃止）
-9. 各 API の単体テストでエラーパスを検証（モック不使用）
+- `PutBucketWebsite` で `redirect_all_requests_to` と他のフィールドが同時指定された場合に `Error::InvalidInput` が返る
+- CHANGES.md に `[CHANGE]`（`PutObjectLegalHold` の暗黙デフォルト廃止）と `[ADD]`（全バリデーション追加）を追記する
+- 各 API の `build_request` を呼び出し `Error::InvalidInput` が返ることを検証する単体テストを追加する
