@@ -18,7 +18,7 @@ exclude = ["fuzz"]
 # 署名計算とチェックサム計算 (feature で切り替え)
 # - 署名: SHA-256, HMAC-SHA256
 # - チェックサム: SHA-256, SHA-1
-aws-lc-rs = { version = "1.16", optional = true }
+aws-lc-rs = { version = "1.17", optional = true }
 base64ct = { version = "1.8", features = ["alloc"] }
 # チェックサム計算 (CRC32, CRC32C, CRC64NVME)
 # 1.10 は MSRV 1.89 を要求するため、本体の rust-version 1.88 を維持するために 1.9.x に固定する
@@ -29,10 +29,10 @@ md-5 = "0.11"
 sha1 = { version = "0.11", optional = true }
 sha2 = { version = "0.11", optional = true }
 # XML パース
-xml = "1.2"
+xml = "1.3"
 
 [dev-dependencies]
-shiguredo_http11 = "2026.5"
+shiguredo_http11 = "2026.6"
 testcontainers = { version = "0.27", features = ["http_wait_plain"] }
 tokio = { version = "1.52", features = [
   "io-util",
