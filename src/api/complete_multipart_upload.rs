@@ -206,6 +206,8 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
     ///
     /// CompleteMultipartUpload は POST ボディに completed parts の XML が必須のため、
     /// `PresignedRequest::body` に XML を含めて返す。
+    /// 署名対象ヘッダーには `content-type: application/xml`、条件付きヘッダー、
+    /// SSE-C ヘッダーが含まれる。
     pub fn presigned(
         self,
         expires_in_secs: u64,
@@ -216,6 +218,31 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
         let xml_body = build_complete_multipart_xml(&self.multipart_upload);
+
+        let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
+        if let Some(ref v) = self.if_match {
+            extra_headers.push(("if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.if_none_match {
+            extra_headers.push(("if-none-match", v.as_str()));
+        }
+        if let Some(ref v) = self.sse_customer_algorithm {
+            extra_headers.push((
+                "x-amz-server-side-encryption-customer-algorithm",
+                v.as_str(),
+            ));
+        }
+        // SSE-C キーが指定されている場合、MD5 を自動計算する
+        let computed_key_md5;
+        if let Some(ref v) = self.sse_customer_key {
+            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
+            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
+            extra_headers.push((
+                "x-amz-server-side-encryption-customer-key-md5",
+                &computed_key_md5,
+            ));
+        }
+
         let url = build_presigned_url(
             &self.client.config_ref(),
             "POST",
@@ -223,13 +250,17 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             key,
             expires_in_secs,
             &[("uploadId", upload_id)],
-            &[],
+            &extra_headers,
             now,
         )?;
+        let headers = extra_headers
+            .iter()
+            .map(|&(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         Ok(super::PresignedRequest {
             url,
             method: "POST".to_string(),
-            headers: Vec::new(),
+            headers,
             body: xml_body.into_bytes(),
         })
     }

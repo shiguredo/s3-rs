@@ -416,6 +416,11 @@ impl<'a> UploadPartFluentBuilder<'a> {
         ];
 
         let mut extra_headers: Vec<(&str, &str)> = Vec::new();
+        let content_length_str;
+        if let Some(cl) = self.content_length {
+            content_length_str = cl.to_string();
+            extra_headers.push(("content-length", content_length_str.as_str()));
+        }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
                 "x-amz-server-side-encryption-customer-algorithm",

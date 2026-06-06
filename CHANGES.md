@@ -11,6 +11,17 @@
 
 ## develop
 
+- [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] GetObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する
+  - @voluntas
+- [FIX] CreateMultipartUpload の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`checksum_algorithm`、コンテント関連ヘッダー、`storage_class` が署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] CompleteMultipartUpload の `presigned()` で `content-type`、`if_match`、`if_none_match`、SSE-C ヘッダーが署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] UploadPart の `presigned()` で `content_length` が署名対象に含まれない問題を修正する
+  - @voluntas
+
 - [CHANGE] `extract_metadata()` でメタデータキーを小文字化していた挙動を修正し、元のヘッダー名のキーケースを保持するように変更する
   - @voluntas
 - [CHANGE] PutObjectLegalHold の `legal_hold_status` 未指定時の暗黙 "ON" フォールバックを廃止し、必須パラメータに変更する

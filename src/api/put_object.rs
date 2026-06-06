@@ -567,6 +567,10 @@ impl<'a> PutObjectFluentBuilder<'a> {
     }
 
     /// Presigned リクエストを生成する (Sans I/O)
+    ///
+    /// `body` を保持していないため、以下の点で `build_request` と挙動が異なる:
+    /// - 未指定時の CRC32 自動計算は行われない。個別 checksum_* 指定または
+    ///   checksum_algorithm 指定がある場合のみ、それぞれのヘッダーが署名対象に含まれる。
     pub fn presigned(
         self,
         expires_in_secs: u64,
@@ -577,8 +581,49 @@ impl<'a> PutObjectFluentBuilder<'a> {
         let key = required(self.key.as_deref(), "key")?;
 
         let mut extra_headers = Vec::new();
+        if let Some(ref v) = self.acl {
+            extra_headers.push(("x-amz-acl", v.as_str()));
+        }
+        if let Some(ref v) = self.storage_class {
+            extra_headers.push(("x-amz-storage-class", v.as_str()));
+        }
+        if let Some(ref v) = self.tagging {
+            extra_headers.push(("x-amz-tagging", v.as_str()));
+        }
+        if let Some(ref v) = self.if_match {
+            extra_headers.push(("if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.if_none_match {
+            extra_headers.push(("if-none-match", v.as_str()));
+        }
         if let Some(ref v) = self.content_type {
             extra_headers.push(("content-type", v.as_str()));
+        }
+        if let Some(ref v) = self.content_encoding {
+            extra_headers.push(("content-encoding", v.as_str()));
+        }
+        if let Some(ref v) = self.content_disposition {
+            extra_headers.push(("content-disposition", v.as_str()));
+        }
+        if let Some(ref v) = self.content_language {
+            extra_headers.push(("content-language", v.as_str()));
+        }
+        if let Some(ref v) = self.cache_control {
+            extra_headers.push(("cache-control", v.as_str()));
+        }
+        if let Some(ref v) = self.expires {
+            extra_headers.push(("expires", v.as_str()));
+        }
+        let content_length_str;
+        if let Some(cl) = self.content_length {
+            content_length_str = cl.to_string();
+            extra_headers.push(("content-length", &content_length_str));
+        }
+        if let Some(ref v) = self.server_side_encryption {
+            extra_headers.push(("x-amz-server-side-encryption", v.as_str()));
+        }
+        if let Some(ref v) = self.ssekms_key_id {
+            extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
         }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
@@ -629,6 +674,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
         }
         if let Some(ref v) = self.checksum_xxhash64 {
             extra_headers.push(("x-amz-checksum-xxhash64", v.as_str()));
+        }
+        let meta_headers: Vec<(String, &str)> = self
+            .metadata
+            .iter()
+            .map(|(k, v)| (format!("x-amz-meta-{k}"), v.as_str()))
+            .collect();
+        for (name, value) in &meta_headers {
+            extra_headers.push((name.as_str(), *value));
         }
 
         let url = build_presigned_url(
