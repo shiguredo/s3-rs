@@ -54,7 +54,7 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let rules = extract_encryption_rules(body_text);
+        let rules = extract_encryption_rules(body_text)?;
         Ok(GetBucketEncryptionOutput {
             server_side_encryption_configuration: if rules.is_empty() {
                 None
@@ -69,7 +69,7 @@ impl<'a> GetBucketEncryptionFluentBuilder<'a> {
 ///
 /// Rule 内に ApplyServerSideEncryptionByDefault がネストされているため、
 /// for_each_element (直接の子要素のみ) では対応できない。EventReader で直接パースする。
-fn extract_encryption_rules(text: &str) -> Vec<ServerSideEncryptionRule> {
+fn extract_encryption_rules(text: &str) -> Result<Vec<ServerSideEncryptionRule>, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -137,10 +137,22 @@ fn extract_encryption_rules(text: &str) -> Vec<ServerSideEncryptionRule> {
                     current_tag = None;
                 }
             }
-            Err(_) => return rules,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = if inside_default {
+                    "ApplyServerSideEncryptionByDefault"
+                } else if inside_rule {
+                    "Rule"
+                } else {
+                    "ServerSideEncryptionConfiguration"
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    rules
+    Ok(rules)
 }

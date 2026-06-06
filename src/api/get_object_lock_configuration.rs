@@ -52,8 +52,9 @@ impl<'a> GetObjectLockConfigurationFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
+        let config = parse_object_lock_configuration(body_text)?;
         Ok(GetObjectLockConfigurationOutput {
-            object_lock_configuration: Some(parse_object_lock_configuration(body_text)),
+            object_lock_configuration: Some(config),
         })
     }
 }
@@ -62,7 +63,7 @@ impl<'a> GetObjectLockConfigurationFluentBuilder<'a> {
 ///
 /// DefaultRetention は Rule > DefaultRetention にネストされるため
 /// EventReader で直接パースする。
-fn parse_object_lock_configuration(text: &str) -> ObjectLockConfiguration {
+fn parse_object_lock_configuration(text: &str) -> Result<ObjectLockConfiguration, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -129,10 +130,18 @@ fn parse_object_lock_configuration(text: &str) -> ObjectLockConfiguration {
                                 retention_mode = Some(current_text.clone())
                             }
                             "Days" if inside_default_retention => {
-                                retention_days = current_text.parse().ok()
+                                retention_days = Some(current_text.parse().map_err(|_| {
+                                    Error::InvalidResponse(
+                                        "failed to parse Days in DefaultRetention".to_string(),
+                                    )
+                                })?);
                             }
                             "Years" if inside_default_retention => {
-                                retention_years = current_text.parse().ok()
+                                retention_years = Some(current_text.parse().map_err(|_| {
+                                    Error::InvalidResponse(
+                                        "failed to parse Years in DefaultRetention".to_string(),
+                                    )
+                                })?);
                             }
                             _ => {}
                         }
@@ -140,13 +149,25 @@ fn parse_object_lock_configuration(text: &str) -> ObjectLockConfiguration {
                     current_tag = None;
                 }
             }
-            Err(_) => break,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = if inside_default_retention {
+                    "DefaultRetention"
+                } else if inside_rule {
+                    "Rule"
+                } else {
+                    "ObjectLockConfiguration"
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    ObjectLockConfiguration {
+    Ok(ObjectLockConfiguration {
         object_lock_enabled,
         rule,
-    }
+    })
 }

@@ -54,7 +54,7 @@ impl<'a> GetBucketNotificationConfigurationFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
-        Ok(parse_notification_configuration(body_text))
+        parse_notification_configuration(body_text)
     }
 }
 
@@ -63,7 +63,9 @@ impl<'a> GetBucketNotificationConfigurationFluentBuilder<'a> {
 /// TopicConfiguration, QueueConfiguration, CloudFunctionConfiguration,
 /// EventBridgeConfiguration の各要素内にネストされた Event, Filter > S3Key > FilterRule が
 /// 複数出現するため EventReader で直接パースする。
-fn parse_notification_configuration(text: &str) -> GetBucketNotificationConfigurationOutput {
+fn parse_notification_configuration(
+    text: &str,
+) -> Result<GetBucketNotificationConfigurationOutput, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -272,15 +274,29 @@ fn parse_notification_configuration(text: &str) -> GetBucketNotificationConfigur
                     _ => {}
                 }
             }
-            Err(_) => break,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = match ctx {
+                    Context::Root => "NotificationConfiguration",
+                    Context::Topic => "TopicConfiguration",
+                    Context::Queue => "QueueConfiguration",
+                    Context::Lambda => "CloudFunctionConfiguration",
+                    Context::Filter => "Filter",
+                    Context::S3Key => "S3Key",
+                    Context::FilterRule => "FilterRule",
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    GetBucketNotificationConfigurationOutput {
+    Ok(GetBucketNotificationConfigurationOutput {
         topic_configurations: topic_configs,
         queue_configurations: queue_configs,
         lambda_function_configurations: lambda_configs,
         event_bridge_configuration: event_bridge,
-    }
+    })
 }

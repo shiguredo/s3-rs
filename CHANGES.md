@@ -131,6 +131,12 @@
   - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
+- [FIX] GetBucket 系 API および GetObjectLockConfiguration で XML パースエラーを握り潰すバグを修正する
+  - @voluntas
+- [FIX] .parse().ok() による数値フィールドのパース失敗黙殺を修正する
+  - @voluntas
+- [FIX] Status パース失敗時の ExpirationStatus::Enabled フォールバックを除去する
+  - @voluntas
 
 ### misc
 
