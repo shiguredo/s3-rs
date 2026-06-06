@@ -124,40 +124,40 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let contents = extract_xml_objects(body_text);
-        let common_prefixes = extract_xml_common_prefixes(body_text);
+        let contents = extract_xml_objects(body_text)?;
+        let common_prefixes = extract_xml_common_prefixes(body_text)?;
 
         Ok(ListObjectsV2Output {
-            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")
+            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
                 .and_then(|v| v.parse::<bool>().ok()),
             contents: if contents.is_empty() {
                 None
             } else {
                 Some(contents)
             },
-            name: crate::xml::extract_element(body_text, "Name"),
-            prefix: crate::xml::extract_element(body_text, "Prefix"),
-            delimiter: crate::xml::extract_element(body_text, "Delimiter"),
-            max_keys: crate::xml::extract_element(body_text, "MaxKeys")
+            name: crate::xml::extract_element(body_text, "Name")?,
+            prefix: crate::xml::extract_element(body_text, "Prefix")?,
+            delimiter: crate::xml::extract_element(body_text, "Delimiter")?,
+            max_keys: crate::xml::extract_element(body_text, "MaxKeys")?
                 .and_then(|v| v.parse::<i32>().ok()),
             common_prefixes: if common_prefixes.is_empty() {
                 None
             } else {
                 Some(common_prefixes)
             },
-            key_count: crate::xml::extract_element(body_text, "KeyCount")
+            key_count: crate::xml::extract_element(body_text, "KeyCount")?
                 .and_then(|v| v.parse::<i32>().ok()),
-            continuation_token: crate::xml::extract_element(body_text, "ContinuationToken"),
+            continuation_token: crate::xml::extract_element(body_text, "ContinuationToken")?,
             next_continuation_token: crate::xml::extract_element(
                 body_text,
                 "NextContinuationToken",
-            ),
-            start_after: crate::xml::extract_element(body_text, "StartAfter"),
+            )?,
+            start_after: crate::xml::extract_element(body_text, "StartAfter")?,
         })
     }
 }
 
-fn extract_xml_objects(text: &str) -> Vec<Object> {
+fn extract_xml_objects(text: &str) -> Result<Vec<Object>, Error> {
     let mut objects = Vec::new();
     crate::xml::for_each_element(text, "Contents", |elem| {
         let owner = if elem.has("Owner") {
@@ -207,16 +207,16 @@ fn extract_xml_objects(text: &str) -> Vec<Object> {
             checksum_algorithm,
             checksum_type: elem.get("ChecksumType").map(String::from),
         });
-    });
-    objects
+    })?;
+    Ok(objects)
 }
 
-fn extract_xml_common_prefixes(text: &str) -> Vec<CommonPrefix> {
+fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
     let mut prefixes = Vec::new();
     crate::xml::for_each_element(text, "CommonPrefixes", |elem| {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
-    });
-    prefixes
+    })?;
+    Ok(prefixes)
 }

@@ -88,12 +88,12 @@ impl<'a> ListBucketsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let buckets = extract_xml_buckets(body_text);
-        let continuation_token = crate::xml::extract_element(body_text, "ContinuationToken");
-        let prefix = crate::xml::extract_element(body_text, "Prefix");
+        let buckets = extract_xml_buckets(body_text)?;
+        let continuation_token = crate::xml::extract_element(body_text, "ContinuationToken")?;
+        let prefix = crate::xml::extract_element(body_text, "Prefix")?;
         // <Owner> はトップレベル <ListAllMyBucketsResult> 配下に出現する
-        let display_name = crate::xml::extract_element(body_text, "DisplayName");
-        let id = crate::xml::extract_element(body_text, "ID");
+        let display_name = crate::xml::extract_element(body_text, "DisplayName")?;
+        let id = crate::xml::extract_element(body_text, "ID")?;
         let owner = if display_name.is_some() || id.is_some() {
             Some(crate::types::Owner { display_name, id })
         } else {
@@ -109,7 +109,7 @@ impl<'a> ListBucketsFluentBuilder<'a> {
     }
 }
 
-fn extract_xml_buckets(text: &str) -> Vec<Bucket> {
+fn extract_xml_buckets(text: &str) -> Result<Vec<Bucket>, Error> {
     let mut buckets = Vec::new();
     crate::xml::for_each_element(text, "Bucket", |elem| {
         buckets.push(Bucket {
@@ -120,6 +120,6 @@ fn extract_xml_buckets(text: &str) -> Vec<Bucket> {
             bucket_region: elem.get("BucketRegion").map(String::from),
             bucket_arn: elem.get("BucketArn").map(String::from),
         });
-    });
-    buckets
+    })?;
+    Ok(buckets)
 }

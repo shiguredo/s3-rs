@@ -64,12 +64,12 @@ impl<'a> GetBucketTaggingFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketTaggingOutput {
-            tag_set: extract_xml_tags(body_text),
+            tag_set: extract_xml_tags(body_text)?,
         })
     }
 }
 
-fn extract_xml_tags(text: &str) -> Vec<Tag> {
+fn extract_xml_tags(text: &str) -> Result<Vec<Tag>, Error> {
     let mut tags = Vec::new();
     crate::xml::for_each_element(text, "Tag", |elem| {
         if let (Some(key), Some(value)) = (elem.get("Key"), elem.get("Value")) {
@@ -78,6 +78,6 @@ fn extract_xml_tags(text: &str) -> Vec<Tag> {
                 value: value.to_string(),
             });
         }
-    });
-    tags
+    })?;
+    Ok(tags)
 }

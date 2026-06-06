@@ -116,8 +116,8 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let deleted = extract_xml_deleted_objects(body_text);
-        let errors = extract_xml_delete_errors(body_text);
+        let deleted = extract_xml_deleted_objects(body_text)?;
+        let errors = extract_xml_delete_errors(body_text)?;
 
         Ok(DeleteObjectsOutput {
             deleted: if deleted.is_empty() {
@@ -173,7 +173,7 @@ fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> String
     w.finish()
 }
 
-fn extract_xml_deleted_objects(text: &str) -> Vec<DeletedObject> {
+fn extract_xml_deleted_objects(text: &str) -> Result<Vec<DeletedObject>, Error> {
     let mut deleted = Vec::new();
     crate::xml::for_each_element(text, "Deleted", |elem| {
         deleted.push(DeletedObject {
@@ -182,11 +182,11 @@ fn extract_xml_deleted_objects(text: &str) -> Vec<DeletedObject> {
             delete_marker: elem.get_parsed::<bool>("DeleteMarker"),
             delete_marker_version_id: elem.get("DeleteMarkerVersionId").map(String::from),
         });
-    });
-    deleted
+    })?;
+    Ok(deleted)
 }
 
-fn extract_xml_delete_errors(text: &str) -> Vec<DeleteError> {
+fn extract_xml_delete_errors(text: &str) -> Result<Vec<DeleteError>, Error> {
     let mut errors = Vec::new();
     crate::xml::for_each_element(text, "Error", |elem| {
         errors.push(DeleteError {
@@ -194,6 +194,6 @@ fn extract_xml_delete_errors(text: &str) -> Vec<DeleteError> {
             code: elem.get("Code").map(String::from),
             message: elem.get("Message").map(String::from),
         });
-    });
-    errors
+    })?;
+    Ok(errors)
 }

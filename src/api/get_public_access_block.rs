@@ -52,16 +52,16 @@ impl<'a> GetPublicAccessBlockFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetPublicAccessBlockOutput {
-            block_public_acls: crate::xml::extract_element(body_text, "BlockPublicAcls")
+            block_public_acls: crate::xml::extract_element(body_text, "BlockPublicAcls")?
                 .and_then(|v| v.parse::<bool>().ok()),
-            ignore_public_acls: crate::xml::extract_element(body_text, "IgnorePublicAcls")
+            ignore_public_acls: crate::xml::extract_element(body_text, "IgnorePublicAcls")?
                 .and_then(|v| v.parse::<bool>().ok()),
-            block_public_policy: crate::xml::extract_element(body_text, "BlockPublicPolicy")
+            block_public_policy: crate::xml::extract_element(body_text, "BlockPublicPolicy")?
                 .and_then(|v| v.parse::<bool>().ok()),
             restrict_public_buckets: crate::xml::extract_element(
                 body_text,
                 "RestrictPublicBuckets",
-            )
+            )?
             .and_then(|v| v.parse::<bool>().ok()),
         })
     }

@@ -412,26 +412,22 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         // S3 は 200 OK でもボディに <Error> を返すことがある
         check_body_error(response)?;
 
-        let body_text = std::str::from_utf8(&response.body).ok();
+        let body_text = super::xml_body_text(&response.body)?;
 
-        let copy_object_result = if let Some(t) = body_text {
-            // <CopyObjectResult> 要素配下のフィールドを抽出する
-            let last_modified = crate::xml::extract_element(t, "LastModified")
-                .map(|s| crate::datetime::parse_iso8601(s.as_str()))
-                .transpose()?;
-            Some(crate::types::CopyObjectResult {
-                e_tag: crate::xml::extract_element(t, "ETag"),
-                last_modified,
-                checksum_crc32: crate::xml::extract_element(t, "ChecksumCRC32"),
-                checksum_crc32_c: crate::xml::extract_element(t, "ChecksumCRC32C"),
-                checksum_crc64_nvme: crate::xml::extract_element(t, "ChecksumCRC64NVME"),
-                checksum_sha1: crate::xml::extract_element(t, "ChecksumSHA1"),
-                checksum_sha256: crate::xml::extract_element(t, "ChecksumSHA256"),
-                checksum_type: crate::xml::extract_element(t, "ChecksumType"),
-            })
-        } else {
-            None
-        };
+        // <CopyObjectResult> 要素配下のフィールドを抽出する
+        let last_modified = crate::xml::extract_element(body_text, "LastModified")?
+            .map(|s| crate::datetime::parse_iso8601(s.as_str()))
+            .transpose()?;
+        let copy_object_result = Some(crate::types::CopyObjectResult {
+            e_tag: crate::xml::extract_element(body_text, "ETag")?,
+            last_modified,
+            checksum_crc32: crate::xml::extract_element(body_text, "ChecksumCRC32")?,
+            checksum_crc32_c: crate::xml::extract_element(body_text, "ChecksumCRC32C")?,
+            checksum_crc64_nvme: crate::xml::extract_element(body_text, "ChecksumCRC64NVME")?,
+            checksum_sha1: crate::xml::extract_element(body_text, "ChecksumSHA1")?,
+            checksum_sha256: crate::xml::extract_element(body_text, "ChecksumSHA256")?,
+            checksum_type: crate::xml::extract_element(body_text, "ChecksumType")?,
+        });
 
         Ok(CopyObjectOutput {
             copy_object_result,

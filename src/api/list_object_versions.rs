@@ -125,15 +125,15 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        let versions = extract_xml_versions(body_text);
-        let delete_markers = extract_xml_delete_markers(body_text);
-        let common_prefixes = extract_xml_common_prefixes(body_text);
+        let versions = extract_xml_versions(body_text)?;
+        let delete_markers = extract_xml_delete_markers(body_text)?;
+        let common_prefixes = extract_xml_common_prefixes(body_text)?;
 
         Ok(ListObjectVersionsOutput {
-            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")
+            is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
                 .and_then(|v| v.parse::<bool>().ok()),
-            next_key_marker: crate::xml::extract_element(body_text, "NextKeyMarker"),
-            next_version_id_marker: crate::xml::extract_element(body_text, "NextVersionIdMarker"),
+            next_key_marker: crate::xml::extract_element(body_text, "NextKeyMarker")?,
+            next_version_id_marker: crate::xml::extract_element(body_text, "NextVersionIdMarker")?,
             versions: if versions.is_empty() {
                 None
             } else {
@@ -149,20 +149,20 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
             } else {
                 Some(common_prefixes)
             },
-            name: crate::xml::extract_element(body_text, "Name"),
-            prefix: crate::xml::extract_element(body_text, "Prefix"),
-            delimiter: crate::xml::extract_element(body_text, "Delimiter"),
-            max_keys: crate::xml::extract_element(body_text, "MaxKeys")
+            name: crate::xml::extract_element(body_text, "Name")?,
+            prefix: crate::xml::extract_element(body_text, "Prefix")?,
+            delimiter: crate::xml::extract_element(body_text, "Delimiter")?,
+            max_keys: crate::xml::extract_element(body_text, "MaxKeys")?
                 .and_then(|v| v.parse::<i32>().ok()),
-            key_marker: crate::xml::extract_element(body_text, "KeyMarker"),
-            version_id_marker: crate::xml::extract_element(body_text, "VersionIdMarker"),
-            encoding_type: crate::xml::extract_element(body_text, "EncodingType")
+            key_marker: crate::xml::extract_element(body_text, "KeyMarker")?,
+            version_id_marker: crate::xml::extract_element(body_text, "VersionIdMarker")?,
+            encoding_type: crate::xml::extract_element(body_text, "EncodingType")?
                 .map(|s| EncodingType::from(s.as_str())),
         })
     }
 }
 
-fn extract_xml_versions(text: &str) -> Vec<ObjectVersion> {
+fn extract_xml_versions(text: &str) -> Result<Vec<ObjectVersion>, Error> {
     let mut versions = Vec::new();
     crate::xml::for_each_element(text, "Version", |elem| {
         let owner = if elem.has("Owner") {
@@ -214,11 +214,11 @@ fn extract_xml_versions(text: &str) -> Vec<ObjectVersion> {
             checksum_algorithm,
             checksum_type: elem.get("ChecksumType").map(String::from),
         });
-    });
-    versions
+    })?;
+    Ok(versions)
 }
 
-fn extract_xml_delete_markers(text: &str) -> Vec<DeleteMarkerEntry> {
+fn extract_xml_delete_markers(text: &str) -> Result<Vec<DeleteMarkerEntry>, Error> {
     let mut markers = Vec::new();
     crate::xml::for_each_element(text, "DeleteMarker", |elem| {
         markers.push(DeleteMarkerEntry {
@@ -229,16 +229,16 @@ fn extract_xml_delete_markers(text: &str) -> Vec<DeleteMarkerEntry> {
                 .get("LastModified")
                 .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
         });
-    });
-    markers
+    })?;
+    Ok(markers)
 }
 
-fn extract_xml_common_prefixes(text: &str) -> Vec<CommonPrefix> {
+fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
     let mut prefixes = Vec::new();
     crate::xml::for_each_element(text, "CommonPrefixes", |elem| {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
-    });
-    prefixes
+    })?;
+    Ok(prefixes)
 }

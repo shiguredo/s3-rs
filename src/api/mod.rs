@@ -605,12 +605,21 @@ pub(crate) fn validate_presign_expires(expires_in_secs: u64) -> Result<(), Error
 /// 2xx レスポンスのボディに `<Error>` が含まれていないか検査する
 ///
 /// CompleteMultipartUpload と CopyObject は 200 OK でボディにエラーを返すことがある。
-/// `<Error>` ルートタグの存在を確認してから `<Code>` を抽出する。
+/// ボディサイズが 10MB 以下の場合は XML 全体をパースして `<Error>` ルートタグの存在を確認する。
+/// 10MB 超の場合は先頭 8KB をスキャンして `<Error` 文字列の有無を確認する。
 pub(crate) fn check_body_error(response: &S3Response) -> Result<(), Error> {
-    if response.body.len() <= MAX_XML_BODY_SIZE
-        && let Ok(text) = std::str::from_utf8(&response.body)
-        && crate::xml::has_error_root(text)
-    {
+    let has_error = if response.body.len() <= MAX_XML_BODY_SIZE {
+        let text = std::str::from_utf8(&response.body).unwrap_or("");
+        crate::xml::has_error_root(text)
+    } else {
+        // 10MB 超のボディは先頭 8KB で <Error の存在を簡易スキャンする
+        let scan_len = std::cmp::min(response.body.len(), 8192);
+        let head = &response.body[..scan_len];
+        let head_str = std::str::from_utf8(head).unwrap_or("");
+        head_str.contains("<Error") || head_str.contains("<Error ")
+    };
+
+    if has_error {
         return Err(parse_error_response_with_status(
             response.status_code,
             &response.body,
@@ -675,7 +684,7 @@ pub(crate) fn head_error_from_status(status_code: u16) -> Error {
 /// ステータスコードとボディから S3 エラーを構築する
 fn parse_error_response_with_status(status_code: u16, body: &[u8]) -> Error {
     let (code, message) = parse_s3_error_xml(body)
-        .unwrap_or_else(|| ("UnknownError".to_string(), "unknown error".to_string()));
+        .unwrap_or_else(|_| ("UnknownError".to_string(), "unknown error".to_string()));
 
     Error::S3 {
         status_code,
@@ -684,7 +693,7 @@ fn parse_error_response_with_status(status_code: u16, body: &[u8]) -> Error {
     }
 }
 
-fn parse_s3_error_xml(body: &[u8]) -> Option<(String, String)> {
+fn parse_s3_error_xml(body: &[u8]) -> Result<(String, String), Error> {
     crate::xml::parse_s3_error(body)
 }
 

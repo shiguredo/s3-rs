@@ -283,9 +283,9 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(CreateMultipartUploadOutput {
-            bucket: crate::xml::extract_element(body_text, "Bucket"),
-            key: crate::xml::extract_element(body_text, "Key"),
-            upload_id: crate::xml::extract_element(body_text, "UploadId"),
+            bucket: crate::xml::extract_element(body_text, "Bucket")?,
+            key: crate::xml::extract_element(body_text, "Key")?,
+            upload_id: crate::xml::extract_element(body_text, "UploadId")?,
         })
     }
 

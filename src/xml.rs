@@ -5,6 +5,8 @@
 
 use std::str::FromStr;
 
+use crate::error::Error;
+
 /// S3 API の namespace
 pub(crate) const S3_NS: &str = "http://s3.amazonaws.com/doc/2006-03-01/";
 
@@ -13,7 +15,11 @@ pub(crate) const S3_NS: &str = "http://s3.amazonaws.com/doc/2006-03-01/";
 // -------------------------------------------------------
 
 /// 指定タグのテキスト内容を取得する（最初に見つかったもの）
-pub(crate) fn extract_element(xml_str: &str, tag: &str) -> Option<String> {
+///
+/// タグが見つからなかった場合は `Ok(None)` を返す。
+/// パースエラー時や、対象タグ内にネストされた子要素が混在する (mixed content)
+/// 場合は `Err(Error::InvalidResponse(...))` を返す。
+pub(crate) fn extract_element(xml_str: &str, tag: &str) -> Result<Option<String>, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(xml_str);
@@ -26,21 +32,33 @@ pub(crate) fn extract_element(xml_str: &str, tag: &str) -> Option<String> {
                 inside_target = true;
                 text.clear();
             }
+            Ok(XmlEvent::StartElement { .. }) if inside_target => {
+                // 対象タグ内にネストされた子要素が出現した = mixed content
+                return Err(Error::InvalidResponse(format!(
+                    "unexpected nested child element inside <{tag}>"
+                )));
+            }
             Ok(XmlEvent::Characters(s)) if inside_target => {
                 text.push_str(&s);
             }
             Ok(XmlEvent::EndElement { name }) if inside_target && name.local_name == tag => {
-                return Some(text);
+                return Ok(Some(text));
             }
             Ok(XmlEvent::EndElement { .. }) if inside_target => {
                 // ネストされた要素の終了タグは無視する
+                // (StartElement でエラーにしているため、ここには到達しないが念のため)
+                return Err(Error::InvalidResponse(format!(
+                    "unexpected nested end element inside <{tag}>"
+                )));
             }
-            Err(_) => return None,
+            Err(e) => {
+                return Err(Error::InvalidResponse(format!("XML parse error: {e}")));
+            }
             _ => {}
         }
     }
 
-    None
+    Ok(None)
 }
 
 /// 親タグ内の子孫要素テキストを保持する構造体
@@ -95,7 +113,11 @@ impl ChildElements {
 }
 
 /// 指定した親タグの各出現に対してクロージャを呼び出す
-pub(crate) fn for_each_element<F>(xml_str: &str, parent_tag: &str, mut f: F)
+///
+/// 親タグ内の直接の子要素 (depth 2) とネストされた孫要素 (depth 3 以降)
+/// のテキストを `ChildElements` に収集する。
+/// パースエラー時は `Err(Error::InvalidResponse(...))` を返す。
+pub(crate) fn for_each_element<F>(xml_str: &str, parent_tag: &str, mut f: F) -> Result<(), Error>
 where
     F: FnMut(&ChildElements),
 {
@@ -130,18 +152,35 @@ where
             }
             Ok(XmlEvent::EndElement { name }) if inside_parent => {
                 if depth >= 2 {
-                    // パススタックの末尾と一致する終了タグなら、その時点までの
-                    // テキストをパスと共に記録する。テキストが空 (ネスト要素のみ)
-                    // でも記録する (`has()` で存在判定するため)。
-                    if let Some(top) = path_stack.last()
-                        && name.local_name == *top
-                    {
-                        children.push((path_stack.clone(), current_text.clone()));
-                        path_stack.pop();
+                    if let Some(top) = path_stack.last() {
+                        if name.local_name == *top {
+                            // パススタックの末尾と一致する終了タグなら、その時点までの
+                            // テキストをパスと共に記録する。テキストが空 (ネスト要素のみ)
+                            // でも記録する (`has()` で存在判定するため)。
+                            children.push((path_stack.clone(), current_text.clone()));
+                            path_stack.pop();
+                            depth -= 1;
+                            current_text.clear();
+                        } else {
+                            // 終了タグがパススタック末尾と不一致 = malformed XML
+                            return Err(Error::InvalidResponse(format!(
+                                "mismatched end tag </{}>: expected </{top}>",
+                                name.local_name,
+                            )));
+                        }
+                    } else {
+                        // path_stack が空なのに depth >= 2 はありえない (desync)
+                        return Err(Error::InvalidResponse(
+                            "internal error: path_stack/depth desync".to_string(),
+                        ));
                     }
-                    current_text.clear();
+                } else {
+                    // depth == 1 の終了タグ = 親タグの終了
+                    // 空要素 `<parent_tag/>` の場合は depth == 1 で終了する
+                    if name.local_name == parent_tag || depth == 1 {
+                        depth = 0;
+                    }
                 }
-                depth -= 1;
                 if depth == 0 {
                     inside_parent = false;
                     f(&ChildElements {
@@ -151,10 +190,14 @@ where
                     path_stack.clear();
                 }
             }
-            Err(_) => return,
+            Err(e) => {
+                return Err(Error::InvalidResponse(format!("XML parse error: {e}")));
+            }
             _ => {}
         }
     }
+
+    Ok(())
 }
 
 /// XML のルート要素が `<Error>` かどうかを判定する
@@ -182,11 +225,14 @@ pub(crate) fn has_error_root(xml_str: &str) -> bool {
 }
 
 /// S3 エラー XML から Code と Message を取得する
-pub(crate) fn parse_s3_error(body: &[u8]) -> Option<(String, String)> {
-    let text = std::str::from_utf8(body).ok()?;
-    let code = extract_element(text, "Code")?;
-    let message = extract_element(text, "Message").unwrap_or_default();
-    Some((code, message))
+///
+/// パースエラー時は `Err(Error::InvalidResponse(...))` を返す。
+pub(crate) fn parse_s3_error(body: &[u8]) -> Result<(String, String), Error> {
+    let text = std::str::from_utf8(body)
+        .map_err(|_| Error::InvalidResponse("S3 error response is not valid UTF-8".to_string()))?;
+    let code = extract_element(text, "Code")?.unwrap_or_default();
+    let message = extract_element(text, "Message")?.unwrap_or_default();
+    Ok((code, message))
 }
 
 // -------------------------------------------------------

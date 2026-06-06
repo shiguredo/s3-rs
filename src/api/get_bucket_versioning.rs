@@ -52,8 +52,8 @@ impl<'a> GetBucketVersioningFluentBuilder<'a> {
         let body_text = super::xml_body_text(&response.body)?;
 
         Ok(GetBucketVersioningOutput {
-            status: crate::xml::extract_element(body_text, "Status"),
-            mfa_delete: crate::xml::extract_element(body_text, "MfaDelete"),
+            status: crate::xml::extract_element(body_text, "Status")?,
+            mfa_delete: crate::xml::extract_element(body_text, "MfaDelete")?,
         })
     }
 }

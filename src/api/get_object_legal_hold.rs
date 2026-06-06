@@ -69,7 +69,7 @@ impl<'a> GetObjectLegalHoldFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
-        let status = crate::xml::extract_element(body_text, "Status");
+        let status = crate::xml::extract_element(body_text, "Status")?;
         let legal_hold = status.map(|s| ObjectLockLegalHold { status: s });
 
         Ok(GetObjectLegalHoldOutput { legal_hold })
