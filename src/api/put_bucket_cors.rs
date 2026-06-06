@@ -99,6 +99,9 @@ fn build_cors_xml(rules: &[CorsRule]) -> String {
     w.start_ns("CORSConfiguration", crate::xml::S3_NS);
     for rule in rules {
         w.start("CORSRule");
+        if let Some(ref id) = rule.id {
+            w.element("ID", id);
+        }
         for origin in &rule.allowed_origins {
             w.element("AllowedOrigin", origin);
         }
