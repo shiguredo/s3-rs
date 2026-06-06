@@ -9,8 +9,11 @@ use libfuzzer_sys::fuzz_target;
 use shiguredo_s3::api::{
     CompleteMultipartUploadFluentBuilder, CopyObjectFluentBuilder,
     CreateMultipartUploadFluentBuilder, DeleteObjectsFluentBuilder,
-    GetBucketEncryptionFluentBuilder, GetBucketLifecycleConfigurationFluentBuilder,
-    GetBucketNotificationConfigurationFluentBuilder, GetBucketTaggingFluentBuilder,
+    GetBucketCorsFluentBuilder, GetBucketEncryptionFluentBuilder,
+    GetBucketLifecycleConfigurationFluentBuilder,
+    GetBucketNotificationConfigurationFluentBuilder,
+    GetObjectLockConfigurationFluentBuilder,
+    GetBucketTaggingFluentBuilder,
     GetBucketWebsiteFluentBuilder,
     GetBucketVersioningFluentBuilder, GetPublicAccessBlockFluentBuilder,
     ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder, ListObjectsV2FluentBuilder,
@@ -42,4 +45,6 @@ fuzz_target!(|data: &[u8]| {
     let _ = GetBucketLifecycleConfigurationFluentBuilder::parse_response(&response);
     let _ = GetBucketNotificationConfigurationFluentBuilder::parse_response(&response);
     let _ = GetBucketWebsiteFluentBuilder::parse_response(&response);
+    let _ = GetBucketCorsFluentBuilder::parse_response(&response);
+    let _ = GetObjectLockConfigurationFluentBuilder::parse_response(&response);
 });

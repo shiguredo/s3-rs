@@ -55,9 +55,8 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
-        Ok(GetBucketLifecycleConfigurationOutput {
-            rules: extract_lifecycle_rules(body_text),
-        })
+        extract_lifecycle_rules(body_text)
+            .map(|rules| GetBucketLifecycleConfigurationOutput { rules })
     }
 }
 
@@ -65,7 +64,7 @@ impl<'a> GetBucketLifecycleConfigurationFluentBuilder<'a> {
 ///
 /// Rule 内にネストされた要素 (Filter, Expiration, Transition 等) があるため
 /// EventReader で直接パースする。
-fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
+fn extract_lifecycle_rules(text: &str) -> Result<Vec<LifecycleRule>, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -230,9 +229,9 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                         rules.push(LifecycleRule {
                             id: id.take(),
                             filter: filter.take(),
-                            status: status
-                                .parse::<ExpirationStatus>()
-                                .unwrap_or(ExpirationStatus::Enabled),
+                            status: status.parse::<ExpirationStatus>().map_err(|_| {
+                                Error::InvalidResponse("failed to parse Status in Rule".to_string())
+                            })?,
                             expiration: expiration.take(),
                             transitions: if transitions.is_empty() {
                                 None
@@ -278,9 +277,21 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             match tag.as_str() {
                                 "Prefix" => filter_prefix = Some(current_text.clone()),
                                 "ObjectSizeGreaterThan" => {
-                                    filter_size_gt = current_text.parse().ok()
+                                    filter_size_gt = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse ObjectSizeGreaterThan in Filter"
+                                                .to_string(),
+                                        )
+                                    })?);
                                 }
-                                "ObjectSizeLessThan" => filter_size_lt = current_text.parse().ok(),
+                                "ObjectSizeLessThan" => {
+                                    filter_size_lt = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse ObjectSizeLessThan in Filter"
+                                                .to_string(),
+                                        )
+                                    })?);
+                                }
                                 _ => {}
                             }
                         }
@@ -324,8 +335,22 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                         {
                             match tag.as_str() {
                                 "Prefix" => and_prefix = Some(current_text.clone()),
-                                "ObjectSizeGreaterThan" => and_size_gt = current_text.parse().ok(),
-                                "ObjectSizeLessThan" => and_size_lt = current_text.parse().ok(),
+                                "ObjectSizeGreaterThan" => {
+                                    and_size_gt = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse ObjectSizeGreaterThan in Filter > And"
+                                                .to_string(),
+                                        )
+                                    })?);
+                                }
+                                "ObjectSizeLessThan" => {
+                                    and_size_lt = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse ObjectSizeLessThan in Filter > And"
+                                                .to_string(),
+                                        )
+                                    })?);
+                                }
                                 _ => {}
                             }
                         }
@@ -363,7 +388,13 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             && *tag == *tag_name
                         {
                             match tag.as_str() {
-                                "Days" => exp_days = current_text.parse().ok(),
+                                "Days" => {
+                                    exp_days = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse Days in Expiration".to_string(),
+                                        )
+                                    })?);
+                                }
                                 "Date" => exp_date = Some(current_text.clone()),
                                 "ExpiredObjectDeleteMarker" => {
                                     exp_delete_marker = Some(current_text == "true")
@@ -388,7 +419,13 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             && *tag == *tag_name
                         {
                             match tag.as_str() {
-                                "Days" => trans_days = current_text.parse().ok(),
+                                "Days" => {
+                                    trans_days = Some(current_text.parse().map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse Days in Transition".to_string(),
+                                        )
+                                    })?);
+                                }
                                 "Date" => trans_date = Some(current_text.clone()),
                                 "StorageClass" => trans_storage_class = Some(current_text.clone()),
                                 _ => {}
@@ -410,9 +447,27 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             && *tag == *tag_name
                         {
                             match tag.as_str() {
-                                "NoncurrentDays" => nv_exp_days = current_text.parse().ok(),
+                                "NoncurrentDays" => {
+                                    nv_exp_days = Some(
+                                        current_text
+                                            .parse()
+                                            .map_err(|_| {
+                                                Error::InvalidResponse(
+                                                    "failed to parse NoncurrentDays in NoncurrentVersionExpiration".to_string(),
+                                                )
+                                            })?,
+                                    );
+                                }
                                 "NewerNoncurrentVersions" => {
-                                    nv_exp_newer = current_text.parse().ok()
+                                    nv_exp_newer = Some(
+                                        current_text
+                                            .parse()
+                                            .map_err(|_| {
+                                                Error::InvalidResponse(
+                                                    "failed to parse NewerNoncurrentVersions in NoncurrentVersionExpiration".to_string(),
+                                                )
+                                            })?,
+                                    );
                                 }
                                 _ => {}
                             }
@@ -436,12 +491,30 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             && *tag == *tag_name
                         {
                             match tag.as_str() {
-                                "NoncurrentDays" => nv_trans_days = current_text.parse().ok(),
+                                "NoncurrentDays" => {
+                                    nv_trans_days = Some(
+                                        current_text
+                                            .parse()
+                                            .map_err(|_| {
+                                                Error::InvalidResponse(
+                                                    "failed to parse NoncurrentDays in NoncurrentVersionTransition".to_string(),
+                                                )
+                                            })?,
+                                    );
+                                }
                                 "StorageClass" => {
                                     nv_trans_storage_class = Some(current_text.clone())
                                 }
                                 "NewerNoncurrentVersions" => {
-                                    nv_trans_newer = current_text.parse().ok()
+                                    nv_trans_newer = Some(
+                                        current_text
+                                            .parse()
+                                            .map_err(|_| {
+                                                Error::InvalidResponse(
+                                                    "failed to parse NewerNoncurrentVersions in NoncurrentVersionTransition".to_string(),
+                                                )
+                                            })?,
+                                    );
                                 }
                                 _ => {}
                             }
@@ -461,17 +534,43 @@ fn extract_lifecycle_rules(text: &str) -> Vec<LifecycleRule> {
                             && *tag == *tag_name
                             && tag == "DaysAfterInitiation"
                         {
-                            abort_days = current_text.parse().ok();
+                            abort_days = Some(
+                                current_text
+                                    .parse()
+                                    .map_err(|_| {
+                                        Error::InvalidResponse(
+                                            "failed to parse DaysAfterInitiation in AbortIncompleteMultipartUpload".to_string(),
+                                        )
+                                    })?,
+                            );
                         }
                         current_tag = None;
                     }
                     _ => {}
                 }
             }
-            Err(_) => return rules,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = match ctx {
+                    Context::None => "LifecycleConfiguration",
+                    Context::Rule => "Rule",
+                    Context::Filter => "Filter",
+                    Context::FilterAnd => "Filter > And",
+                    Context::FilterTag => "Filter > Tag",
+                    Context::FilterAndTag => "Filter > And > Tag",
+                    Context::Expiration => "Expiration",
+                    Context::Transition => "Transition",
+                    Context::NoncurrentVersionExpiration => "NoncurrentVersionExpiration",
+                    Context::NoncurrentVersionTransition => "NoncurrentVersionTransition",
+                    Context::AbortIncompleteMultipartUpload => "AbortIncompleteMultipartUpload",
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    rules
+    Ok(rules)
 }

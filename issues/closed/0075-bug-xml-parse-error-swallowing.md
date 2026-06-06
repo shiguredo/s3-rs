@@ -4,6 +4,7 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/fix-get-bucket-xml-parse-error-swallowing
 
 ## 目的
@@ -43,6 +44,26 @@ status.parse::<ExpirationStatus>().unwrap_or(ExpirationStatus::Enabled)
 ## スコープ外
 
 以下の問題は本 issue のスコープ外とする。0075 を先に対応し、0079 で `xml.rs` の内部 API を統一する。
+
+## 解決方法
+
+6 つのヘルパー関数の戻り値を `Result<T, Error>` に変更し、XML パースエラー時に `Error::InvalidResponse` を返すように修正した。
+
+1. `get_bucket_encryption.rs`: `extract_encryption_rules` → `Result<Vec<ServerSideEncryptionRule>, Error>`、`Err(_) => return rules` → `return Err(InvalidResponse(...))`
+2. `get_bucket_cors.rs`: `extract_cors_rules` → `Result<Vec<CorsRule>, Error>`、`MaxAgeSeconds` の `.parse().ok()` → `.map_err()?`
+3. `get_bucket_lifecycle_configuration.rs`: `extract_lifecycle_rules` → `Result<Vec<LifecycleRule>, Error>`、`.unwrap_or(ExpirationStatus::Enabled)` 除去、全 `.parse().ok()` (14 箇所) → `.map_err()?`
+4. `get_object_lock_configuration.rs`: `parse_object_lock_configuration` → `Result<ObjectLockConfiguration, Error>`、`Err(_) => break` → `return Err(...)`、`Days`/`Years` の `.parse().ok()` → `.map_err()?`
+5. `get_bucket_website.rs`: `parse_website_configuration` → `Result<GetBucketWebsiteOutput, Error>`、`Err(_) => break` → `return Err(...)`
+6. `get_bucket_notification_configuration.rs`: `parse_notification_configuration` → `Result<GetBucketNotificationConfigurationOutput, Error>`、`Err(_) => break` → `return Err(...)`
+
+追加・変更したテスト:
+- `tests/test_get_bucket_encryption.rs` — 切断 XML、non-UTF-8 ボディ、SSEAlgorithm 空文字列
+- `tests/test_get_bucket_cors.rs` — 切断 XML、非数値 MaxAgeSeconds、オーバーフロー MaxAgeSeconds
+- `tests/test_get_bucket_lifecycle_configuration.rs` — 切断 XML、無効 Status、非数値 Days、非数値 ObjectSizeGreaterThan
+- `tests/test_get_object_lock_configuration.rs` — 切断 XML、非数値 Days、非数値 Years
+- `tests/test_get_bucket_website.rs` — 切断 XML
+- `tests/test_get_bucket_notification_configuration.rs` — 切断 XML
+- `fuzz/fuzz_targets/fuzz_xml_parse.rs` — `GetBucketCorsFluentBuilder` と `GetObjectLockConfigurationFluentBuilder` を追加
 
 - `xml.rs` の `extract_element` (`Err(_) => return None`) と `for_each_element` (`Err(_) => return`) のエラー握り潰し — issue 0079 で対応
 - `parse_response` 側の `.and_then(|v| v.parse().ok())` 等のパース失敗黙殺 — 0079 の design に含まれていないため、新規 issue 化が必要

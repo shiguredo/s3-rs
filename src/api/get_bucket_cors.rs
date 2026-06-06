@@ -49,8 +49,9 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
 
         let body_text = super::xml_body_text(&response.body)?;
 
+        let cors_rules = extract_cors_rules(body_text)?;
         Ok(GetBucketCorsOutput {
-            cors_rules: Some(extract_cors_rules(body_text)),
+            cors_rules: Some(cors_rules),
         })
     }
 }
@@ -60,7 +61,7 @@ impl<'a> GetBucketCorsFluentBuilder<'a> {
 /// CORSRule 内の AllowedOrigin, AllowedMethod, AllowedHeader, ExposeHeader は
 /// 同名タグが複数出現するため、for_each_element (最後の値のみ保持) は使えない。
 /// EventReader で直接パースする。
-fn extract_cors_rules(text: &str) -> Vec<CorsRule> {
+fn extract_cors_rules(text: &str) -> Result<Vec<CorsRule>, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -118,17 +119,33 @@ fn extract_cors_rules(text: &str) -> Vec<CorsRule> {
                             "AllowedMethod" => allowed_methods.push(current_text.clone()),
                             "AllowedHeader" => allowed_headers.push(current_text.clone()),
                             "ExposeHeader" => expose_headers.push(current_text.clone()),
-                            "MaxAgeSeconds" => max_age_seconds = current_text.parse().ok(),
+                            "MaxAgeSeconds" => {
+                                max_age_seconds = Some(current_text.parse().map_err(|_| {
+                                    Error::InvalidResponse(
+                                        "failed to parse MaxAgeSeconds in CORSRule".to_string(),
+                                    )
+                                })?);
+                            }
                             _ => {}
                         }
                     }
                     current_tag = None;
                 }
             }
-            Err(_) => return rules,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = if inside_rule {
+                    "CORSRule"
+                } else {
+                    "CORSConfiguration"
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    rules
+    Ok(rules)
 }

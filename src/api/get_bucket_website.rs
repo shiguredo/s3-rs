@@ -51,12 +51,12 @@ impl<'a> GetBucketWebsiteFluentBuilder<'a> {
         }
 
         let body_text = super::xml_body_text(&response.body)?;
-        Ok(parse_website_configuration(body_text))
+        parse_website_configuration(body_text)
     }
 }
 
 /// WebsiteConfiguration XML をパースする
-fn parse_website_configuration(text: &str) -> GetBucketWebsiteOutput {
+fn parse_website_configuration(text: &str) -> Result<GetBucketWebsiteOutput, Error> {
     use xml::reader::{EventReader, XmlEvent};
 
     let reader = EventReader::from_str(text);
@@ -243,15 +243,30 @@ fn parse_website_configuration(text: &str) -> GetBucketWebsiteOutput {
                     _ => {}
                 }
             }
-            Err(_) => break,
+            Err(_) => {
+                let element = current_tag.as_deref().unwrap_or("unknown");
+                let parent = match ctx {
+                    Ctx::Root => "WebsiteConfiguration",
+                    Ctx::RoutingRules => "RoutingRules",
+                    Ctx::IndexDocument => "IndexDocument",
+                    Ctx::ErrorDocument => "ErrorDocument",
+                    Ctx::RedirectAll => "RedirectAllRequestsTo",
+                    Ctx::RoutingRule => "RoutingRule",
+                    Ctx::Condition => "Condition",
+                    Ctx::Redirect => "Redirect",
+                };
+                return Err(Error::InvalidResponse(format!(
+                    "failed to parse {element} in {parent}"
+                )));
+            }
             _ => {}
         }
     }
 
-    GetBucketWebsiteOutput {
+    Ok(GetBucketWebsiteOutput {
         index_document,
         error_document,
         redirect_all_requests_to: redirect_all,
         routing_rules,
-    }
+    })
 }
