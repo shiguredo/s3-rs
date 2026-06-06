@@ -11,6 +11,17 @@
 
 ## develop
 
+- [ADD] DeleteObjectOutput に `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] CreateMultipartUploadOutput に `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] ListObjectsV2Output に `encoding_type` フィールドを追加する
+  - @voluntas
+- [ADD] ListMultipartUploadsOutput に `encoding_type` および `request_charged` フィールドを追加する
+  - @voluntas
+- [ADD] GetObjectOutput / HeadObjectOutput に `website_redirect_location` フィールドを追加する
+  - @voluntas
+
 - [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
   - @voluntas
 - [FIX] GetObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する

@@ -82,6 +82,9 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
                 .get_header("x-amz-delete-marker")
                 .and_then(|v| v.parse().ok()),
             version_id: response.get_header("x-amz-version-id").map(String::from),
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
         })
     }
 

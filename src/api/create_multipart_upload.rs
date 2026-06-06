@@ -286,6 +286,9 @@ impl<'a> CreateMultipartUploadFluentBuilder<'a> {
             bucket: crate::xml::extract_element(body_text, "Bucket")?,
             key: crate::xml::extract_element(body_text, "Key")?,
             upload_id: crate::xml::extract_element(body_text, "UploadId")?,
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
         })
     }
 

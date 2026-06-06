@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-05-25
+- Completed: 2026-06-06
 - Model: Composer 2.5
 - Polished: 2026-06-06
 - Branch: feature/add-aws-sdk-output-fields
@@ -51,3 +52,14 @@ CHANGES.md の `develop` に `[ADD]` 記載の API が実装されていても�
 - `parse_response` が実レスポンスから値を設定する
 - CHANGES.md の `develop` に `[ADD]` エントリを追記する
 - 統合テストで主要フィールドを検証する
+
+## 解決方法
+
+以下の Output 型に欠落フィールドを追加し、parse_response でレスポンスから値を設定するようにした:
+
+- `DeleteObjectOutput`: `request_charged` フィールドを追加、`x-amz-request-charged` ヘッダーからパース
+- `CreateMultipartUploadOutput`: `request_charged` フィールドを追加、`x-amz-request-charged` ヘッダーからパース
+- `ListObjectsV2Output`: `encoding_type` フィールドを追加、XML `<EncodingType>` 要素から `EncodingType::from()` でパース
+- `ListMultipartUploadsOutput`: `encoding_type` フィールドを追加（XML `<EncodingType>` 要素からパース）、`request_charged` フィールドを追加（`x-amz-request-charged` ヘッダーからパース）
+- `GetObjectOutput`: `website_redirect_location` フィールドを追加、`x-amz-website-redirect-location` ヘッダーからパース
+- `HeadObjectOutput`: `website_redirect_location` フィールドを追加、`x-amz-website-redirect-location` ヘッダーからパース
