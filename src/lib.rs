@@ -1,6 +1,6 @@
 // rust-crypto と aws_lc_rs の両方が無効の場合はコンパイルエラー
 #[cfg(not(any(feature = "rust-crypto", feature = "aws_lc_rs")))]
-compile_error!("feature \"rust-crypto\" または \"aws_lc_rs\" のどちらかを有効にしてください。");
+compile_error!("either feature \"rust-crypto\" or \"aws_lc_rs\" must be enabled");
 
 pub mod api;
 mod checksum;

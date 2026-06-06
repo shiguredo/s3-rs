@@ -4,7 +4,22 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/fix-project-convention-compliance
+
+## 解決方法
+
+以下の修正を実施した:
+
+- `#[allow]` を全て `#[expect]` に変更 (`src/api/mod.rs` 3 箇所、`examples/s3cli/` 6 箇所)
+- `src/lib.rs` の `compile_error!` を日本語から英語に変更
+- `examples/s3cli/Cargo.toml` の `shiguredo_http11` バージョン指定を `"2026.5.0"` → `"2026.5"` に修正
+- `src/types.rs` の解決済み issue (0059, 0064) を参照するコメントから issue 参照部分を削除 (5 箇所)
+- `.github/workflows/ci.yml` の clippy コマンドに `--all-targets` を追加
+- `CHANGES.md` を CHANGE → ADD → UPDATE → FIX の種別順に再整理、[ADD] HttpDate 追加エントリを削除、shiguredo_http11 misc エントリを統合
+- `docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
+
+全テストと clippy (`--all-targets`) が通過することを確認した。
 
 ## 目的
 

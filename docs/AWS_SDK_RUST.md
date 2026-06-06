@@ -7,7 +7,6 @@ aws-sdk-s3 と shiguredo_s3 の API パラメータ対応をまとめる。
 - 対応済み: shiguredo_s3 で利用可能
 - **未対応**: shiguredo_s3 で未実装
 - 対応予定無し: S3 固有機能 / S3 互換ストレージで意味が薄いため対応しない
-- (*): shiguredo_s3 独自パラメータ (aws-sdk-rust に存在しない)
 
 ## 対応方針
 

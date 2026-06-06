@@ -170,7 +170,7 @@ pub struct GetObjectOutput {
     pub ssekms_key_id: Option<String>,
     /// `x-amz-server-side-encryption-bucket-key-enabled`
     pub bucket_key_enabled: Option<bool>,
-    /// `x-amz-request-charged` (issue 0059 後続で `RequestCharged` 型化)
+    /// `x-amz-request-charged`
     pub request_charged: Option<String>,
     /// `x-amz-tagging-count`
     pub tag_count: Option<i32>,
@@ -357,7 +357,7 @@ pub struct CopyObjectResult {
     pub checksum_crc64_nvme: Option<String>,
     pub checksum_sha1: Option<String>,
     pub checksum_sha256: Option<String>,
-    /// `<ChecksumType>` 要素 (issue 0064 後続で型化検討)
+    /// `<ChecksumType>` 要素
     pub checksum_type: Option<String>,
 }
 
@@ -525,7 +525,7 @@ pub struct ObjectVersion {
     pub restore_status: Option<RestoreStatus>,
     /// 各オブジェクトに有効なチェックサムアルゴリズムのリスト
     pub checksum_algorithm: Option<Vec<ChecksumAlgorithm>>,
-    /// `<ChecksumType>` 要素 (issue 0059 後続で型化検討)
+    /// `<ChecksumType>` 要素
     pub checksum_type: Option<String>,
 }
 
@@ -550,7 +550,7 @@ pub struct Object {
     pub restore_status: Option<RestoreStatus>,
     /// 各オブジェクトに有効なチェックサムアルゴリズムのリスト
     pub checksum_algorithm: Option<Vec<ChecksumAlgorithm>>,
-    /// `<ChecksumType>` 要素 (issue 0059 後続で型化検討)
+    /// `<ChecksumType>` 要素
     pub checksum_type: Option<String>,
 }
 
@@ -588,7 +588,7 @@ pub struct HeadBucketOutput {
     pub bucket_region: Option<String>,
     /// バケットの ARN
     pub bucket_arn: Option<String>,
-    /// バケットのロケーションタイプ (issue 0059 後続で型化検討)
+    /// バケットのロケーションタイプ
     pub bucket_location_type: Option<String>,
     /// バケットのロケーション名
     pub bucket_location_name: Option<String>,

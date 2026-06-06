@@ -287,7 +287,7 @@ impl Client {
 ///
 /// `now` は `x-amz-date` ヘッダーおよびクレデンシャルスコープに使う現在時刻。
 /// Sans I/O 原則のため呼び出し側で `SystemTime::now()` を取得して渡す。
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn build_signed_request(
     config: &ClientConfig<'_>,
     method: &str,
@@ -336,7 +336,7 @@ pub(crate) fn build_signed_service_request(
 }
 
 /// 署名済みリクエスト構築の共通処理
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn build_signed_request_inner(
     config: &ClientConfig<'_>,
     method: &str,
@@ -421,7 +421,7 @@ fn build_signed_request_inner(
 /// `extra_headers` は署名対象に含める追加 header (SSE-C 等)。
 /// リクエスト時にも同じ header を付与する必要がある。
 /// `now` は `X-Amz-Date` クエリパラメータおよびクレデンシャルスコープに使う現在時刻。
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn build_presigned_url(
     config: &ClientConfig<'_>,
     method: &str,
