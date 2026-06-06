@@ -65,6 +65,23 @@ impl<'a> PutBucketWebsiteFluentBuilder<'a> {
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
+        let has_index = self.index_document.is_some();
+        let has_error = self.error_document.is_some();
+        let has_redirect = self.redirect_all_requests_to.is_some();
+        let has_routing = !self.routing_rules.is_empty();
+
+        if !has_index && !has_error && !has_redirect && !has_routing {
+            return Err(Error::InvalidInput(
+                "website configuration is required".to_string(),
+            ));
+        }
+
+        if has_redirect && (has_index || has_error || has_routing) {
+            return Err(Error::InvalidInput(
+                "redirect_all_requests_to cannot be set together with IndexDocument, ErrorDocument, or RoutingRules".to_string(),
+            ));
+        }
+
         let xml_body = build_website_xml(
             &self.index_document,
             &self.error_document,

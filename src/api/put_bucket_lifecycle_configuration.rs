@@ -63,6 +63,12 @@ impl<'a> PutBucketLifecycleConfigurationFluentBuilder<'a> {
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
+        if self.rules.is_empty() {
+            return Err(Error::InvalidInput(
+                "lifecycle rules is required".to_string(),
+            ));
+        }
+
         let xml_body = build_lifecycle_xml(&self.rules);
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![

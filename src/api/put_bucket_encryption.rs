@@ -64,6 +64,19 @@ impl<'a> PutBucketEncryptionFluentBuilder<'a> {
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
+        if self.rules.is_empty() {
+            return Err(Error::InvalidInput(
+                "encryption rules is required".to_string(),
+            ));
+        }
+        for rule in &self.rules {
+            if let Some(ref default) = rule.apply_server_side_encryption_by_default
+                && default.sse_algorithm.is_empty()
+            {
+                return Err(Error::InvalidInput("sse_algorithm is required".to_string()));
+            }
+        }
+
         let xml_body = build_encryption_xml(&self.rules);
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![

@@ -64,6 +64,12 @@ impl<'a> PutObjectLockConfigurationFluentBuilder<'a> {
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
+        if self.object_lock_configuration.is_none() {
+            return Err(Error::InvalidInput(
+                "object_lock_configuration is required".to_string(),
+            ));
+        }
+
         let xml_body = build_object_lock_configuration_xml(&self.object_lock_configuration);
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
