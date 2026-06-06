@@ -113,6 +113,8 @@
   - @voluntas
 - [CHANGE] `CopyObjectOutput` のフラット構造を `CopyObjectResult` ネスト構造に変更する (`e_tag` / `last_modified` を `copy_object_result` 配下に移動、aws-sdk-rust 互換)
   - @voluntas
+- [CHANGE] `second == 60` (閏秒) をエラーに変更し閏秒非対応を明文化する
+  - @voluntas
 - [ADD] `Owner` / `RestoreStatus` 型を追加する (aws-sdk-rust 互換)
   - @voluntas
 - [ADD] `Object` / `ObjectVersion` に `owner` / `restore_status` / `checksum_algorithm` / `checksum_type` フィールドを追加する
@@ -138,6 +140,8 @@
 - [FIX] Status パース失敗時の ExpirationStatus::Enabled フォールバックを除去する
   - @voluntas
 - [FIX] CorsRule ID の XML serialize / parse を実装しラウンドトリップを可能にする
+  - @voluntas
+- [FIX] datetime モジュールの日時検証・オーバーフロー不備を修正する
   - @voluntas
 
 ### misc

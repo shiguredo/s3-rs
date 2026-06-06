@@ -4,6 +4,7 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/fix-datetime-validation-overflow
 
 ## 目的
@@ -102,3 +103,13 @@ datetime モジュールの関数は純粋なパーサーであるため `Error:
 - `pbt/tests/prop_datetime.rs` に PBT テストを新規作成し、ラウンドトリップを検証する:
   - `unix_timestamp_from_civil` → `civil_from_unix_timestamp` → 元に戻る
   - `parse_iso8601` → `format_iso8601` → 元に戻る (`format_iso8601` (extended 形式: `YYYY-MM-DDTHH:MM:SSZ`) を新規実装)
+
+## 解決方法
+
+1. `unix_timestamp_from_civil`: year 上限 9999 追加、second > 59 エラー化、checked_mul/checked_add でオーバーフロー対策、ラウンドトリップ検証で存在しない暦日を検出
+2. `civil_from_unix_timestamp`: 戻り値を Result に変更、`i32::try_from(y)` でオーバーフロー検出
+3. `parse_iso8601`: s[19] 以降の小数秒形式を厳密検証（`.` + 数字 + `Z`）
+4. `validate_imf_fixdate`: 数字部分と区切り文字の形式検証を追加
+5. `UtcDateTime::from_unix_timestamp`: 戻り値を Result に変更
+6. 呼び出し側の修正: `delete_objects.rs`、`signing.rs` のテスト
+7. datetime モジュールに存在しない暦日、うるう年、閏秒、year 境界値の単体テストを追加

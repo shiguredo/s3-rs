@@ -43,10 +43,72 @@ pub fn validate_imf_fixdate(s: &str) -> Result<(), Error> {
         ));
     }
 
+    // 日 (s[5..7]) が ASCII 数字
+    if !s.as_bytes()[5..7].iter().all(|b| b.is_ascii_digit()) {
+        return Err(Error::InvalidInput(
+            "expected digits for day in IMF-fixdate".to_string(),
+        ));
+    }
+    // 日と月の間のスペース
+    if s.as_bytes()[7] != b' ' {
+        return Err(Error::InvalidInput(
+            "expected space after day in IMF-fixdate".to_string(),
+        ));
+    }
+
     // 月チェック (8..11)
     let month = &s[8..11];
     if !crate::datetime::MONTH_NAMES.contains(&month) {
         return Err(Error::InvalidInput(format!("invalid month: {month}")));
+    }
+
+    // 月と年の間のスペース
+    if s.as_bytes()[11] != b' ' {
+        return Err(Error::InvalidInput(
+            "expected space after month in IMF-fixdate".to_string(),
+        ));
+    }
+    // 年 (s[12..16]) が ASCII 数字
+    if !s.as_bytes()[12..16].iter().all(|b| b.is_ascii_digit()) {
+        return Err(Error::InvalidInput(
+            "expected digits for year in IMF-fixdate".to_string(),
+        ));
+    }
+    // 年と時刻の間のスペース
+    if s.as_bytes()[16] != b' ' {
+        return Err(Error::InvalidInput(
+            "expected space after year in IMF-fixdate".to_string(),
+        ));
+    }
+    // 時 (s[17..19]) が ASCII 数字
+    if !s.as_bytes()[17..19].iter().all(|b| b.is_ascii_digit()) {
+        return Err(Error::InvalidInput(
+            "expected digits for hour in IMF-fixdate".to_string(),
+        ));
+    }
+    // : 区切り
+    if s.as_bytes()[19] != b':' {
+        return Err(Error::InvalidInput(
+            "expected ':' after hour in IMF-fixdate".to_string(),
+        ));
+    }
+    // 分 (s[20..22]) が ASCII 数字
+    if !s.as_bytes()[20..22].iter().all(|b| b.is_ascii_digit()) {
+        return Err(Error::InvalidInput(
+            "expected digits for minute in IMF-fixdate".to_string(),
+        ));
+    }
+    // : 区切り
+    if s.as_bytes()[22] != b':' {
+        return Err(Error::InvalidInput(
+            "expected ':' after minute in IMF-fixdate".to_string(),
+        ));
+    }
+    // 秒 (s[23..25]) が ASCII 数字
+    if !s.as_bytes()[23..25].iter().all(|b| b.is_ascii_digit()) {
+        return Err(Error::InvalidInput(
+            "expected digits for second in IMF-fixdate".to_string(),
+        ));
     }
 
     // GMT チェック (末尾)

@@ -6,6 +6,8 @@
 //! - 署名計算で使う `UtcDateTime` (ISO 8601 basic / date stamp 出力)
 //! - HTTP ヘッダー入出力で使う `format_imf_fixdate` / `parse_imf_fixdate`
 //! - XML レスポンスの ISO 8601 拡張形式パース用 `parse_iso8601`
+//!
+//! 閏秒 (second == 60) は非対応。second > 59 はエラーとして扱う。
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -34,7 +36,8 @@ pub(crate) struct CivilDateTime {
 /// UNIX タイムスタンプから UTC 日時の各フィールドを計算する
 ///
 /// Howard Hinnant の civil_from_days アルゴリズムを使用する。
-pub(crate) fn civil_from_unix_timestamp(secs: u64) -> CivilDateTime {
+/// year が i32 の範囲外になるような極端な入力では `Error::InvalidInput` を返す。
+pub(crate) fn civil_from_unix_timestamp(secs: u64) -> Result<CivilDateTime, Error> {
     let days = (secs / 86400) as i64;
     let time_of_day = (secs % 86400) as u32;
     let hour = time_of_day / 3600;
@@ -52,21 +55,23 @@ pub(crate) fn civil_from_unix_timestamp(secs: u64) -> CivilDateTime {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
 
-    CivilDateTime {
-        year: y as i32,
+    Ok(CivilDateTime {
+        year: i32::try_from(y)
+            .map_err(|_| Error::InvalidInput(format!("year out of range: {y}")))?,
         month: m,
         day: d,
         hour,
         minute,
         second,
         days_since_epoch: days,
-    }
+    })
 }
 
 /// UTC 日時 (年, 月, 日, 時, 分, 秒) から UNIX タイムスタンプ (秒) を計算する
 ///
 /// Howard Hinnant の days_from_civil アルゴリズムを使用する。
 /// UNIX epoch より前の日付や 1970 年より前の年は `Err(Error::InvalidInput)` を返す。
+/// 存在しない暦日 (例: 2024-02-31) はラウンドトリップ検証で検出する。
 pub(crate) fn unix_timestamp_from_civil(
     year: i32,
     month: u32,
@@ -77,6 +82,9 @@ pub(crate) fn unix_timestamp_from_civil(
 ) -> Result<u64, Error> {
     if year < 1970 {
         return Err(Error::InvalidInput(format!("year must be >= 1970: {year}")));
+    }
+    if year > 9999 {
+        return Err(Error::InvalidInput(format!("year must be <= 9999: {year}")));
     }
     if !(1..=12).contains(&month) {
         return Err(Error::InvalidInput(format!("invalid month: {month}")));
@@ -90,7 +98,7 @@ pub(crate) fn unix_timestamp_from_civil(
     if minute > 59 {
         return Err(Error::InvalidInput(format!("invalid minute: {minute}")));
     }
-    if second > 60 {
+    if second > 59 {
         return Err(Error::InvalidInput(format!("invalid second: {second}")));
     }
 
@@ -114,10 +122,25 @@ pub(crate) fn unix_timestamp_from_civil(
         )));
     }
 
-    let secs = (days as u64) * 86400
-        + (hour as u64) * 3600
-        + (minute as u64) * 60
-        + (second.min(59) as u64);
+    let secs = (days as u64)
+        .checked_mul(86400)
+        .and_then(|s| s.checked_add((hour as u64) * 3600))
+        .and_then(|s| s.checked_add((minute as u64) * 60))
+        .and_then(|s| s.checked_add(second as u64))
+        .ok_or_else(|| {
+            Error::InvalidInput(format!(
+                "timestamp overflow for {year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}"
+            ))
+        })?;
+
+    // ラウンドトリップ検証で存在しない暦日 (例: 2024-02-31) を検出する
+    let civil = civil_from_unix_timestamp(secs)?;
+    if civil.year != year || civil.month != month || civil.day != day {
+        return Err(Error::InvalidInput(format!(
+            "invalid calendar date: {year:04}-{month:02}-{day:02}"
+        )));
+    }
+
     Ok(secs)
 }
 
@@ -136,14 +159,14 @@ impl UtcDateTime {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| Error::InvalidInput("now is before UNIX epoch".to_string()))?
             .as_secs();
-        Ok(Self::from_unix_timestamp(secs))
+        Self::from_unix_timestamp(secs)
     }
 
     /// UNIX タイムスタンプから UTC 日時を生成する (テスト用)
-    pub(crate) fn from_unix_timestamp(secs: u64) -> Self {
-        Self {
-            civil: civil_from_unix_timestamp(secs),
-        }
+    pub(crate) fn from_unix_timestamp(secs: u64) -> Result<Self, Error> {
+        Ok(Self {
+            civil: civil_from_unix_timestamp(secs)?,
+        })
     }
 
     /// ISO 8601 形式 (YYYYMMDDTHHMMSSZ) で返す
@@ -172,7 +195,7 @@ pub(crate) fn format_imf_fixdate(t: SystemTime) -> Result<String, Error> {
         .duration_since(UNIX_EPOCH)
         .map_err(|_| Error::InvalidInput("date is before UNIX epoch".to_string()))?
         .as_secs();
-    let c = civil_from_unix_timestamp(secs);
+    let c = civil_from_unix_timestamp(secs)?;
     let weekday = ((c.days_since_epoch.rem_euclid(7) + 4) % 7) as usize;
     Ok(format!(
         "{}, {:02} {} {:04} {:02}:{:02}:{:02} GMT",
@@ -229,7 +252,7 @@ pub(crate) fn parse_imf_fixdate(s: &str) -> Result<SystemTime, Error> {
 /// - `YYYY-MM-DDTHH:MM:SS.fffZ` (XML レスポンスの `<LastModified>` 等)
 /// - `YYYY-MM-DDTHH:MM:SSZ`
 ///
-/// 小数秒は秒精度に切り捨てる (`SystemTime` は本 crate 内ではミリ秒以下を扱わない方針)。
+/// 小数秒部分は形式検証のみ行い、値は秒精度に切り捨てる。
 /// 形式不正、または UNIX epoch 前の日付は `Error::InvalidInput` を返す。
 pub(crate) fn parse_iso8601(s: &str) -> Result<SystemTime, Error> {
     if !s.is_ascii() {
@@ -278,7 +301,26 @@ pub(crate) fn parse_iso8601(s: &str) -> Result<SystemTime, Error> {
         .parse()
         .map_err(|_| Error::InvalidInput(format!("invalid second: {}", &s[17..19])))?;
 
-    // 残り (`Z` を除いた小数秒部) は秒精度に切り捨てるためスキップする
+    // s[19] が '.' の場合は小数秒形式 (.digitsZ) を検証する
+    if s.len() > 20 {
+        let fraction = &s[19..s.len() - 1]; // Z を除く
+        let bytes = fraction.as_bytes();
+        if bytes.is_empty() {
+            return Err(Error::InvalidInput(format!("ISO 8601 empty fraction: {s}")));
+        }
+        if bytes[0] != b'.' {
+            return Err(Error::InvalidInput(format!(
+                "ISO 8601 unexpected characters after seconds: {s}"
+            )));
+        }
+        // 小数点の後に少なくとも 1 桁の数字があることを確認する
+        if bytes.len() < 2 || !bytes[1..].iter().all(|b| b.is_ascii_digit()) {
+            return Err(Error::InvalidInput(format!(
+                "ISO 8601 invalid fraction: {s}"
+            )));
+        }
+    }
+
     let secs = unix_timestamp_from_civil(year, month, day, hour, minute, second)?;
     Ok(UNIX_EPOCH + Duration::from_secs(secs))
 }
@@ -289,7 +331,7 @@ mod tests {
 
     #[test]
     fn test_civil_from_unix_timestamp_epoch() {
-        let c = civil_from_unix_timestamp(0);
+        let c = civil_from_unix_timestamp(0).expect("epoch");
         assert_eq!(c.year, 1970);
         assert_eq!(c.month, 1);
         assert_eq!(c.day, 1);
@@ -298,7 +340,7 @@ mod tests {
         assert_eq!(c.second, 0);
         assert_eq!(c.days_since_epoch, 0);
 
-        let dt = UtcDateTime::from_unix_timestamp(0);
+        let dt = UtcDateTime::from_unix_timestamp(0).expect("from_unix_timestamp");
         assert_eq!(dt.iso8601(), "19700101T000000Z");
         assert_eq!(dt.date_stamp(), "19700101");
     }
@@ -306,7 +348,7 @@ mod tests {
     #[test]
     fn test_civil_from_unix_timestamp_known_date() {
         // 2024-01-15 12:30:45 UTC
-        let c = civil_from_unix_timestamp(1705321845);
+        let c = civil_from_unix_timestamp(1705321845).expect("known date");
         assert_eq!(c.year, 2024);
         assert_eq!(c.month, 1);
         assert_eq!(c.day, 15);
@@ -314,20 +356,45 @@ mod tests {
         assert_eq!(c.minute, 30);
         assert_eq!(c.second, 45);
 
-        let dt = UtcDateTime::from_unix_timestamp(1705321845);
+        let dt = UtcDateTime::from_unix_timestamp(1705321845).expect("known date");
         assert_eq!(dt.iso8601(), "20240115T123045Z");
     }
 
     #[test]
     fn test_unix_timestamp_from_civil_round_trip() {
-        // いくつかの代表時刻でラウンドトリップを確認する
         for &secs in &[0u64, 1, 86399, 86400, 1_705_321_845, 4_102_444_800] {
-            let c = civil_from_unix_timestamp(secs);
+            let c = civil_from_unix_timestamp(secs).expect("civil");
             let back =
                 unix_timestamp_from_civil(c.year, c.month, c.day, c.hour, c.minute, c.second)
-                    .unwrap();
+                    .expect("round-trip");
             assert_eq!(secs, back, "round-trip failed for {secs}");
         }
+    }
+
+    #[test]
+    fn test_unix_timestamp_from_civil_invalid_date() {
+        // 2024-02-31 は存在しない日付
+        assert!(unix_timestamp_from_civil(2024, 2, 31, 0, 0, 0).is_err());
+        // 2024-04-31 は存在しない日付
+        assert!(unix_timestamp_from_civil(2024, 4, 31, 0, 0, 0).is_err());
+        // うるう年でない年の 2/29
+        assert!(unix_timestamp_from_civil(2023, 2, 29, 0, 0, 0).is_err());
+        // 2024-02-29 は有効 (うるう年)
+        assert!(unix_timestamp_from_civil(2024, 2, 29, 0, 0, 0).is_ok());
+    }
+
+    #[test]
+    fn test_unix_timestamp_from_civil_leap_second_error() {
+        // second == 60 はエラー
+        assert!(unix_timestamp_from_civil(2024, 1, 15, 12, 30, 60).is_err());
+    }
+
+    #[test]
+    fn test_unix_timestamp_from_civil_year_limit() {
+        // year 10000 はエラー
+        assert!(unix_timestamp_from_civil(10000, 1, 1, 0, 0, 0).is_err());
+        // year 9999 は有効
+        assert!(unix_timestamp_from_civil(9999, 12, 31, 23, 59, 59).is_ok());
     }
 
     #[test]
@@ -387,5 +454,11 @@ mod tests {
         assert!(parse_iso8601("invalid").is_err());
         assert!(parse_iso8601("2024-01-15 12:30:45Z").is_err()); // T が空白
         assert!(parse_iso8601("2024-01-15T12:30:45").is_err()); // Z 抜け
+        // Z 直前にゴミ文字
+        assert!(parse_iso8601("2024-01-15T12:30:45abcZ").is_err());
+        // 小数点のみで数字なし
+        assert!(parse_iso8601("2024-01-15T12:30:45.Z").is_err());
+        // 小数点の後に非数字
+        assert!(parse_iso8601("2024-01-15T12:30:45.abcZ").is_err());
     }
 }
