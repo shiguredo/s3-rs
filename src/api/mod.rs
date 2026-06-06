@@ -209,16 +209,17 @@ impl S3Response {
     /// x-amz-meta-* ヘッダーからカスタムメタデータを抽出する
     ///
     /// メタデータが存在しない場合は None を返す。
+    /// aws-sdk-rust と同様に、キーの大文字小文字は元のヘッダー名を保持する。
     pub fn extract_metadata(&self) -> Option<std::collections::HashMap<String, String>> {
         let prefix = "x-amz-meta-";
+        let prefix_len = prefix.len();
         let map: std::collections::HashMap<String, String> = self
             .headers
             .iter()
             .filter_map(|(k, v)| {
-                let lower = k.to_ascii_lowercase();
-                lower
+                k.to_ascii_lowercase()
                     .strip_prefix(prefix)
-                    .map(|key| (key.to_string(), v.clone()))
+                    .map(|_| (k[prefix_len..].to_string(), v.clone()))
             })
             .collect();
         if map.is_empty() { None } else { Some(map) }
@@ -579,8 +580,14 @@ fn path_for_key(config: &ClientConfig<'_>, bucket: &str, key: &str) -> String {
 // -------------------------------------------------------
 
 /// 必須パラメータのバリデーション
+///
+/// `None` または空文字列の場合に `Error::InvalidInput` を返す。
 pub(crate) fn required<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str, Error> {
-    value.ok_or_else(|| Error::InvalidInput(format!("{name} is required")))
+    let v = value.ok_or_else(|| Error::InvalidInput(format!("{name} is required")))?;
+    if v.is_empty() {
+        return Err(Error::InvalidInput(format!("{name} must not be empty")));
+    }
+    Ok(v)
 }
 
 /// Presigned URL の最小有効期限 (秒)
@@ -715,6 +722,39 @@ pub(crate) fn compute_sse_c_key_md5(base64_key: &str) -> Result<String, Error> {
         .map_err(|_| Error::InvalidInput("SSE-C key must be valid Base64".to_string()))?;
     let hash = Md5::digest(&key_bytes);
     Ok(Base64::encode_string(hash.as_slice()))
+}
+
+#[cfg(test)]
+mod required_tests {
+    use super::*;
+
+    /// `required()` は Some(非空) をそのまま返す
+    #[test]
+    fn test_required_some_non_empty() {
+        let result = required(Some("hello"), "test_field");
+        assert_eq!(result.expect("非空の値が通ること"), "hello");
+    }
+
+    /// `required()` は None を Error::InvalidInput として拒否する
+    #[test]
+    fn test_required_none() {
+        let result = required(None, "test_field");
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+    }
+
+    /// `required()` は空文字列を Error::InvalidInput として拒否する
+    #[test]
+    fn test_required_empty_string() {
+        let result = required(Some(""), "test_field");
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+    }
+
+    /// `required()` は空白のみの文字列は許容する (trim は行わない)
+    #[test]
+    fn test_required_whitespace_only() {
+        let result = required(Some("   "), "test_field");
+        assert_eq!(result.expect("空白のみは空ではないので通ること"), "   ");
+    }
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-05-25
+- Completed: 2026-06-06
 - Model: Composer 2.5
 - Polished: 2026-06-06
 - Branch: feature/fix-api-input-validation
@@ -60,3 +61,11 @@
 - 空 region の `ConfigBuilder::build` が `Error::InvalidInput` になる
 - `extract_metadata` がキーを小文字化しない
 - `tests/test_api_mod.rs` に `required()` の単体テストを追加する
+
+## 解決方法
+
+1. `src/api/mod.rs` の `required()` 関数に空文字列チェック (`is_empty()`) を追加し、空文字列の場合 `Error::InvalidInput` を返すようにした。`trim()` は含めない。
+2. `src/client.rs` の `ConfigBuilder::build()` に region 空文字列チェックを追加した。
+3. `src/api/copy_object.rs` および `src/api/upload_part_copy.rs` の `copy_source` を `strip_prefix('/')` で正規化し、`//` を防ぐようにした。
+4. `src/api/mod.rs` の `extract_metadata()` で、`to_ascii_lowercase()` によるキー小文字化を廃止し、大文字小文字を区別しないプレフィックス照合と元のキーケース保持の両立を実装した。
+5. `src/api/mod.rs` の `#[cfg(test)] mod required_tests` に `required()` の単体テスト（非空正常系、None 拒否、空文字拒否、空白のみ許容）を追加した。

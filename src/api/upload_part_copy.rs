@@ -151,7 +151,9 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
             ));
         }
 
-        let copy_source_header = format!("/{copy_source}");
+        // 先頭の / を正規化して二重スラッシュを防ぐ
+        let copy_source_normalized = copy_source.strip_prefix('/').unwrap_or(copy_source);
+        let copy_source_header = format!("/{copy_source_normalized}");
         let mut extra_headers = vec![("x-amz-copy-source", copy_source_header.as_str())];
 
         if let Some(ref v) = self.copy_source_range {
