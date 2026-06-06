@@ -79,9 +79,19 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_range(mut self, input: Option<String>) -> Self {
+        self.range = input;
+        self
+    }
+
     /// マルチパートアップロードされたオブジェクトの特定パートを取得する
     pub fn part_number(mut self, part_number: i32) -> Self {
         self.part_number = Some(part_number);
+        self
+    }
+
+    pub fn set_part_number(mut self, input: Option<i32>) -> Self {
+        self.part_number = input;
         self
     }
 
@@ -93,11 +103,21 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_if_match(mut self, input: Option<String>) -> Self {
+        self.if_match = input;
+        self
+    }
+
     /// ETag が異なる場合のみオブジェクトを返す
     ///
     /// 一致する場合は 304 Not Modified が返される。
     pub fn if_none_match(mut self, e_tag: impl Into<String>) -> Self {
         self.if_none_match = Some(e_tag.into());
+        self
+    }
+
+    pub fn set_if_none_match(mut self, input: Option<String>) -> Self {
+        self.if_none_match = input;
         self
     }
 
@@ -133,11 +153,21 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_sse_customer_algorithm(mut self, input: Option<String>) -> Self {
+        self.sse_customer_algorithm = input;
+        self
+    }
+
     /// SSE-C キーを指定する (Base64 エンコード)
     ///
     /// MD5 はキーから自動計算される。
     pub fn sse_customer_key(mut self, key: impl Into<String>) -> Self {
         self.sse_customer_key = Some(key.into());
+        self
+    }
+
+    pub fn set_sse_customer_key(mut self, input: Option<String>) -> Self {
+        self.sse_customer_key = input;
         self
     }
 
@@ -147,9 +177,19 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_version_id(mut self, input: Option<String>) -> Self {
+        self.version_id = input;
+        self
+    }
+
     /// レスポンスの Cache-Control ヘッダーを上書きする
     pub fn response_cache_control(mut self, value: impl Into<String>) -> Self {
         self.response_cache_control = Some(value.into());
+        self
+    }
+
+    pub fn set_response_cache_control(mut self, input: Option<String>) -> Self {
+        self.response_cache_control = input;
         self
     }
 
@@ -159,9 +199,19 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_response_content_disposition(mut self, input: Option<String>) -> Self {
+        self.response_content_disposition = input;
+        self
+    }
+
     /// レスポンスの Content-Encoding ヘッダーを上書きする
     pub fn response_content_encoding(mut self, value: impl Into<String>) -> Self {
         self.response_content_encoding = Some(value.into());
+        self
+    }
+
+    pub fn set_response_content_encoding(mut self, input: Option<String>) -> Self {
+        self.response_content_encoding = input;
         self
     }
 
@@ -171,15 +221,30 @@ impl<'a> GetObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_response_content_language(mut self, input: Option<String>) -> Self {
+        self.response_content_language = input;
+        self
+    }
+
     /// レスポンスの Content-Type ヘッダーを上書きする
     pub fn response_content_type(mut self, value: impl Into<String>) -> Self {
         self.response_content_type = Some(value.into());
         self
     }
 
+    pub fn set_response_content_type(mut self, input: Option<String>) -> Self {
+        self.response_content_type = input;
+        self
+    }
+
     /// レスポンスの Expires ヘッダーを上書きする
     pub fn response_expires(mut self, value: impl Into<String>) -> Self {
         self.response_expires = Some(value.into());
+        self
+    }
+
+    pub fn set_response_expires(mut self, input: Option<String>) -> Self {
+        self.response_expires = input;
         self
     }
 

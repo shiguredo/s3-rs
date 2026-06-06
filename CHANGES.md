@@ -11,6 +11,15 @@
 
 ## develop
 
+- [ADD] PutObjectFluentBuilder に `set_body`、`set_content_type`、`set_content_encoding`、`set_cache_control` 等の String 系 `set_*` メソッドと `set_content_length`、`set_metadata` を追加する
+  - @voluntas
+- [ADD] GetObjectFluentBuilder に `set_range`、`set_part_number`、`set_if_match`、`set_version_id`、`set_response_*` 等の `set_*` メソッドを追加する
+  - @voluntas
+- [ADD] ConfigBuilder に `set_region`、`set_credentials_provider`、`set_endpoint`、`set_force_path_style`、`set_ignore_cert_check` を追加する
+  - @voluntas
+- [ADD] HeadObjectFluentBuilder / DeleteObjectFluentBuilder / ListPartsFluentBuilder に `set_*` メソッドを追加する
+  - @voluntas
+
 - [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
   - @voluntas
 - [FIX] GetObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する

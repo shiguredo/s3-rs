@@ -125,8 +125,18 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_body(mut self, input: Option<Vec<u8>>) -> Self {
+        self.body = input;
+        self
+    }
+
     pub fn content_type(mut self, content_type: impl Into<String>) -> Self {
         self.content_type = Some(content_type.into());
+        self
+    }
+
+    pub fn set_content_type(mut self, input: Option<String>) -> Self {
+        self.content_type = input;
         self
     }
 
@@ -135,8 +145,18 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_content_encoding(mut self, input: Option<String>) -> Self {
+        self.content_encoding = input;
+        self
+    }
+
     pub fn content_disposition(mut self, content_disposition: impl Into<String>) -> Self {
         self.content_disposition = Some(content_disposition.into());
+        self
+    }
+
+    pub fn set_content_disposition(mut self, input: Option<String>) -> Self {
+        self.content_disposition = input;
         self
     }
 
@@ -145,14 +165,29 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_content_language(mut self, input: Option<String>) -> Self {
+        self.content_language = input;
+        self
+    }
+
     pub fn cache_control(mut self, cache_control: impl Into<String>) -> Self {
         self.cache_control = Some(cache_control.into());
+        self
+    }
+
+    pub fn set_cache_control(mut self, input: Option<String>) -> Self {
+        self.cache_control = input;
         self
     }
 
     /// HTTP の Expires ヘッダー (RFC 7234 形式)
     pub fn expires(mut self, expires: impl Into<String>) -> Self {
         self.expires = Some(expires.into());
+        self
+    }
+
+    pub fn set_expires(mut self, input: Option<String>) -> Self {
+        self.expires = input;
         self
     }
 
@@ -174,9 +209,19 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_ssekms_key_id(mut self, input: Option<String>) -> Self {
+        self.ssekms_key_id = input;
+        self
+    }
+
     /// SSE-C アルゴリズムを指定する (AES256)
     pub fn sse_customer_algorithm(mut self, algorithm: impl Into<String>) -> Self {
         self.sse_customer_algorithm = Some(algorithm.into());
+        self
+    }
+
+    pub fn set_sse_customer_algorithm(mut self, input: Option<String>) -> Self {
+        self.sse_customer_algorithm = input;
         self
     }
 
@@ -185,6 +230,11 @@ impl<'a> PutObjectFluentBuilder<'a> {
     /// MD5 はキーから自動計算される。
     pub fn sse_customer_key(mut self, key: impl Into<String>) -> Self {
         self.sse_customer_key = Some(key.into());
+        self
+    }
+
+    pub fn set_sse_customer_key(mut self, input: Option<String>) -> Self {
+        self.sse_customer_key = input;
         self
     }
 
@@ -206,6 +256,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_metadata(
+        mut self,
+        input: Option<std::collections::HashMap<String, String>>,
+    ) -> Self {
+        self.metadata = input.map(|m| m.into_iter().collect()).unwrap_or_default();
+        self
+    }
+
     /// ストレージクラスを指定する (STANDARD, STANDARD_IA, GLACIER 等)
     pub fn storage_class(mut self, input: StorageClass) -> Self {
         self.storage_class = Some(input);
@@ -224,9 +282,19 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_content_length(mut self, input: Option<i64>) -> Self {
+        self.content_length = input;
+        self
+    }
+
     /// オブジェクトタグを指定する (URL エンコード形式: "key1=value1&key2=value2")
     pub fn tagging(mut self, tagging: impl Into<String>) -> Self {
         self.tagging = Some(tagging.into());
+        self
+    }
+
+    pub fn set_tagging(mut self, input: Option<String>) -> Self {
+        self.tagging = input;
         self
     }
 
@@ -236,9 +304,19 @@ impl<'a> PutObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_if_match(mut self, input: Option<String>) -> Self {
+        self.if_match = input;
+        self
+    }
+
     /// オブジェクトが存在しない場合のみ作成する ("*" を指定)
     pub fn if_none_match(mut self, value: impl Into<String>) -> Self {
         self.if_none_match = Some(value.into());
+        self
+    }
+
+    pub fn set_if_none_match(mut self, input: Option<String>) -> Self {
+        self.if_none_match = input;
         self
     }
 

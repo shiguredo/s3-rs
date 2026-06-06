@@ -58,8 +58,18 @@ impl<'a> ListPartsFluentBuilder<'a> {
         self
     }
 
+    pub fn set_max_parts(mut self, input: Option<i32>) -> Self {
+        self.max_parts = input;
+        self
+    }
+
     pub fn part_number_marker(mut self, part_number_marker: i32) -> Self {
         self.part_number_marker = Some(part_number_marker);
+        self
+    }
+
+    pub fn set_part_number_marker(mut self, input: Option<i32>) -> Self {
+        self.part_number_marker = input;
         self
     }
 
