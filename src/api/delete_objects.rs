@@ -156,7 +156,8 @@ fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> String
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let c = crate::datetime::civil_from_unix_timestamp(secs);
+            let c = crate::datetime::civil_from_unix_timestamp(secs)
+                .expect("SystemTime from S3 response should be convertible to CivilDateTime");
             let formatted = format!(
                 "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
                 c.year, c.month, c.day, c.hour, c.minute, c.second

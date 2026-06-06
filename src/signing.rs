@@ -326,7 +326,7 @@ mod tests {
             "static",
         );
 
-        let datetime = UtcDateTime::from_unix_timestamp(1369353600); // 2013-05-24T00:00:00Z
+        let datetime = UtcDateTime::from_unix_timestamp(1369353600).expect("valid timestamp");
 
         let payload_hash = hex_sha256(b"");
 
