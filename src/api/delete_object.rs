@@ -46,6 +46,11 @@ impl<'a> DeleteObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_version_id(mut self, input: Option<String>) -> Self {
+        self.version_id = input;
+        self
+    }
+
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;

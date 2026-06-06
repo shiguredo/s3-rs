@@ -65,9 +65,19 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_range(mut self, input: Option<String>) -> Self {
+        self.range = input;
+        self
+    }
+
     /// マルチパートアップロードされたオブジェクトの特定パートのメタデータを取得する
     pub fn part_number(mut self, part_number: i32) -> Self {
         self.part_number = Some(part_number);
+        self
+    }
+
+    pub fn set_part_number(mut self, input: Option<i32>) -> Self {
+        self.part_number = input;
         self
     }
 
@@ -79,11 +89,21 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_if_match(mut self, input: Option<String>) -> Self {
+        self.if_match = input;
+        self
+    }
+
     /// ETag が異なる場合のみメタデータを返す
     ///
     /// 一致する場合は 304 Not Modified が返される。
     pub fn if_none_match(mut self, e_tag: impl Into<String>) -> Self {
         self.if_none_match = Some(e_tag.into());
+        self
+    }
+
+    pub fn set_if_none_match(mut self, input: Option<String>) -> Self {
+        self.if_none_match = input;
         self
     }
 
@@ -119,6 +139,11 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_sse_customer_algorithm(mut self, input: Option<String>) -> Self {
+        self.sse_customer_algorithm = input;
+        self
+    }
+
     /// SSE-C キーを指定する (Base64 エンコード)
     ///
     /// MD5 はキーから自動計算される。
@@ -127,9 +152,19 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         self
     }
 
+    pub fn set_sse_customer_key(mut self, input: Option<String>) -> Self {
+        self.sse_customer_key = input;
+        self
+    }
+
     /// バージョン ID を指定する (バージョニング有効時)
     pub fn version_id(mut self, version_id: impl Into<String>) -> Self {
         self.version_id = Some(version_id.into());
+        self
+    }
+
+    pub fn set_version_id(mut self, input: Option<String>) -> Self {
+        self.version_id = input;
         self
     }
 

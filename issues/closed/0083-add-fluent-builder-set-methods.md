@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-05-25
+- Completed: 2026-06-06
 - Model: Composer 2.5
 - Polished: 2026-06-06
 - Branch: feature/add-fluent-builder-set-methods
@@ -73,3 +74,16 @@ Fluent Builder（`src/api/` 配下）と `ConfigBuilder`（`src/client.rs`）の
 - `set_foo(Some(v))` と `foo(v)` が等価であることを PBT で検証する
 - `set_foo(None)` でフィールドがクリアされることを PBT で検証する
 - 既存テストが通る
+
+## 解決方法
+
+主要 Fluent Builder と ConfigBuilder に `set_*` メソッドを追加した:
+
+- `PutObjectFluentBuilder`: `set_body`、`set_content_type`、`set_content_encoding`、`set_content_disposition`、`set_content_language`、`set_cache_control`、`set_expires`、`set_ssekms_key_id`、`set_sse_customer_algorithm`、`set_sse_customer_key`、`set_content_length`、`set_tagging`、`set_if_match`、`set_if_none_match`、`set_metadata` (Option<HashMap<String, String>>)
+- `GetObjectFluentBuilder`: `set_range`、`set_part_number`、`set_if_match`、`set_if_none_match`、`set_sse_customer_algorithm`、`set_sse_customer_key`、`set_version_id`、`set_response_cache_control`、`set_response_content_disposition`、`set_response_content_encoding`、`set_response_content_language`、`set_response_content_type`、`set_response_expires`
+- `ConfigBuilder`: `set_region`、`set_credentials_provider`、`set_endpoint`、`set_force_path_style`、`set_ignore_cert_check`
+- `HeadObjectFluentBuilder`: `set_range`、`set_part_number`、`set_if_match`、`set_if_none_match`、`set_sse_customer_algorithm`、`set_sse_customer_key`、`set_version_id`
+- `DeleteObjectFluentBuilder`: `set_version_id`
+- `ListPartsFluentBuilder`: `set_max_parts`、`set_part_number_marker`
+
+すべての `set_*` メソッドは `Option<T>` を受け取り、aws-sdk-rust 互換のシグネチャを持つ。既存の `foo(value)` メソッドは維持される。

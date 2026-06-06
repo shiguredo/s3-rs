@@ -92,9 +92,21 @@ impl ConfigBuilder {
         self
     }
 
+    /// リージョンを `Option` で設定する (`set_*` バリアント)
+    pub fn set_region(mut self, region: Option<String>) -> Self {
+        self.region = region;
+        self
+    }
+
     /// AWS クレデンシャルを設定する (必須)
     pub fn credentials_provider(mut self, credentials_provider: Credentials) -> Self {
         self.credentials_provider = Some(credentials_provider);
+        self
+    }
+
+    /// クレデンシャルを `Option` で設定する (`set_*` バリアント)
+    pub fn set_credentials_provider(mut self, credentials_provider: Option<Credentials>) -> Self {
+        self.credentials_provider = credentials_provider;
         self
     }
 
@@ -104,15 +116,37 @@ impl ConfigBuilder {
         self
     }
 
+    /// エンドポイントを `Option` で設定する (`set_*` バリアント)
+    pub fn set_endpoint(mut self, endpoint: Option<String>) -> Self {
+        self.endpoint = endpoint;
+        self
+    }
+
     /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
     pub fn force_path_style(mut self, force_path_style: bool) -> Self {
         self.force_path_style = force_path_style;
         self
     }
 
+    /// パススタイルアクセスを `Option` で設定する (`set_*` バリアント)
+    pub fn set_force_path_style(mut self, force_path_style: Option<bool>) -> Self {
+        if let Some(v) = force_path_style {
+            self.force_path_style = v;
+        }
+        self
+    }
+
     /// TLS 証明書の検証を無視する (テスト環境向け、shiguredo_s3 独自フィールド)
     pub fn ignore_cert_check(mut self, ignore_cert_check: bool) -> Self {
         self.ignore_cert_check = ignore_cert_check;
+        self
+    }
+
+    /// TLS 証明書の検証無視を `Option` で設定する (`set_*` バリアント)
+    pub fn set_ignore_cert_check(mut self, ignore_cert_check: Option<bool>) -> Self {
+        if let Some(v) = ignore_cert_check {
+            self.ignore_cert_check = v;
+        }
         self
     }
 
