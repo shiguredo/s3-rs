@@ -75,11 +75,13 @@ fn extract_cors_rules(text: &str) -> Result<Vec<CorsRule>, Error> {
     let mut allowed_headers = Vec::new();
     let mut expose_headers = Vec::new();
     let mut max_age_seconds: Option<i32> = None;
+    let mut id: Option<String> = None;
 
     for event in reader {
         match event {
             Ok(XmlEvent::StartElement { name, .. }) if name.local_name == "CORSRule" => {
                 inside_rule = true;
+                id = None;
                 allowed_origins.clear();
                 allowed_methods.clear();
                 allowed_headers.clear();
@@ -96,7 +98,7 @@ fn extract_cors_rules(text: &str) -> Result<Vec<CorsRule>, Error> {
             Ok(XmlEvent::EndElement { name }) if inside_rule => {
                 if name.local_name == "CORSRule" {
                     rules.push(CorsRule {
-                        id: None,
+                        id: id.take(),
                         allowed_origins: allowed_origins.clone(),
                         allowed_methods: allowed_methods.clone(),
                         allowed_headers: if allowed_headers.is_empty() {
@@ -115,6 +117,7 @@ fn extract_cors_rules(text: &str) -> Result<Vec<CorsRule>, Error> {
                 } else if let Some(ref tag) = current_tag {
                     if name.local_name == *tag {
                         match tag.as_str() {
+                            "ID" => id = Some(current_text.clone()),
                             "AllowedOrigin" => allowed_origins.push(current_text.clone()),
                             "AllowedMethod" => allowed_methods.push(current_text.clone()),
                             "AllowedHeader" => allowed_headers.push(current_text.clone()),

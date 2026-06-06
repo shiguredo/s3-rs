@@ -40,3 +40,58 @@ fn test_overflow_max_age() {
     let result = GetBucketCorsFluentBuilder::parse_response(&response);
     assert!(matches!(result, Err(Error::InvalidResponse(_))));
 }
+
+/// ID 要素のパース
+#[test]
+fn test_id_parse() {
+    let response = S3Response {
+        status_code: 200,
+        headers: vec![],
+        body: br#"<CORSConfiguration><CORSRule><ID>my-rule-id</ID><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod></CORSRule></CORSConfiguration>"#.to_vec(),
+    };
+    let result = GetBucketCorsFluentBuilder::parse_response(&response);
+    let output = result.expect("パース成功");
+    let rules = output.cors_rules.expect("CORS ルールあり");
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0].id.as_deref(), Some("my-rule-id"));
+}
+
+/// ID なしルールの既存挙動（後方互換）
+#[test]
+fn test_id_none() {
+    let response = S3Response {
+        status_code: 200,
+        headers: vec![],
+        body: br#"<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod></CORSRule></CORSConfiguration>"#.to_vec(),
+    };
+    let result = GetBucketCorsFluentBuilder::parse_response(&response);
+    let output = result.expect("パース成功");
+    let rules = output.cors_rules.expect("CORS ルールあり");
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0].id, None);
+}
+
+/// CorsRuleBuilder::id で 255 文字超えはパニック
+#[test]
+#[should_panic(expected = "must not be longer than 255")]
+fn test_cors_rule_id_too_long() {
+    use shiguredo_s3::types::CorsRule;
+    let long_id = "a".repeat(256);
+    let _rule = CorsRule::builder()
+        .id(long_id)
+        .allowed_origins("*")
+        .allowed_methods("GET")
+        .build();
+}
+
+/// CorsRuleBuilder::id で空文字列は許容
+#[test]
+fn test_cors_rule_id_empty() {
+    use shiguredo_s3::types::CorsRule;
+    let rule = CorsRule::builder()
+        .id("")
+        .allowed_origins("*")
+        .allowed_methods("GET")
+        .build();
+    assert_eq!(rule.id.as_deref(), Some(""));
+}

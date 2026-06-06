@@ -137,6 +137,8 @@
   - @voluntas
 - [FIX] Status パース失敗時の ExpirationStatus::Enabled フォールバックを除去する
   - @voluntas
+- [FIX] CorsRule ID の XML serialize / parse を実装しラウンドトリップを可能にする
+  - @voluntas
 
 ### misc
 

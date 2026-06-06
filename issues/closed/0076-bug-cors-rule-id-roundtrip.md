@@ -4,6 +4,7 @@
 - Created: 2026-05-25
 - Model: Composer 2.5
 - Polished: 2026-06-06
+- Completed: 2026-06-06
 - Branch: feature/fix-cors-rule-id-roundtrip
 
 ## 目的
@@ -54,3 +55,10 @@ issue 0075 で `extract_cors_rules` の戻り値を `Result<Vec<CorsRule>, Error
 - 空文字列の ID は正常にラウンドトリップする
 - MinIO / RustFS 統合テストで CORS ラウンドトリップを検証する
 - 0075 で作成される `tests/test_get_bucket_cors.rs` に ID のパーステストを追加する
+
+## 解決方法
+
+1. `put_bucket_cors.rs`: `build_cors_xml` で `rule.id` が `Some` のとき `<ID>` 要素を `w.start("CORSRule")` の直後に出力するように修正
+2. `get_bucket_cors.rs`: `extract_cors_rules` に `id` 変数を追加し、`"ID"` 分岐と `id.take()` による CorsRule 構築を実装
+3. `types.rs`: `CorsRuleBuilder::id` に 255 文字制限バリデーションを追加（超過で panic）
+4. `tests/test_get_bucket_cors.rs`: ID パーステスト、ID なし後方互換テスト、255 文字パニックテスト、空文字列許容テストを追加

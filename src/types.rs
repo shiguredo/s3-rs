@@ -1160,9 +1160,16 @@ pub struct CorsRuleBuilder {
 }
 
 impl CorsRuleBuilder {
-    /// ルール ID を設定する
+    /// ルール ID を設定する (最大 255 文字)
     pub fn id(mut self, id: impl Into<String>) -> Self {
-        self.id = Some(id.into());
+        let id = id.into();
+        if id.len() > 255 {
+            panic!(
+                "CorsRule ID must not be longer than 255 characters, got {}",
+                id.len()
+            );
+        }
+        self.id = Some(id);
         self
     }
 
