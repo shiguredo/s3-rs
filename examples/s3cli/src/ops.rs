@@ -15,7 +15,7 @@ use crate::upload::{
 use crate::util::{FilterRule, now, resolve_content_type, should_include};
 
 /// 単一ファイルをアップロードする
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn upload_file(
     client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
@@ -58,7 +58,7 @@ pub(crate) async fn upload_file(
 }
 
 /// 単一ファイルをダウンロードする
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn download_file(
     client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
@@ -171,7 +171,7 @@ pub(crate) async fn upload_recursive(
 }
 
 /// 再帰的にダウンロードする
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn download_recursive(
     client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,
@@ -239,7 +239,7 @@ pub(crate) async fn download_recursive(
 }
 
 /// 再帰的に S3 → S3 コピーする
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn copy_recursive(
     client: &Client,
     tls_config: &Arc<rustls::ClientConfig>,

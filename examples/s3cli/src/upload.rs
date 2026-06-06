@@ -295,7 +295,7 @@ async fn upload_parts_concurrent(
 }
 
 /// 単一パートをアップロードする
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn upload_single_part(
     pool: &ConnectionPool,
     client: &Client,

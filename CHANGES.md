@@ -2,14 +2,73 @@
 
 - CHANGE
   - 下位互換のない変更
-- UPDATE
-  - 下位互換がある変更
 - ADD
   - 下位互換がある追加
+- UPDATE
+  - 下位互換がある変更
 - FIX
   - バグ修正
 
 ## develop
+
+- [CHANGE] `extract_metadata()` でメタデータキーを小文字化していた挙動を修正し、元のヘッダー名のキーケースを保持するように変更する
+  - @voluntas
+- [CHANGE] PutObjectLegalHold の `legal_hold_status` 未指定時の暗黙 "ON" フォールバックを廃止し、必須パラメータに変更する
+  - @voluntas
+- [CHANGE] CreateBucket の LocationConstraint 自動付与を廃止し、利用者が `CreateBucketConfiguration` で明示的に指定する設計に変更する
+  - @voluntas
+- [CHANGE] CopyObject のメタデータディレクティブ事前検証を廃止し、aws-sdk-rust 互換の挙動に変更する
+  - @voluntas
+- [CHANGE] `S3Config` を `Config` にリネームする
+  - @voluntas
+- [CHANGE] `S3ConfigBuilder` を `ConfigBuilder` にリネームする
+  - @voluntas
+- [CHANGE] `S3Client` を `Client` にリネームする
+  - @voluntas
+- [CHANGE] `S3Client::new` を `Client::from_conf` にリネームする
+  - @voluntas
+- [CHANGE] `Credential` を `Credentials` にリネームし、`Credentials::new` を aws-credential-types と同じ 5 引数シグネチャ (access_key_id, secret_access_key, session_token, expires_after, provider_name) に変更する
+  - @voluntas
+- [CHANGE] `Credential::with_session_token` を廃止し、`Credentials::new` で `session_token` を `Some` 指定する形に統合する
+  - @voluntas
+- [CHANGE] `ConfigBuilder::credential` を `credentials_provider` にリネームする
+  - @voluntas
+- [CHANGE] `ConfigBuilder::use_path_style` を `force_path_style` にリネームする
+  - @voluntas
+- [CHANGE] `Config::credential()` ゲッターを `credentials_provider()` にリネームする
+  - @voluntas
+- [CHANGE] `Config::use_path_style()` ゲッターを `force_path_style()` にリネームする
+  - @voluntas
+- [CHANGE] `PutObject` / `UploadPart` / `CopyObject` / `CreateMultipartUpload` / `CreateBucket` / `DeleteObjects` / `PutBucket*` 系の `acl` / `storage_class` / `server_side_encryption` / `checksum_algorithm` / `metadata_directive` / `tagging_directive` を文字列から対応する型付き enum に変更する
+  - @voluntas
+- [CHANGE] `GetObject` / `HeadObject` の `checksum_mode` を `ChecksumMode` enum に変更する
+  - @voluntas
+- [CHANGE] `ListObjectsV2` / `ListObjectVersions` / `ListMultipartUploads` の `encoding_type` を `EncodingType` enum に変更する
+  - @voluntas
+- [CHANGE] `Object` / `ObjectVersion` / `ListPartsOutput` / `MultipartUpload` / `HeadObjectOutput` / `Transition` / `NoncurrentVersionTransition` / `ListObjectVersionsOutput` の `storage_class` / `encoding_type` 出力フィールドを対応する型付き enum に変更する
+  - @voluntas
+- [CHANGE] 全 enum 化対象のビルダーに aws-sdk-rust 互換の `set_*` バリアント (Option を直接受ける) を追加する
+  - @voluntas
+- [CHANGE] 全 `build_request` / `presigned` メソッドに `now: SystemTime` 引数を追加し、Sans I/O 原則を徹底する
+  - @voluntas
+- [CHANGE] `HttpDate` 構造体を廃止し、`validate_imf_fixdate` 関数のみを公開する
+  - @voluntas
+- [CHANGE] `GetObject` / `HeadObject` の `if_modified_since` / `if_unmodified_since` を `Option<HttpDate>` から `Option<SystemTime>` に変更する
+  - @voluntas
+- [CHANGE] `last_modified` / `creation_date` / `initiated` / `last_modified_time` / `restore_expiry_date` の出力日時フィールドを `Option<String>` から `Option<SystemTime>` に変更する
+  - @voluntas
+- [CHANGE] `DeleteObjects` の入力を `Delete` 構造体経由に変更し、`DeleteObjectsFluentBuilder::object` / `quiet` メソッドを廃止する
+  - @voluntas
+- [CHANGE] `PutObject` の `checksum_value` を廃止し `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_md5` / `checksum_sha1` / `checksum_sha256` / `checksum_sha512` / `checksum_xxhash128` / `checksum_xxhash3` / `checksum_xxhash64` の個別フィールドに分解する
+  - @voluntas
+- [CHANGE] `UploadPart` の `checksum_value` を廃止し 10 種の個別チェックサムフィールドに分解する。個別 checksum 指定時に `checksum_algorithm` を無視する S3 仕様に合わせる
+  - @voluntas
+- [CHANGE] `PutObject` / `UploadPart` の `x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更する (aws-sdk-rust 仕様準拠)
+  - @voluntas
+- [CHANGE] `CopyObjectOutput` のフラット構造を `CopyObjectResult` ネスト構造に変更する (`e_tag` / `last_modified` を `copy_object_result` 配下に移動、aws-sdk-rust 互換)
+  - @voluntas
+- [CHANGE] `second == 60` (閏秒) をエラーに変更し閏秒非対応を明文化する
+  - @voluntas
 
 - [ADD] PutObjectFluentBuilder に `set_body`、`set_content_type`、`set_content_encoding`、`set_cache_control` 等の String 系 `set_*` メソッドと `set_content_length`、`set_metadata` を追加する
   - @voluntas
@@ -27,38 +86,6 @@
 - [ADD] ListMultipartUploadsOutput に `encoding_type` および `request_charged` フィールドを追加する
   - @voluntas
 - [ADD] GetObjectOutput / HeadObjectOutput に `website_redirect_location` フィールドを追加する
-  - @voluntas
-
-- [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
-  - @voluntas
-- [FIX] GetObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する
-  - @voluntas
-- [FIX] CreateMultipartUpload の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`checksum_algorithm`、コンテント関連ヘッダー、`storage_class` が署名対象に含まれない問題を修正する
-  - @voluntas
-- [FIX] CompleteMultipartUpload の `presigned()` で `content-type`、`if_match`、`if_none_match`、SSE-C ヘッダーが署名対象に含まれない問題を修正する
-  - @voluntas
-- [FIX] UploadPart の `presigned()` で `content_length` が署名対象に含まれない問題を修正する
-  - @voluntas
-
-- [CHANGE] `extract_metadata()` でメタデータキーを小文字化していた挙動を修正し、元のヘッダー名のキーケースを保持するように変更する
-  - @voluntas
-- [CHANGE] PutObjectLegalHold の `legal_hold_status` 未指定時の暗黙 "ON" フォールバックを廃止し、必須パラメータに変更する
-  - @voluntas
-- [FIX] `required()` が空文字列を受理する問題を修正し、空文字列の場合に `Error::InvalidInput` を返すようにする
-  - @voluntas
-- [FIX] `ConfigBuilder::build()` が空リージョン文字列を受理する問題を修正する
-  - @voluntas
-- [FIX] `CopyObject` / `UploadPartCopy` の `copy_source` で先頭 `/` が二重になる問題を修正し、`strip_prefix('/')` で正規化する
-  - @voluntas
-- [FIX] PutBucketEncryption / PutBucketCors / PutBucketLifecycleConfiguration / PutBucketOwnershipControls でルール空のままリクエストを構築できる問題を修正する
-  - @voluntas
-- [FIX] PutBucketEncryption で `sse_algorithm` が空文字列のままリクエストを構築できる問題を修正する
-  - @voluntas
-- [FIX] PutObjectRetention で `mode` と `retain_until_date` の両方が未設定のままリクエストを構築できる問題を修正する
-  - @voluntas
-- [FIX] PutObjectLockConfiguration で `object_lock_configuration` 未指定のままリクエストを構築できる問題を修正する
-  - @voluntas
-- [FIX] PutBucketWebsite で全フィールド未指定のままリクエストを構築できる問題と `redirect_all_requests_to` と他フィールドの同時指定を検出しない問題を修正する
   - @voluntas
 - [ADD] GetObjectLegalHold / PutObjectLegalHold / GetObjectRetention / PutObjectRetention / GetObjectLockConfiguration / PutObjectLockConfiguration API を追加する
   - @voluntas
@@ -98,71 +125,15 @@
   - @voluntas
 - [ADD] PutObject / CompleteMultipartUpload に条件付き書き込みパラメータ (`if_match`, `if_none_match`) を追加する
   - @voluntas
-- [ADD] `HttpDate::try_from_imf_fixdate()` バリデーション付きコンストラクタを追加する
-  - @voluntas
 - [ADD] `CreateBucketConfiguration` 型と `CreateBucketFluentBuilder::create_bucket_configuration()` メソッドを追加する
   - @voluntas
 - [ADD] XML レスポンスボディのサイズ上限チェック (10MB) を追加する
   - @voluntas
-- [CHANGE] CreateBucket の LocationConstraint 自動付与を廃止し、利用者が `CreateBucketConfiguration` で明示的に指定する設計に変更する
-  - @voluntas
-- [CHANGE] CopyObject のメタデータディレクティブ事前検証を廃止し、aws-sdk-rust 互換の挙動に変更する
-  - @voluntas
-- [CHANGE] `S3Config` を `Config` にリネームする
-  - @voluntas
-- [CHANGE] `S3ConfigBuilder` を `ConfigBuilder` にリネームする
-  - @voluntas
-- [CHANGE] `S3Client` を `Client` にリネームする
-  - @voluntas
-- [CHANGE] `S3Client::new` を `Client::from_conf` にリネームする
-  - @voluntas
-- [CHANGE] `Credential` を `Credentials` にリネームし、`Credentials::new` を aws-credential-types と同じ 5 引数シグネチャ (access_key_id, secret_access_key, session_token, expires_after, provider_name) に変更する
-  - @voluntas
-- [CHANGE] `Credential::with_session_token` を廃止し、`Credentials::new` で `session_token` を `Some` 指定する形に統合する
-  - @voluntas
-- [CHANGE] `ConfigBuilder::credential` を `credentials_provider` にリネームする
-  - @voluntas
-- [CHANGE] `ConfigBuilder::use_path_style` を `force_path_style` にリネームする
-  - @voluntas
-- [CHANGE] `Config::credential()` ゲッターを `credentials_provider()` にリネームする
-  - @voluntas
-- [CHANGE] `Config::use_path_style()` ゲッターを `force_path_style()` にリネームする
-  - @voluntas
 - [ADD] `ChecksumAlgorithm` / `ChecksumMode` / `ServerSideEncryption` / `ObjectCannedAcl` / `StorageClass` / `MetadataDirective` / `TaggingDirective` / `EncodingType` の型付き enum を public 型として公開する
-  - @voluntas
-- [CHANGE] `PutObject` / `UploadPart` / `CopyObject` / `CreateMultipartUpload` / `CreateBucket` / `DeleteObjects` / `PutBucket*` 系の `acl` / `storage_class` / `server_side_encryption` / `checksum_algorithm` / `metadata_directive` / `tagging_directive` を文字列から対応する型付き enum に変更する
-  - @voluntas
-- [CHANGE] `GetObject` / `HeadObject` の `checksum_mode` を `ChecksumMode` enum に変更する
-  - @voluntas
-- [CHANGE] `ListObjectsV2` / `ListObjectVersions` / `ListMultipartUploads` の `encoding_type` を `EncodingType` enum に変更する
-  - @voluntas
-- [CHANGE] `Object` / `ObjectVersion` / `ListPartsOutput` / `MultipartUpload` / `HeadObjectOutput` / `Transition` / `NoncurrentVersionTransition` / `ListObjectVersionsOutput` の `storage_class` / `encoding_type` 出力フィールドを対応する型付き enum に変更する
-  - @voluntas
-- [CHANGE] 全 enum 化対象のビルダーに aws-sdk-rust 互換の `set_*` バリアント (Option を直接受ける) を追加する
-  - @voluntas
-- [CHANGE] 全 `build_request` / `presigned` メソッドに `now: SystemTime` 引数を追加し、Sans I/O 原則を徹底する
-  - @voluntas
-- [CHANGE] `HttpDate` 構造体を廃止し、`validate_imf_fixdate` 関数のみを公開する
-  - @voluntas
-- [CHANGE] `GetObject` / `HeadObject` の `if_modified_since` / `if_unmodified_since` を `Option<HttpDate>` から `Option<SystemTime>` に変更する
-  - @voluntas
-- [CHANGE] `last_modified` / `creation_date` / `initiated` / `last_modified_time` / `restore_expiry_date` の出力日時フィールドを `Option<String>` から `Option<SystemTime>` に変更する
   - @voluntas
 - [ADD] `Delete` / `DeleteBuilder` 型を追加する
   - @voluntas
-- [CHANGE] `DeleteObjects` の入力を `Delete` 構造体経由に変更し、`DeleteObjectsFluentBuilder::object` / `quiet` メソッドを廃止する
-  - @voluntas
-- [CHANGE] `PutObject` の `checksum_value` を廃止し `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_md5` / `checksum_sha1` / `checksum_sha256` / `checksum_sha512` / `checksum_xxhash128` / `checksum_xxhash3` / `checksum_xxhash64` の個別フィールドに分解する
-  - @voluntas
-- [CHANGE] `UploadPart` の `checksum_value` を廃止し 10 種の個別チェックサムフィールドに分解する。個別 checksum 指定時に `checksum_algorithm` を無視する S3 仕様に合わせる
-  - @voluntas
-- [CHANGE] `PutObject` / `UploadPart` の `x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更する (aws-sdk-rust 仕様準拠)
-  - @voluntas
 - [ADD] `CopyObjectResult` 型を追加する (`e_tag` / `last_modified` / `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_sha1` / `checksum_sha256` / `checksum_type`)
-  - @voluntas
-- [CHANGE] `CopyObjectOutput` のフラット構造を `CopyObjectResult` ネスト構造に変更する (`e_tag` / `last_modified` を `copy_object_result` 配下に移動、aws-sdk-rust 互換)
-  - @voluntas
-- [CHANGE] `second == 60` (閏秒) をエラーに変更し閏秒非対応を明文化する
   - @voluntas
 - [ADD] `Owner` / `RestoreStatus` 型を追加する (aws-sdk-rust 互換)
   - @voluntas
@@ -179,6 +150,33 @@
 - [ADD] `CompletedPart` に `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_sha1` / `checksum_sha256` を追加する (XML シリアライズも追加)
   - @voluntas
 - [ADD] `HeadBucketOutput` に `bucket_arn` / `bucket_location_type` / `bucket_location_name` / `access_point_alias` を追加する
+  - @voluntas
+
+- [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] GetObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する
+  - @voluntas
+- [FIX] CreateMultipartUpload の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`checksum_algorithm`、コンテント関連ヘッダー、`storage_class` が署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] CompleteMultipartUpload の `presigned()` で `content-type`、`if_match`、`if_none_match`、SSE-C ヘッダーが署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] UploadPart の `presigned()` で `content_length` が署名対象に含まれない問題を修正する
+  - @voluntas
+- [FIX] `required()` が空文字列を受理する問題を修正し、空文字列の場合に `Error::InvalidInput` を返すようにする
+  - @voluntas
+- [FIX] `ConfigBuilder::build()` が空リージョン文字列を受理する問題を修正する
+  - @voluntas
+- [FIX] `CopyObject` / `UploadPartCopy` の `copy_source` で先頭 `/` が二重になる問題を修正し、`strip_prefix('/')` で正規化する
+  - @voluntas
+- [FIX] PutBucketEncryption / PutBucketCors / PutBucketLifecycleConfiguration / PutBucketOwnershipControls でルール空のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutBucketEncryption で `sse_algorithm` が空文字列のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutObjectRetention で `mode` と `retain_until_date` の両方が未設定のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutObjectLockConfiguration で `object_lock_configuration` 未指定のままリクエストを構築できる問題を修正する
+  - @voluntas
+- [FIX] PutBucketWebsite で全フィールド未指定のままリクエストを構築できる問題と `redirect_all_requests_to` と他フィールドの同時指定を検出しない問題を修正する
   - @voluntas
 - [FIX] `HttpDate::try_from_imf_fixdate()` でマルチバイト文字を含む入力がパニックする問題を修正する
   - @voluntas
@@ -199,15 +197,13 @@
 
 - proptest (PBT) のインフラを導入する (`pbt/` Cargo.toml、`prop_datetime` ラウンドトリップテスト)
   - @voluntas
-- 依存クレートを更新する (`shiguredo_http11` 2026.2 → 2026.5)
+- 依存クレートを更新する (`shiguredo_http11` 2026.1 → 2026.5、`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11)
   - @voluntas
-- s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.5.0 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
-  - @voluntas
-- 依存クレートを更新する (`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11、`shiguredo_http11` 2026.1 → 2026.2)
+- s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.5 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
   - @voluntas
 - `crc-fast` を `~1.9` に固定する (1.10 が MSRV 1.89 を要求するため `rust-version = "1.88"` を維持する)
   - @voluntas
-- examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.2、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
+- examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.5、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
   - @voluntas
 - Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
   - @voluntas
@@ -215,3 +211,5 @@
   - @voluntas
 - RustFS 統合テストで使うアクセスキー / シークレットキーを `rustfsadmin` から `devadmin` に変更する (上流 `rustfs/rustfs` の `docker-compose.yml` で使用されている値に追従。最新の RustFS は `rustfsadmin` をデフォルト資格情報として non-loopback リスナーで拒否するためコンテナが起動しなくなっていた)
   - @Hexa
+- プロジェクト規約準拠の修正: `#[allow]` を `#[expect]` に変更、`compile_error!` を英語化、CHANGES.md の種別順序を整理、解決済み issue 参照 TODO を削除、CI clippy に `--all-targets` を追加、`shiguredo_http11` のバージョン指定を `"2026.5"` に修正、`docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
+  - @voluntas

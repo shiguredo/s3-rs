@@ -1123,7 +1123,7 @@ fn should_skip_sync(
 }
 
 /// sync サブコマンド
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn cmd_sync(
     mut args: noargs::RawArgs,
     tls_config: Arc<rustls::ClientConfig>,
