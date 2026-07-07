@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 shiguredo_s3 = { path = "../..", default-features = false, features = ["aws_lc_rs"] }
-shiguredo_http11 = "2026.5"
+shiguredo_http11 = "2026.6"
 rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",

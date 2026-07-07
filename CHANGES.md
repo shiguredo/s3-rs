@@ -209,13 +209,13 @@
 
 - proptest (PBT) のインフラを導入する (`pbt/` Cargo.toml、`prop_datetime` ラウンドトリップテスト)
   - @voluntas
-- 依存クレートを更新する (`shiguredo_http11` 2026.1 → 2026.5、`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11)
+- 依存クレートを更新する (`shiguredo_http11` 2026.1 → 2026.6、`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11)
   - @voluntas
-- s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.5 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
+- s3cli と統合テストの HTTP/1.1 I/O 層を `shiguredo_http11` 2026.6 API に合わせる (`Request::new` / `add_header` / `encode`、`ResponseDecoder::set_request_method`、`HttpHead::headers` 等)
   - @voluntas
 - `crc-fast` を `~1.9` に固定する (1.10 が MSRV 1.89 を要求するため `rust-version = "1.88"` を維持する)
   - @voluntas
-- examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.5、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
+- examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.6、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
   - @voluntas
 - Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
   - @voluntas
@@ -223,5 +223,5 @@
   - @voluntas
 - RustFS 統合テストで使うアクセスキー / シークレットキーを `rustfsadmin` から `devadmin` に変更する (上流 `rustfs/rustfs` の `docker-compose.yml` で使用されている値に追従。最新の RustFS は `rustfsadmin` をデフォルト資格情報として non-loopback リスナーで拒否するためコンテナが起動しなくなっていた)
   - @Hexa
-- プロジェクト規約準拠の修正: `#[allow]` を `#[expect]` に変更、`compile_error!` を英語化、CHANGES.md の種別順序を整理、解決済み issue 参照 TODO を削除、CI clippy に `--all-targets` を追加、`shiguredo_http11` のバージョン指定を `"2026.5"` に修正、`docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
+- プロジェクト規約準拠の修正: `#[allow]` を `#[expect]` に変更、`compile_error!` を英語化、CHANGES.md の種別順序を整理、解決済み issue 参照 TODO を削除、CI clippy に `--all-targets` を追加、`shiguredo_http11` のバージョン指定を `"2026.6"` に修正、`docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
   - @voluntas
