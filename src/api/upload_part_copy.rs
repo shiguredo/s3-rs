@@ -7,6 +7,7 @@
 use crate::client::Client;
 use crate::error::Error;
 use crate::types::UploadPartCopyOutput;
+use std::time::SystemTime;
 
 use super::{
     S3Request, build_signed_request, parse_error_response, required, validate_part_number,
@@ -23,8 +24,8 @@ pub struct UploadPartCopyFluentBuilder<'a> {
     // 条件付きコピー
     copy_source_if_match: Option<String>,
     copy_source_if_none_match: Option<String>,
-    copy_source_if_modified_since: Option<String>,
-    copy_source_if_unmodified_since: Option<String>,
+    copy_source_if_modified_since: Option<SystemTime>,
+    copy_source_if_unmodified_since: Option<SystemTime>,
     // コピー元 SSE-C
     copy_source_sse_customer_algorithm: Option<String>,
     copy_source_sse_customer_key: Option<String>,
@@ -99,14 +100,24 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
     }
 
     /// コピー元が指定日時以降に変更されている場合のみコピーする
-    pub fn copy_source_if_modified_since(mut self, date: impl Into<String>) -> Self {
-        self.copy_source_if_modified_since = Some(date.into());
+    pub fn copy_source_if_modified_since(mut self, date: SystemTime) -> Self {
+        self.copy_source_if_modified_since = Some(date);
+        self
+    }
+
+    pub fn set_copy_source_if_modified_since(mut self, input: Option<SystemTime>) -> Self {
+        self.copy_source_if_modified_since = input;
         self
     }
 
     /// コピー元が指定日時以降に変更されていない場合のみコピーする
-    pub fn copy_source_if_unmodified_since(mut self, date: impl Into<String>) -> Self {
-        self.copy_source_if_unmodified_since = Some(date.into());
+    pub fn copy_source_if_unmodified_since(mut self, date: SystemTime) -> Self {
+        self.copy_source_if_unmodified_since = Some(date);
+        self
+    }
+
+    pub fn set_copy_source_if_unmodified_since(mut self, input: Option<SystemTime>) -> Self {
+        self.copy_source_if_unmodified_since = input;
         self
     }
 
@@ -163,11 +174,21 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
         if let Some(ref v) = self.copy_source_if_none_match {
             extra_headers.push(("x-amz-copy-source-if-none-match", v.as_str()));
         }
-        if let Some(ref v) = self.copy_source_if_modified_since {
-            extra_headers.push(("x-amz-copy-source-if-modified-since", v.as_str()));
+        let copy_source_if_modified_since_str;
+        if let Some(t) = self.copy_source_if_modified_since {
+            copy_source_if_modified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push((
+                "x-amz-copy-source-if-modified-since",
+                copy_source_if_modified_since_str.as_str(),
+            ));
         }
-        if let Some(ref v) = self.copy_source_if_unmodified_since {
-            extra_headers.push(("x-amz-copy-source-if-unmodified-since", v.as_str()));
+        let copy_source_if_unmodified_since_str;
+        if let Some(t) = self.copy_source_if_unmodified_since {
+            copy_source_if_unmodified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push((
+                "x-amz-copy-source-if-unmodified-since",
+                copy_source_if_unmodified_since_str.as_str(),
+            ));
         }
 
         // コピー元の SSE-C

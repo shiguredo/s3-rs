@@ -73,6 +73,8 @@
   - @voluntas
 - [CHANGE] `ConfigBuilder::set_force_path_style` / `set_ignore_cert_check` を `None` 渡し時に no-op ではなくデフォルト値 (`false`) へクリアする挙動に統一し、aws-sdk-rust 互換の「`Option` で丸ごと置換」セマンティクスにする
   - @voluntas
+- [CHANGE] `CopyObject` / `UploadPartCopy` の `copy_source_if_modified_since` / `copy_source_if_unmodified_since` を `String` から `SystemTime` に変更し、内部で IMF-fixdate に整形する
+  - @voluntas
 
 - [ADD] PutObjectFluentBuilder に `set_body`、`set_content_type`、`set_content_encoding`、`set_cache_control` 等の String 系 `set_*` メソッドと `set_content_length`、`set_metadata` を追加する
   - @voluntas
