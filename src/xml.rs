@@ -265,10 +265,32 @@ impl XmlWriter {
         self.writer.write(event).expect("XML write failed");
     }
 
+    /// XML 1.0 で許可された文字かどうかを検証する
+    ///
+    /// 許可範囲: #x9 | #xA | #xD | #x20-#xD7FF | #xE000-#xFFFD | #x10000-#x10FFFF
+    /// https://www.w3.org/TR/xml/#charsets
+    fn validate_xml_characters(content: &str) -> Result<(), Error> {
+        for ch in content.chars() {
+            let valid = matches!(
+                ch as u32,
+                0x09 | 0x0A | 0x0D | 0x20..=0xD7FF | 0xE000..=0xFFFD | 0x10000..=0x10FFFF
+            );
+            if !valid {
+                return Err(Error::InvalidInput(format!(
+                    "XML 1.0 does not allow character U+{:04X}",
+                    ch as u32
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// テキストを書く（自動エスケープ）
-    pub(crate) fn text(&mut self, content: &str) {
+    pub(crate) fn text(&mut self, content: &str) -> Result<(), Error> {
+        Self::validate_xml_characters(content)?;
         let event = xml::writer::XmlEvent::characters(content);
         self.writer.write(event).expect("XML write failed");
+        Ok(())
     }
 
     /// 現在の要素を閉じる
@@ -278,10 +300,11 @@ impl XmlWriter {
     }
 
     /// <tag>text</tag> を一度に書く（リーフ要素用）
-    pub(crate) fn element(&mut self, tag: &str, content: &str) {
+    pub(crate) fn element(&mut self, tag: &str, content: &str) -> Result<(), Error> {
         self.start(tag);
-        self.text(content);
+        self.text(content)?;
         self.end();
+        Ok(())
     }
 
     /// 完了して String を返す

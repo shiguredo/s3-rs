@@ -65,7 +65,7 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
             "legal_hold_status is required",
         )?;
 
-        let xml_body = build_legal_hold_xml(status);
+        let xml_body = build_legal_hold_xml(status)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -92,10 +92,10 @@ impl<'a> PutObjectLegalHoldFluentBuilder<'a> {
     }
 }
 
-fn build_legal_hold_xml(status: &str) -> String {
+fn build_legal_hold_xml(status: &str) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("LegalHold", crate::xml::S3_NS);
-    w.element("Status", status);
+    w.element("Status", status)?;
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

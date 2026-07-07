@@ -69,7 +69,7 @@ impl<'a> PutBucketLifecycleConfigurationFluentBuilder<'a> {
             ));
         }
 
-        let xml_body = build_lifecycle_xml(&self.rules);
+        let xml_body = build_lifecycle_xml(&self.rules)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -113,14 +113,14 @@ impl<'a> PutBucketLifecycleConfigurationFluentBuilder<'a> {
     }
 }
 
-fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
+fn build_lifecycle_xml(rules: &[LifecycleRule]) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("LifecycleConfiguration", crate::xml::S3_NS);
     for rule in rules {
         w.start("Rule");
 
         if let Some(ref id) = rule.id {
-            w.element("ID", id);
+            w.element("ID", id)?;
         }
 
         // Filter
@@ -129,59 +129,59 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
             if let Some(ref and) = f.and {
                 w.start("And");
                 if let Some(ref prefix) = and.prefix {
-                    w.element("Prefix", prefix);
+                    w.element("Prefix", prefix)?;
                 }
                 if let Some(ref tags) = and.tags {
                     for tag in tags {
                         w.start("Tag");
-                        w.element("Key", &tag.key);
-                        w.element("Value", &tag.value);
+                        w.element("Key", &tag.key)?;
+                        w.element("Value", &tag.value)?;
                         w.end();
                     }
                 }
                 if let Some(size) = and.object_size_greater_than {
-                    w.element("ObjectSizeGreaterThan", &size.to_string());
+                    w.element("ObjectSizeGreaterThan", &size.to_string())?;
                 }
                 if let Some(size) = and.object_size_less_than {
-                    w.element("ObjectSizeLessThan", &size.to_string());
+                    w.element("ObjectSizeLessThan", &size.to_string())?;
                 }
                 w.end();
             } else {
                 if let Some(ref prefix) = f.prefix {
-                    w.element("Prefix", prefix);
+                    w.element("Prefix", prefix)?;
                 }
                 if let Some(ref tag) = f.tag {
                     w.start("Tag");
-                    w.element("Key", &tag.key);
-                    w.element("Value", &tag.value);
+                    w.element("Key", &tag.key)?;
+                    w.element("Value", &tag.value)?;
                     w.end();
                 }
                 if let Some(size) = f.object_size_greater_than {
-                    w.element("ObjectSizeGreaterThan", &size.to_string());
+                    w.element("ObjectSizeGreaterThan", &size.to_string())?;
                 }
                 if let Some(size) = f.object_size_less_than {
-                    w.element("ObjectSizeLessThan", &size.to_string());
+                    w.element("ObjectSizeLessThan", &size.to_string())?;
                 }
             }
             w.end();
         }
 
-        w.element("Status", rule.status.as_str());
+        w.element("Status", rule.status.as_str())?;
 
         // Expiration
         if let Some(ref exp) = rule.expiration {
             w.start("Expiration");
             if let Some(days) = exp.days {
-                w.element("Days", &days.to_string());
+                w.element("Days", &days.to_string())?;
             }
             if let Some(ref date) = exp.date {
-                w.element("Date", date);
+                w.element("Date", date)?;
             }
             if let Some(marker) = exp.expired_object_delete_marker {
                 w.element(
                     "ExpiredObjectDeleteMarker",
                     if marker { "true" } else { "false" },
-                );
+                )?;
             }
             w.end();
         }
@@ -190,13 +190,13 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         for trans in rule.transitions.iter().flatten() {
             w.start("Transition");
             if let Some(days) = trans.days {
-                w.element("Days", &days.to_string());
+                w.element("Days", &days.to_string())?;
             }
             if let Some(ref date) = trans.date {
-                w.element("Date", date);
+                w.element("Date", date)?;
             }
             if let Some(ref sc) = trans.storage_class {
-                w.element("StorageClass", sc.as_str());
+                w.element("StorageClass", sc.as_str())?;
             }
             w.end();
         }
@@ -205,10 +205,10 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         if let Some(ref nve) = rule.noncurrent_version_expiration {
             w.start("NoncurrentVersionExpiration");
             if let Some(days) = nve.noncurrent_days {
-                w.element("NoncurrentDays", &days.to_string());
+                w.element("NoncurrentDays", &days.to_string())?;
             }
             if let Some(newer) = nve.newer_noncurrent_versions {
-                w.element("NewerNoncurrentVersions", &newer.to_string());
+                w.element("NewerNoncurrentVersions", &newer.to_string())?;
             }
             w.end();
         }
@@ -217,13 +217,13 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         for nvt in rule.noncurrent_version_transitions.iter().flatten() {
             w.start("NoncurrentVersionTransition");
             if let Some(days) = nvt.noncurrent_days {
-                w.element("NoncurrentDays", &days.to_string());
+                w.element("NoncurrentDays", &days.to_string())?;
             }
             if let Some(ref sc) = nvt.storage_class {
-                w.element("StorageClass", sc.as_str());
+                w.element("StorageClass", sc.as_str())?;
             }
             if let Some(newer) = nvt.newer_noncurrent_versions {
-                w.element("NewerNoncurrentVersions", &newer.to_string());
+                w.element("NewerNoncurrentVersions", &newer.to_string())?;
             }
             w.end();
         }
@@ -232,7 +232,7 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         if let Some(ref abort) = rule.abort_incomplete_multipart_upload {
             w.start("AbortIncompleteMultipartUpload");
             if let Some(days) = abort.days_after_initiation {
-                w.element("DaysAfterInitiation", &days.to_string());
+                w.element("DaysAfterInitiation", &days.to_string())?;
             }
             w.end();
         }
@@ -240,5 +240,5 @@ fn build_lifecycle_xml(rules: &[LifecycleRule]) -> String {
         w.end(); // Rule
     }
     w.end(); // LifecycleConfiguration
-    w.finish()
+    Ok(w.finish())
 }

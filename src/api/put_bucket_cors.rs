@@ -63,7 +63,7 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
             return Err(Error::InvalidInput("cors_rules is required".to_string()));
         }
 
-        let xml_body = build_cors_xml(&self.cors_rules);
+        let xml_body = build_cors_xml(&self.cors_rules)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -98,35 +98,35 @@ impl<'a> PutBucketCorsFluentBuilder<'a> {
     }
 }
 
-fn build_cors_xml(rules: &[CorsRule]) -> String {
+fn build_cors_xml(rules: &[CorsRule]) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("CORSConfiguration", crate::xml::S3_NS);
     for rule in rules {
         w.start("CORSRule");
         if let Some(ref id) = rule.id {
-            w.element("ID", id);
+            w.element("ID", id)?;
         }
         for origin in &rule.allowed_origins {
-            w.element("AllowedOrigin", origin);
+            w.element("AllowedOrigin", origin)?;
         }
         for method in &rule.allowed_methods {
-            w.element("AllowedMethod", method);
+            w.element("AllowedMethod", method)?;
         }
         if let Some(ref headers) = rule.allowed_headers {
             for header in headers {
-                w.element("AllowedHeader", header);
+                w.element("AllowedHeader", header)?;
             }
         }
         if let Some(max_age) = rule.max_age_seconds {
-            w.element("MaxAgeSeconds", &max_age.to_string());
+            w.element("MaxAgeSeconds", &max_age.to_string())?;
         }
         if let Some(ref headers) = rule.expose_headers {
             for header in headers {
-                w.element("ExposeHeader", header);
+                w.element("ExposeHeader", header)?;
             }
         }
         w.end();
     }
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

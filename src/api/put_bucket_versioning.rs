@@ -62,7 +62,7 @@ impl<'a> PutBucketVersioningFluentBuilder<'a> {
 
         let mut w = crate::xml::XmlWriter::new();
         w.start_ns("VersioningConfiguration", crate::xml::S3_NS);
-        w.element("Status", status);
+        w.element("Status", status)?;
         w.end();
         let xml_body = w.finish();
         let content_md5 = base64_md5(xml_body.as_bytes());

@@ -77,7 +77,7 @@ impl<'a> PutBucketEncryptionFluentBuilder<'a> {
             }
         }
 
-        let xml_body = build_encryption_xml(&self.rules);
+        let xml_body = build_encryption_xml(&self.rules)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -114,24 +114,24 @@ impl<'a> PutBucketEncryptionFluentBuilder<'a> {
     }
 }
 
-fn build_encryption_xml(rules: &[ServerSideEncryptionRule]) -> String {
+fn build_encryption_xml(rules: &[ServerSideEncryptionRule]) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("ServerSideEncryptionConfiguration", crate::xml::S3_NS);
     for rule in rules {
         w.start("Rule");
         if let Some(ref default) = rule.apply_server_side_encryption_by_default {
             w.start("ApplyServerSideEncryptionByDefault");
-            w.element("SSEAlgorithm", &default.sse_algorithm);
+            w.element("SSEAlgorithm", &default.sse_algorithm)?;
             if let Some(ref key_id) = default.kms_master_key_id {
-                w.element("KMSMasterKeyID", key_id);
+                w.element("KMSMasterKeyID", key_id)?;
             }
             w.end();
         }
         if let Some(enabled) = rule.bucket_key_enabled {
-            w.element("BucketKeyEnabled", if enabled { "true" } else { "false" });
+            w.element("BucketKeyEnabled", if enabled { "true" } else { "false" })?;
         }
         w.end();
     }
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

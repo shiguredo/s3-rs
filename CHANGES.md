@@ -202,6 +202,8 @@
   - @voluntas
 - [FIX] `CorsRuleBuilder::id` の 255 文字超え検証を `panic!` から `build()` 内の `Error::InvalidInput` 返却に変更し、`allowed_methods` / `allowed_origins` の未指定も検証する
   - @voluntas
+- [FIX] `XmlWriter` で XML 1.0 禁止制御文字を検証し、`Error::InvalidInput` を返すようにする
+  - @voluntas
 
 ### misc
 

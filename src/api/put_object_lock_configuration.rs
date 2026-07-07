@@ -70,7 +70,7 @@ impl<'a> PutObjectLockConfigurationFluentBuilder<'a> {
             ));
         }
 
-        let xml_body = build_object_lock_configuration_xml(&self.object_lock_configuration);
+        let xml_body = build_object_lock_configuration_xml(&self.object_lock_configuration)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -111,26 +111,28 @@ impl<'a> PutObjectLockConfigurationFluentBuilder<'a> {
     }
 }
 
-fn build_object_lock_configuration_xml(config: &Option<ObjectLockConfiguration>) -> String {
+fn build_object_lock_configuration_xml(
+    config: &Option<ObjectLockConfiguration>,
+) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("ObjectLockConfiguration", crate::xml::S3_NS);
 
     if let Some(cfg) = config {
         if let Some(ref enabled) = cfg.object_lock_enabled {
-            w.element("ObjectLockEnabled", enabled);
+            w.element("ObjectLockEnabled", enabled)?;
         }
         if let Some(ref rule) = cfg.rule {
             w.start("Rule");
             if let Some(ref retention) = rule.default_retention {
                 w.start("DefaultRetention");
                 if let Some(ref mode) = retention.mode {
-                    w.element("Mode", mode);
+                    w.element("Mode", mode)?;
                 }
                 if let Some(days) = retention.days {
-                    w.element("Days", &days.to_string());
+                    w.element("Days", &days.to_string())?;
                 }
                 if let Some(years) = retention.years {
-                    w.element("Years", &years.to_string());
+                    w.element("Years", &years.to_string())?;
                 }
                 w.end();
             }
@@ -139,5 +141,5 @@ fn build_object_lock_configuration_xml(config: &Option<ObjectLockConfiguration>)
     }
 
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

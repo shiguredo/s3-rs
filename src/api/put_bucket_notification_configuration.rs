@@ -80,7 +80,7 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
             &self.queue_configurations,
             &self.lambda_function_configurations,
             self.event_bridge_enabled,
-        );
+        )?;
         let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
 
         if self.skip_destination_validation == Some(true) {
@@ -112,19 +112,20 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
 fn write_filter(
     w: &mut crate::xml::XmlWriter,
     filter: &crate::types::NotificationConfigurationFilter,
-) {
+) -> Result<(), Error> {
     w.start("Filter");
     if let Some(ref key) = filter.key {
         w.start("S3Key");
         for rule in &key.filter_rules {
             w.start("FilterRule");
-            w.element("Name", &rule.name);
-            w.element("Value", &rule.value);
+            w.element("Name", &rule.name)?;
+            w.element("Value", &rule.value)?;
             w.end();
         }
         w.end();
     }
     w.end();
+    Ok(())
 }
 
 fn build_notification_xml(
@@ -132,21 +133,21 @@ fn build_notification_xml(
     queues: &[QueueConfiguration],
     lambdas: &[LambdaFunctionConfiguration],
     event_bridge: bool,
-) -> String {
+) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("NotificationConfiguration", crate::xml::S3_NS);
 
     for topic in topics {
         w.start("TopicConfiguration");
         if let Some(ref id) = topic.id {
-            w.element("Id", id);
+            w.element("Id", id)?;
         }
-        w.element("Topic", &topic.topic_arn);
+        w.element("Topic", &topic.topic_arn)?;
         for event in &topic.events {
-            w.element("Event", event);
+            w.element("Event", event)?;
         }
         if let Some(ref filter) = topic.filter {
-            write_filter(&mut w, filter);
+            write_filter(&mut w, filter)?;
         }
         w.end();
     }
@@ -154,14 +155,14 @@ fn build_notification_xml(
     for queue in queues {
         w.start("QueueConfiguration");
         if let Some(ref id) = queue.id {
-            w.element("Id", id);
+            w.element("Id", id)?;
         }
-        w.element("Queue", &queue.queue_arn);
+        w.element("Queue", &queue.queue_arn)?;
         for event in &queue.events {
-            w.element("Event", event);
+            w.element("Event", event)?;
         }
         if let Some(ref filter) = queue.filter {
-            write_filter(&mut w, filter);
+            write_filter(&mut w, filter)?;
         }
         w.end();
     }
@@ -169,14 +170,14 @@ fn build_notification_xml(
     for lambda in lambdas {
         w.start("CloudFunctionConfiguration");
         if let Some(ref id) = lambda.id {
-            w.element("Id", id);
+            w.element("Id", id)?;
         }
-        w.element("CloudFunction", &lambda.lambda_function_arn);
+        w.element("CloudFunction", &lambda.lambda_function_arn)?;
         for event in &lambda.events {
-            w.element("Event", event);
+            w.element("Event", event)?;
         }
         if let Some(ref filter) = lambda.filter {
-            write_filter(&mut w, filter);
+            write_filter(&mut w, filter)?;
         }
         w.end();
     }
@@ -187,5 +188,5 @@ fn build_notification_xml(
     }
 
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

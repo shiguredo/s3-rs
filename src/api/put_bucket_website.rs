@@ -87,7 +87,7 @@ impl<'a> PutBucketWebsiteFluentBuilder<'a> {
             &self.error_document,
             &self.redirect_all_requests_to,
             &self.routing_rules,
-        );
+        )?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -119,28 +119,28 @@ fn build_website_xml(
     error: &Option<ErrorDocument>,
     redirect_all: &Option<RedirectAllRequestsTo>,
     routing_rules: &[RoutingRule],
-) -> String {
+) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("WebsiteConfiguration", crate::xml::S3_NS);
 
     if let Some(redirect) = redirect_all {
         w.start("RedirectAllRequestsTo");
-        w.element("HostName", &redirect.host_name);
+        w.element("HostName", &redirect.host_name)?;
         if let Some(ref protocol) = redirect.protocol {
-            w.element("Protocol", protocol);
+            w.element("Protocol", protocol)?;
         }
         w.end();
     }
 
     if let Some(idx) = index {
         w.start("IndexDocument");
-        w.element("Suffix", &idx.suffix);
+        w.element("Suffix", &idx.suffix)?;
         w.end();
     }
 
     if let Some(err) = error {
         w.start("ErrorDocument");
-        w.element("Key", &err.key);
+        w.element("Key", &err.key)?;
         w.end();
     }
 
@@ -151,29 +151,29 @@ fn build_website_xml(
             if let Some(ref cond) = rule.condition {
                 w.start("Condition");
                 if let Some(ref code) = cond.http_error_code_returned_equals {
-                    w.element("HttpErrorCodeReturnedEquals", code);
+                    w.element("HttpErrorCodeReturnedEquals", code)?;
                 }
                 if let Some(ref prefix) = cond.key_prefix_equals {
-                    w.element("KeyPrefixEquals", prefix);
+                    w.element("KeyPrefixEquals", prefix)?;
                 }
                 w.end();
             }
             if let Some(ref redirect) = rule.redirect {
                 w.start("Redirect");
                 if let Some(ref host) = redirect.host_name {
-                    w.element("HostName", host);
+                    w.element("HostName", host)?;
                 }
                 if let Some(ref code) = redirect.http_redirect_code {
-                    w.element("HttpRedirectCode", code);
+                    w.element("HttpRedirectCode", code)?;
                 }
                 if let Some(ref protocol) = redirect.protocol {
-                    w.element("Protocol", protocol);
+                    w.element("Protocol", protocol)?;
                 }
                 if let Some(ref prefix) = redirect.replace_key_prefix_with {
-                    w.element("ReplaceKeyPrefixWith", prefix);
+                    w.element("ReplaceKeyPrefixWith", prefix)?;
                 }
                 if let Some(ref key) = redirect.replace_key_with {
-                    w.element("ReplaceKeyWith", key);
+                    w.element("ReplaceKeyWith", key)?;
                 }
                 w.end();
             }
@@ -183,5 +183,5 @@ fn build_website_xml(
     }
 
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

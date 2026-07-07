@@ -84,7 +84,8 @@ impl<'a> PutObjectRetentionFluentBuilder<'a> {
             query_params.push(("versionId", vid.as_str()));
         }
 
-        let xml_body = build_retention_xml(self.mode.as_deref(), self.retain_until_date.as_deref());
+        let xml_body =
+            build_retention_xml(self.mode.as_deref(), self.retain_until_date.as_deref())?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -115,15 +116,18 @@ impl<'a> PutObjectRetentionFluentBuilder<'a> {
     }
 }
 
-fn build_retention_xml(mode: Option<&str>, retain_until_date: Option<&str>) -> String {
+fn build_retention_xml(
+    mode: Option<&str>,
+    retain_until_date: Option<&str>,
+) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("Retention", crate::xml::S3_NS);
     if let Some(m) = mode {
-        w.element("Mode", m);
+        w.element("Mode", m)?;
     }
     if let Some(d) = retain_until_date {
-        w.element("RetainUntilDate", d);
+        w.element("RetainUntilDate", d)?;
     }
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

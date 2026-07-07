@@ -79,7 +79,7 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
             ));
         }
 
-        let xml_body = build_delete_objects_xml(&delete.objects, delete.quiet.unwrap_or(false));
+        let xml_body = build_delete_objects_xml(&delete.objects, delete.quiet.unwrap_or(false))?;
         let content_md5 = base64_md5(xml_body.as_bytes());
 
         let mut extra_headers: Vec<(&str, &str)> = vec![
@@ -134,20 +134,20 @@ impl<'a> DeleteObjectsFluentBuilder<'a> {
     }
 }
 
-fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> String {
+fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("Delete", crate::xml::S3_NS);
     if quiet {
-        w.element("Quiet", "true");
+        w.element("Quiet", "true")?;
     }
     for obj in objects {
         w.start("Object");
-        w.element("Key", &obj.key);
+        w.element("Key", &obj.key)?;
         if let Some(ref version_id) = obj.version_id {
-            w.element("VersionId", version_id);
+            w.element("VersionId", version_id)?;
         }
         if let Some(ref e_tag) = obj.e_tag {
-            w.element("ETag", e_tag);
+            w.element("ETag", e_tag)?;
         }
         if let Some(t) = obj.last_modified_time {
             // S3 仕様では ISO 8601 (RFC 3339) フォーマットで送る
@@ -162,15 +162,15 @@ fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> String
                 "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
                 c.year, c.month, c.day, c.hour, c.minute, c.second
             );
-            w.element("LastModifiedTime", &formatted);
+            w.element("LastModifiedTime", &formatted)?;
         }
         if let Some(size) = obj.size {
-            w.element("Size", &size.to_string());
+            w.element("Size", &size.to_string())?;
         }
         w.end();
     }
     w.end();
-    w.finish()
+    Ok(w.finish())
 }
 
 fn extract_xml_deleted_objects(text: &str) -> Result<Vec<DeletedObject>, Error> {

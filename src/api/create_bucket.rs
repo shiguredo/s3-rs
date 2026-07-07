@@ -57,7 +57,7 @@ impl<'a> CreateBucketFluentBuilder<'a> {
                 Some(constraint) => {
                     let mut w = crate::xml::XmlWriter::new();
                     w.start_ns("CreateBucketConfiguration", crate::xml::S3_NS);
-                    w.element("LocationConstraint", constraint);
+                    w.element("LocationConstraint", constraint)?;
                     w.end();
                     w.finish().into_bytes()
                 }

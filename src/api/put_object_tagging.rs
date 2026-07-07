@@ -80,7 +80,7 @@ impl<'a> PutObjectTaggingFluentBuilder<'a> {
             .as_ref()
             .ok_or_else(|| Error::InvalidInput("tagging is required".to_string()))?;
 
-        let xml_body = build_tagging_xml(&tagging.tag_set);
+        let xml_body = build_tagging_xml(&tagging.tag_set)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let mut extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -126,17 +126,17 @@ impl<'a> PutObjectTaggingFluentBuilder<'a> {
     }
 }
 
-fn build_tagging_xml(tags: &[Tag]) -> String {
+fn build_tagging_xml(tags: &[Tag]) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("Tagging", crate::xml::S3_NS);
     w.start("TagSet");
     for tag in tags {
         w.start("Tag");
-        w.element("Key", &tag.key);
-        w.element("Value", &tag.value);
+        w.element("Key", &tag.key)?;
+        w.element("Value", &tag.value)?;
         w.end();
     }
     w.end();
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

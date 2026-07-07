@@ -115,7 +115,7 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             }
         }
 
-        let xml_body = build_complete_multipart_xml(&self.multipart_upload);
+        let xml_body = build_complete_multipart_xml(&self.multipart_upload)?;
         let query_params = [("uploadId", upload_id)];
         let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
         if let Some(ref v) = self.if_match {
@@ -217,7 +217,7 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
-        let xml_body = build_complete_multipart_xml(&self.multipart_upload);
+        let xml_body = build_complete_multipart_xml(&self.multipart_upload)?;
 
         let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
         if let Some(ref v) = self.if_match {
@@ -266,7 +266,9 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
     }
 }
 
-fn build_complete_multipart_xml(multipart_upload: &Option<CompletedMultipartUpload>) -> String {
+fn build_complete_multipart_xml(
+    multipart_upload: &Option<CompletedMultipartUpload>,
+) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("CompleteMultipartUpload", crate::xml::S3_NS);
 
@@ -276,30 +278,30 @@ fn build_complete_multipart_xml(multipart_upload: &Option<CompletedMultipartUplo
         for part in parts {
             w.start("Part");
             if let Some(part_number) = part.part_number {
-                w.element("PartNumber", &part_number.to_string());
+                w.element("PartNumber", &part_number.to_string())?;
             }
             if let Some(ref e_tag) = part.e_tag {
-                w.element("ETag", e_tag);
+                w.element("ETag", e_tag)?;
             }
             if let Some(ref v) = part.checksum_crc32 {
-                w.element("ChecksumCRC32", v);
+                w.element("ChecksumCRC32", v)?;
             }
             if let Some(ref v) = part.checksum_crc32_c {
-                w.element("ChecksumCRC32C", v);
+                w.element("ChecksumCRC32C", v)?;
             }
             if let Some(ref v) = part.checksum_crc64_nvme {
-                w.element("ChecksumCRC64NVME", v);
+                w.element("ChecksumCRC64NVME", v)?;
             }
             if let Some(ref v) = part.checksum_sha1 {
-                w.element("ChecksumSHA1", v);
+                w.element("ChecksumSHA1", v)?;
             }
             if let Some(ref v) = part.checksum_sha256 {
-                w.element("ChecksumSHA256", v);
+                w.element("ChecksumSHA256", v)?;
             }
             w.end();
         }
     }
 
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

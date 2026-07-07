@@ -45,7 +45,7 @@ impl<'a> PutBucketOwnershipControlsFluentBuilder<'a> {
             ));
         }
 
-        let xml_body = build_ownership_controls_xml(&self.rules);
+        let xml_body = build_ownership_controls_xml(&self.rules)?;
         let content_md5 = base64_md5(xml_body.as_bytes());
         let extra_headers: Vec<(&str, &str)> = vec![
             ("content-type", "application/xml"),
@@ -74,14 +74,14 @@ impl<'a> PutBucketOwnershipControlsFluentBuilder<'a> {
     }
 }
 
-fn build_ownership_controls_xml(rules: &[OwnershipControlsRule]) -> String {
+fn build_ownership_controls_xml(rules: &[OwnershipControlsRule]) -> Result<String, Error> {
     let mut w = crate::xml::XmlWriter::new();
     w.start_ns("OwnershipControls", crate::xml::S3_NS);
     for rule in rules {
         w.start("Rule");
-        w.element("ObjectOwnership", &rule.object_ownership);
+        w.element("ObjectOwnership", &rule.object_ownership)?;
         w.end();
     }
     w.end();
-    w.finish()
+    Ok(w.finish())
 }

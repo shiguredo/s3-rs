@@ -76,16 +76,16 @@ impl<'a> PutPublicAccessBlockFluentBuilder<'a> {
         let mut w = crate::xml::XmlWriter::new();
         w.start_ns("PublicAccessBlockConfiguration", crate::xml::S3_NS);
         if let Some(v) = self.block_public_acls {
-            w.element("BlockPublicAcls", &v.to_string());
+            w.element("BlockPublicAcls", &v.to_string())?;
         }
         if let Some(v) = self.ignore_public_acls {
-            w.element("IgnorePublicAcls", &v.to_string());
+            w.element("IgnorePublicAcls", &v.to_string())?;
         }
         if let Some(v) = self.block_public_policy {
-            w.element("BlockPublicPolicy", &v.to_string());
+            w.element("BlockPublicPolicy", &v.to_string())?;
         }
         if let Some(v) = self.restrict_public_buckets {
-            w.element("RestrictPublicBuckets", &v.to_string());
+            w.element("RestrictPublicBuckets", &v.to_string())?;
         }
         w.end();
         let xml_body = w.finish();
