@@ -83,6 +83,7 @@
 - [ADD] ConfigBuilder に `set_region`、`set_credentials_provider`、`set_endpoint`、`set_force_path_style`、`set_ignore_cert_check` を追加する
   - @voluntas
 - [ADD] HeadObjectFluentBuilder / DeleteObjectFluentBuilder / ListPartsFluentBuilder に `set_*` メソッドを追加する
+  - @voluntas
 - [ADD] DeleteObjectOutput に `request_charged` フィールドを追加する
   - @voluntas
 - [ADD] CreateMultipartUploadOutput に `request_charged` フィールドを追加する
