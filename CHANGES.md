@@ -196,6 +196,8 @@
   - @voluntas
 - [FIX] HeadObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する
   - @voluntas
+- [FIX] `CorsRuleBuilder::id` の 255 文字超え検証を `panic!` から `build()` 内の `Error::InvalidInput` 返却に変更し、`allowed_methods` / `allowed_origins` の未指定も検証する
+  - @voluntas
 
 ### misc
 

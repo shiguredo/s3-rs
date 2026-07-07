@@ -71,27 +71,51 @@ fn test_id_none() {
     assert_eq!(rules[0].id, None);
 }
 
-/// CorsRuleBuilder::id で 255 文字超えはパニック
+/// CorsRuleBuilder::id で 255 文字超えは InvalidInput になる
 #[test]
-#[should_panic(expected = "must not be longer than 255")]
 fn test_cors_rule_id_too_long() {
+    use shiguredo_s3::Error;
     use shiguredo_s3::types::CorsRule;
+
     let long_id = "a".repeat(256);
-    let _rule = CorsRule::builder()
+    let result = CorsRule::builder()
         .id(long_id)
         .allowed_origins("*")
         .allowed_methods("GET")
         .build();
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
 }
 
 /// CorsRuleBuilder::id で空文字列は許容
 #[test]
 fn test_cors_rule_id_empty() {
     use shiguredo_s3::types::CorsRule;
+
     let rule = CorsRule::builder()
         .id("")
         .allowed_origins("*")
         .allowed_methods("GET")
-        .build();
+        .build()
+        .expect("build should succeed");
     assert_eq!(rule.id.as_deref(), Some(""));
+}
+
+/// CorsRuleBuilder::build で allowed_methods が空の場合は InvalidInput になる
+#[test]
+fn test_cors_rule_empty_allowed_methods() {
+    use shiguredo_s3::Error;
+    use shiguredo_s3::types::CorsRule;
+
+    let result = CorsRule::builder().allowed_origins("*").build();
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// CorsRuleBuilder::build で allowed_origins が空の場合は InvalidInput になる
+#[test]
+fn test_cors_rule_empty_allowed_origins() {
+    use shiguredo_s3::Error;
+    use shiguredo_s3::types::CorsRule;
+
+    let result = CorsRule::builder().allowed_methods("GET").build();
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
 }

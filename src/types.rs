@@ -1237,15 +1237,10 @@ pub struct CorsRuleBuilder {
 
 impl CorsRuleBuilder {
     /// ルール ID を設定する (最大 255 文字)
+    ///
+    /// 長さ制限は `build()` で検証される。
     pub fn id(mut self, id: impl Into<String>) -> Self {
-        let id = id.into();
-        if id.len() > 255 {
-            panic!(
-                "CorsRule ID must not be longer than 255 characters, got {}",
-                id.len()
-            );
-        }
-        self.id = Some(id);
+        self.id = Some(id.into());
         self
     }
 
@@ -1308,15 +1303,37 @@ impl CorsRuleBuilder {
     }
 
     /// CorsRule を構築する
-    pub fn build(self) -> CorsRule {
-        CorsRule {
+    ///
+    /// `allowed_methods` / `allowed_origins` が空の場合、または `id` が 255 文字を超える場合は
+    /// `Error::InvalidInput` を返す。
+    pub fn build(self) -> Result<CorsRule, Error> {
+        if self.allowed_methods.is_empty() {
+            return Err(Error::InvalidInput(
+                "allowed_methods must not be empty".to_string(),
+            ));
+        }
+        if self.allowed_origins.is_empty() {
+            return Err(Error::InvalidInput(
+                "allowed_origins must not be empty".to_string(),
+            ));
+        }
+        if let Some(ref id) = self.id
+            && id.len() > 255
+        {
+            return Err(Error::InvalidInput(format!(
+                "CorsRule ID must not be longer than 255 characters, got {}",
+                id.len()
+            )));
+        }
+
+        Ok(CorsRule {
             id: self.id,
             allowed_headers: self.allowed_headers,
             allowed_methods: self.allowed_methods,
             allowed_origins: self.allowed_origins,
             expose_headers: self.expose_headers,
             max_age_seconds: self.max_age_seconds,
-        }
+        })
     }
 }
 

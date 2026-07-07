@@ -1689,7 +1689,8 @@ async fn test_bucket_cors() {
                         .allowed_headers("*")
                         .expose_headers("x-amz-request-id")
                         .max_age_seconds(3600)
-                        .build(),
+                        .build()
+                        .expect("CorsRule build failed"),
                 )
                 .build(),
         )
