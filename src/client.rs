@@ -81,8 +81,8 @@ pub struct ConfigBuilder {
     region: Option<String>,
     credentials_provider: Option<Credentials>,
     endpoint: Option<String>,
-    force_path_style: bool,
-    ignore_cert_check: bool,
+    force_path_style: Option<bool>,
+    ignore_cert_check: Option<bool>,
 }
 
 impl ConfigBuilder {
@@ -124,29 +124,29 @@ impl ConfigBuilder {
 
     /// パススタイルのアクセスを使用する (MinIO 等の S3 互換サービス向け)
     pub fn force_path_style(mut self, force_path_style: bool) -> Self {
-        self.force_path_style = force_path_style;
+        self.force_path_style = Some(force_path_style);
         self
     }
 
     /// パススタイルアクセスを `Option` で設定する (`set_*` バリアント)
+    ///
+    /// `None` を渡すと設定をクリアし、デフォルトの `false` に戻す。
     pub fn set_force_path_style(mut self, force_path_style: Option<bool>) -> Self {
-        if let Some(v) = force_path_style {
-            self.force_path_style = v;
-        }
+        self.force_path_style = force_path_style;
         self
     }
 
     /// TLS 証明書の検証を無視する (テスト環境向け、shiguredo_s3 独自フィールド)
     pub fn ignore_cert_check(mut self, ignore_cert_check: bool) -> Self {
-        self.ignore_cert_check = ignore_cert_check;
+        self.ignore_cert_check = Some(ignore_cert_check);
         self
     }
 
     /// TLS 証明書の検証無視を `Option` で設定する (`set_*` バリアント)
+    ///
+    /// `None` を渡すと設定をクリアし、デフォルトの `false` に戻す。
     pub fn set_ignore_cert_check(mut self, ignore_cert_check: Option<bool>) -> Self {
-        if let Some(v) = ignore_cert_check {
-            self.ignore_cert_check = v;
-        }
+        self.ignore_cert_check = ignore_cert_check;
         self
     }
 
@@ -168,8 +168,8 @@ impl ConfigBuilder {
             region,
             credentials_provider,
             endpoint: self.endpoint,
-            force_path_style: self.force_path_style,
-            ignore_cert_check: self.ignore_cert_check,
+            force_path_style: self.force_path_style.unwrap_or(false),
+            ignore_cert_check: self.ignore_cert_check.unwrap_or(false),
         })
     }
 }
