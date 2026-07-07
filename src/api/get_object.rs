@@ -13,7 +13,7 @@ use crate::types::{ChecksumMode, GetObjectOutput};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
-    validate_presign_expires,
+    validate_part_number, validate_presign_expires,
 };
 
 pub struct GetObjectFluentBuilder<'a> {
@@ -309,11 +309,7 @@ impl<'a> GetObjectFluentBuilder<'a> {
         let part_number_str;
         let mut query_params = Vec::new();
         if let Some(pn) = self.part_number {
-            if !(1..=10000).contains(&pn) {
-                return Err(Error::InvalidInput(
-                    "part_number must be between 1 and 10000".to_string(),
-                ));
-            }
+            validate_part_number(pn)?;
             part_number_str = pn.to_string();
             query_params.push(("partNumber", part_number_str.as_str()));
         }
@@ -455,11 +451,7 @@ impl<'a> GetObjectFluentBuilder<'a> {
         let part_number_str;
         let mut extra_query_params = Vec::new();
         if let Some(pn) = self.part_number {
-            if !(1..=10000).contains(&pn) {
-                return Err(Error::InvalidInput(
-                    "part_number must be between 1 and 10000".to_string(),
-                ));
-            }
+            validate_part_number(pn)?;
             part_number_str = pn.to_string();
             extra_query_params.push(("partNumber", part_number_str.as_str()));
         }

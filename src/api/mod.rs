@@ -609,6 +609,19 @@ pub(crate) fn validate_presign_expires(expires_in_secs: u64) -> Result<(), Error
     Ok(())
 }
 
+/// パート番号を検証する (1〜10000)
+///
+/// HeadObject / GetObject / UploadPart / UploadPartCopy で共通して使う。
+/// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
+pub(crate) fn validate_part_number(part_number: i32) -> Result<(), Error> {
+    if !(1..=10000).contains(&part_number) {
+        return Err(Error::InvalidInput(
+            "part_number must be between 1 and 10000".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// 2xx レスポンスのボディに `<Error>` が含まれていないか検査する
 ///
 /// CompleteMultipartUpload と CopyObject は 200 OK でボディにエラーを返すことがある。

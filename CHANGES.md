@@ -192,6 +192,8 @@
   - @voluntas
 - [FIX] xml インフラのエラーハンドリングを統一し破損 XML や非 UTF-8 ボディを正しく扱う
   - @voluntas
+- [FIX] HeadObject の `presigned()` で `range`、`if_match`、`if_none_match`、`if_modified_since`、`if_unmodified_since`、`checksum_mode` が署名対象に含まれない問題を修正し、`part_number` の範囲検証を追加する
+  - @voluntas
 
 ### misc
 

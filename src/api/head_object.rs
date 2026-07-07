@@ -11,7 +11,8 @@ use std::time::SystemTime;
 use crate::types::{ChecksumMode, HeadObjectOutput};
 
 use super::{
-    S3Request, build_presigned_url, build_signed_request, required, validate_presign_expires,
+    S3Request, build_presigned_url, build_signed_request, required, validate_part_number,
+    validate_presign_expires,
 };
 
 pub struct HeadObjectFluentBuilder<'a> {
@@ -228,11 +229,7 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         let part_number_str;
         let mut query_params = Vec::new();
         if let Some(pn) = self.part_number {
-            if !(1..=10000).contains(&pn) {
-                return Err(Error::InvalidInput(
-                    "part_number must be between 1 and 10000".to_string(),
-                ));
-            }
+            validate_part_number(pn)?;
             part_number_str = pn.to_string();
             query_params.push(("partNumber", part_number_str.as_str()));
         }
@@ -350,6 +347,7 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         let part_number_str;
         let mut extra_query_params = Vec::new();
         if let Some(pn) = self.part_number {
+            validate_part_number(pn)?;
             part_number_str = pn.to_string();
             extra_query_params.push(("partNumber", part_number_str.as_str()));
         }
@@ -358,6 +356,28 @@ impl<'a> HeadObjectFluentBuilder<'a> {
         }
 
         let mut extra_headers = Vec::new();
+        if let Some(ref range) = self.range {
+            extra_headers.push(("range", range.as_str()));
+        }
+        if let Some(ref v) = self.if_match {
+            extra_headers.push(("if-match", v.as_str()));
+        }
+        if let Some(ref v) = self.if_none_match {
+            extra_headers.push(("if-none-match", v.as_str()));
+        }
+        let if_modified_since_str;
+        if let Some(t) = self.if_modified_since {
+            if_modified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push(("if-modified-since", if_modified_since_str.as_str()));
+        }
+        let if_unmodified_since_str;
+        if let Some(t) = self.if_unmodified_since {
+            if_unmodified_since_str = crate::datetime::format_imf_fixdate(t)?;
+            extra_headers.push(("if-unmodified-since", if_unmodified_since_str.as_str()));
+        }
+        if let Some(ref v) = self.checksum_mode {
+            extra_headers.push(("x-amz-checksum-mode", v.as_str()));
+        }
         if let Some(ref v) = self.sse_customer_algorithm {
             extra_headers.push((
                 "x-amz-server-side-encryption-customer-algorithm",

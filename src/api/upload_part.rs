@@ -11,7 +11,7 @@ use crate::types::{ChecksumAlgorithm, UploadPartOutput};
 
 use super::{
     S3Request, build_presigned_url, build_signed_request, parse_error_response, required,
-    validate_presign_expires,
+    validate_part_number, validate_presign_expires,
 };
 
 pub struct UploadPartFluentBuilder<'a> {
@@ -271,11 +271,7 @@ impl<'a> UploadPartFluentBuilder<'a> {
         let part_number = self
             .part_number
             .ok_or_else(|| Error::InvalidInput("part_number is required".into()))?;
-        if !(1..=10000).contains(&part_number) {
-            return Err(Error::InvalidInput(
-                "part_number must be between 1 and 10000".to_string(),
-            ));
-        }
+        validate_part_number(part_number)?;
         let body = self.body.as_deref().unwrap_or_default();
 
         let part_number_str = part_number.to_string();
@@ -403,11 +399,7 @@ impl<'a> UploadPartFluentBuilder<'a> {
         let part_number = self
             .part_number
             .ok_or_else(|| Error::InvalidInput("part_number is required".into()))?;
-        if !(1..=10000).contains(&part_number) {
-            return Err(Error::InvalidInput(
-                "part_number must be between 1 and 10000".to_string(),
-            ));
-        }
+        validate_part_number(part_number)?;
 
         let part_number_str = part_number.to_string();
         let extra_query_params = [

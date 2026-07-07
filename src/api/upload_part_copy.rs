@@ -8,7 +8,9 @@ use crate::client::Client;
 use crate::error::Error;
 use crate::types::UploadPartCopyOutput;
 
-use super::{S3Request, build_signed_request, parse_error_response, required};
+use super::{
+    S3Request, build_signed_request, parse_error_response, required, validate_part_number,
+};
 
 pub struct UploadPartCopyFluentBuilder<'a> {
     client: &'a Client,
@@ -145,11 +147,7 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
             .ok_or_else(|| Error::InvalidInput("part_number is required".into()))?;
         let copy_source = required(self.copy_source.as_deref(), "copy_source")?;
 
-        if !(1..=10000).contains(&part_number) {
-            return Err(Error::InvalidInput(
-                "part_number must be between 1 and 10000".to_string(),
-            ));
-        }
+        validate_part_number(part_number)?;
 
         // 先頭の / を正規化して二重スラッシュを防ぐ
         let copy_source_normalized = copy_source.strip_prefix('/').unwrap_or(copy_source);
