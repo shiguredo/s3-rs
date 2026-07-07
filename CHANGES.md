@@ -69,6 +69,8 @@
   - @voluntas
 - [CHANGE] `second == 60` (閏秒) をエラーに変更し閏秒非対応を明文化する
   - @voluntas
+- [CHANGE] `GetObjectOutput` / `HeadObjectOutput` の `checksum_crc32c` / `checksum_crc64nvme` フィールドを `checksum_crc32_c` / `checksum_crc64_nvme` にリネームし、aws-sdk-rust 互換の命名に統一する
+  - @voluntas
 
 - [ADD] PutObjectFluentBuilder に `set_body`、`set_content_type`、`set_content_encoding`、`set_cache_control` 等の String 系 `set_*` メソッドと `set_content_length`、`set_metadata` を追加する
   - @voluntas

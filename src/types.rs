@@ -136,9 +136,9 @@ pub struct GetObjectOutput {
     /// CRC32 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_crc32: Option<String>,
     /// CRC32C チェックサム (checksum_mode=ENABLED 時)
-    pub checksum_crc32c: Option<String>,
+    pub checksum_crc32_c: Option<String>,
     /// CRC64NVME チェックサム (checksum_mode=ENABLED 時)
-    pub checksum_crc64nvme: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
     /// SHA1 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_sha1: Option<String>,
     /// SHA256 チェックサム (checksum_mode=ENABLED 時)
@@ -194,9 +194,9 @@ pub struct HeadObjectOutput {
     /// CRC32 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_crc32: Option<String>,
     /// CRC32C チェックサム (checksum_mode=ENABLED 時)
-    pub checksum_crc32c: Option<String>,
+    pub checksum_crc32_c: Option<String>,
     /// CRC64NVME チェックサム (checksum_mode=ENABLED 時)
-    pub checksum_crc64nvme: Option<String>,
+    pub checksum_crc64_nvme: Option<String>,
     /// SHA1 チェックサム (checksum_mode=ENABLED 時)
     pub checksum_sha1: Option<String>,
     /// SHA256 チェックサム (checksum_mode=ENABLED 時)

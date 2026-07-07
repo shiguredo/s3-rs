@@ -283,10 +283,10 @@ impl<'a> HeadObjectFluentBuilder<'a> {
             checksum_crc32: response
                 .get_header("x-amz-checksum-crc32")
                 .map(String::from),
-            checksum_crc32c: response
+            checksum_crc32_c: response
                 .get_header("x-amz-checksum-crc32c")
                 .map(String::from),
-            checksum_crc64nvme: response
+            checksum_crc64_nvme: response
                 .get_header("x-amz-checksum-crc64nvme")
                 .map(String::from),
             checksum_sha1: response.get_header("x-amz-checksum-sha1").map(String::from),
