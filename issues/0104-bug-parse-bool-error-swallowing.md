@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
+- Polished: 2026-07-12
 - Branch: feature/fix-parse-bool-error-swallowing
 
 ## 目的
@@ -15,7 +16,7 @@ S3 が不正な真偽値（例: `"yes"`, `"1"`, `""`）を返した場合、パ�
 
 ## 現状
 
-以下の 9 ファイル 18 箇所で `.and_then(|v| v.parse::<bool>().ok())` または `.and_then(|s| s.parse::<bool>().ok())` が使用されている:
+以下の 12 ファイル 18 箇所で `.and_then(|v| v.parse::<bool>().ok())` または `.and_then(|s| s.parse::<bool>().ok())` が使用されている:
 
 - `src/api/get_public_access_block.rs:56,58,60,65` (4箇所)
 - `src/api/get_object.rs:408,428` (2箇所)
@@ -32,14 +33,18 @@ S3 が不正な真偽値（例: `"yes"`, `"1"`, `""`）を返した場合、パ�
 
 ## 設計方針
 
-1. パース失敗時は `None` ではなく `Error::InvalidResponse` を返す
-2. 共通のヘルパー関数 `parse_xml_bool(text: &str) -> Result<bool, Error>` を `crate::xml` に追加し、全箇所から使用する
+1. `src/xml.rs` に `pub(crate) fn parse_xml_bool(text: &str) -> Result<bool, Error>` を追加する。実装は `text.parse::<bool>().map_err(|_| Error::InvalidResponse(format!("invalid boolean value: {text}")))` とする
+2. 各ファイルの `.and_then(|v| v.parse::<bool>().ok())` を以下のように置き換える:
+   - `Some(ref s)` を経由している場合: `.map(|s| crate::xml::parse_xml_bool(s)).transpose()?`
+   - `elem.get_parsed::<bool>(...)` を経由している場合は別アプローチ（get_parsed 内での対応）
+3. S3 レスポンスの真偽値は `"true"` / `"false"` のみ。`"0"` / `"1"` 等の非標準文字列はエラーとする
 
 ## 完了条件
 
-- 全 18 箇所で `parse::<bool>().ok()` が削除され、適切なエラー処理に置き換えられていること
+- 全 18 箇所で `.parse::<bool>().ok()` が削除され、不正な真偽値入力で `Error::InvalidResponse` が返ること
+- `tests/test_xml.rs` に `parse_xml_bool` の正常系・エラー系テストを追加すること
 - 既存のテストが全て通過すること
-- 単体テストが追加されていること
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
 
 ## 解決方法
 

@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-09
 - Model: Grok 4.5
+- Polished: 2026-07-12
 - Branch: feature/fix-delete-objects-sdk-checksum-algorithm-header
 
 ## AWS S3 API Reference
@@ -57,7 +58,6 @@ DeleteObjects でボディ整合性検証用のアルゴリズムヘッダーを
 
 ## 完了条件
 
-- `DeleteObjectsFluentBuilder::build_request` が `x-amz-sdk-checksum-algorithm` を送ること
-- `x-amz-checksum-algorithm` を DeleteObjects から送らないこと
-- 単体テストまたは既存テストでヘッダー名を検証すること
-- `CHANGES.md` の `## develop` に `[FIX]` を記載すること
+- `src/api/delete_objects.rs:92` のヘッダー名を `x-amz-checksum-algorithm` から `x-amz-sdk-checksum-algorithm` に変更すること
+- `tests/test_delete_objects.rs` に `checksum_algorithm` 指定時のリクエストヘッダー検証テストを追加すること（`x-amz-sdk-checksum-algorithm` が含まれ、`x-amz-checksum-algorithm` が含まれないことを確認）
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること

@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-09
 - Model: Grok 4.5
+- Polished: 2026-07-12
 - Branch: feature/fix-delete-objects-last-modified-time-format
 
 ## AWS S3 API Reference
@@ -61,12 +62,13 @@ inner_writer.data(var_3.fmt(::aws_smithy_types::date_time::Format::HttpDate)?.as
 
 ## 設計方針
 
-- `crate::datetime::format_imf_fixdate(t)?` で IMF-fixdate 文字列を生成して `<LastModifiedTime>` に書く
-- `duration_since` / 変換失敗は `Error::InvalidInput` として返す（`unwrap_or` / `expect` をやめる）
+- `build_delete_objects_xml` の `LastModifiedTime` 生成部分を、手動の ISO 8601 フォーマットから `crate::datetime::format_imf_fixdate(t)?` に置き換える
+- `format_imf_fixdate` は epoch 前の `SystemTime` に対して `Error::InvalidInput` を返すため、`unwrap_or(0)` で黙殺されていた問題も同時に解消される
+- `duration_since` / `civil_from_unix_timestamp` / `expect` のブロック全体を削除し、`format_imf_fixdate` 一発で置き換える
 
 ## 完了条件
 
-- `LastModifiedTime` が `Day, DD Mon YYYY HH:MM:SS GMT` 形式で送信されること
-- epoch 前や変換不能な `SystemTime` が `Error::InvalidInput` になること
-- 単体テストでフォーマットとエラーパスを検証すること
-- `CHANGES.md` の `## develop` に `[FIX]` を記載すること
+- `build_delete_objects_xml` の `LastModifiedTime` が `format_imf_fixdate` 経由で `Day, DD Mon YYYY HH:MM:SS GMT` 形式で送信されること
+- epoch 前の `SystemTime` が `Error::InvalidInput` で拒否されること（`unwrap_or(0)` の黙殺が解消されること）
+- `tests/test_delete_objects.rs` に `build_request` で `last_modified_time` を指定した場合のフォーマット検証テストと、epoch 前に `Error::InvalidInput` になることを確認するエラーパステストを追加すること
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること

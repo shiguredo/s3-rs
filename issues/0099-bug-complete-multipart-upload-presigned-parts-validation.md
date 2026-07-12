@@ -3,6 +3,7 @@
 - Priority: Medium
 - Created: 2026-07-09
 - Model: Grok 4.5
+- Polished: 2026-07-12
 - Branch: feature/fix-complete-multipart-upload-presigned-parts-validation
 
 ## AWS S3 API Reference
@@ -70,12 +71,14 @@ Special errors より:
 
 ## 設計方針
 
-- parts 検証ロジックを共通関数（例: `validate_completed_parts`）に切り出す
-- `build_request` と `presigned` の両方から呼ぶ
-- 既存の必須・昇順チェックを維持する（`part_number` の 1..=10000 は UploadPart 側と揃えるかは実装時に判断し、揃えるなら `validate_part_number` を再利用）
+- `build_request` 内の parts 検証ロジック（`part_number` 必須チェック、`e_tag` 必須チェック、昇順チェック）を `src/api/complete_multipart_upload.rs` 内のプライベート関数 `validate_completed_parts` に切り出す
+- `build_request` と `presigned` の両方から `validate_completed_parts(self.multipart_upload.as_ref())?;` を呼ぶ
+- `validate_completed_parts` は `&Option<CompletedMultipartUpload>` を受け取り、`None` または `parts` が空の場合は何もせず `Ok(())` を返す
+- `part_number` の値域検証 (`1..=10000`) は既存の `validate_part_number` を流用する。ただし `validate_part_number` の追加呼び出しは `build_request` でも現状行われていないため、本 issue で併せて導入するかどうかは実装時に判断する
 
 ## 完了条件
 
-- `presigned` が `build_request` と同じ parts 検証で `Error::InvalidInput` を返すこと
-- 単体テストで欠落 part_number / e_tag / 非昇順が `presigned` でも拒否されること
-- `CHANGES.md` の `## develop` に `[FIX]` を記載すること
+- `validate_completed_parts` 関数が抽出され、`build_request` と `presigned` の両方から呼ばれること
+- `presigned` で `part_number` 欠落・`e_tag` 欠落・非昇順の parts を指定した場合に `Error::InvalidInput` が返ること
+- `tests/test_complete_multipart_upload.rs` に parts 検証のエラーパステストを追加すること（欠落 part_number / 欠落 e_tag / 非昇順の 3 ケース）
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること

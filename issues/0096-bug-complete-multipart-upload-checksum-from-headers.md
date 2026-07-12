@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-09
 - Model: Grok 4.5
+- Polished: 2026-07-12
 - Branch: feature/fix-complete-multipart-upload-checksum-xml
 
 ## AWS S3 API Reference
@@ -76,12 +77,15 @@ PutObject / GetObject / HeadObject / UploadPart がヘッダーから読むの�
 
 ## 設計方針
 
-- `CopyObject` と同様に `crate::xml::extract_element(body_text, "ChecksumCRC32")?` 等で XML から取得する
-- 対象タグ: `ChecksumCRC32` / `ChecksumCRC32C` / `ChecksumCRC64NVME` / `ChecksumSHA1` / `ChecksumSHA256` / `ChecksumType`
-- レスポンスヘッダー側の version_id / expiration / SSE 等は現状どおりヘッダーから読む
+- `parse_response` 内で既に取得済みの `body_text` 変数に対して、checksum フィールドを `response.get_header(...)` から `crate::xml::extract_element(body_text, ...)` に切り替える
+- 対象タグ: `ChecksumCRC32` / `ChecksumCRC32C` / `ChecksumCRC64NVME` / `ChecksumSHA1` / `ChecksumSHA256` / `ChecksumType`（CopyObject と同一）
+- `extract_element` はタグが存在しない場合 `Ok(None)` を返すため、checksum が付与されていない MPU 完了でも正常に動作する
+- `CopyObject::parse_response` の実装（`src/api/copy_object.rs:445-450`）を参照し、同じパターンで実装する
+- レスポンスヘッダー側の `version_id` / `expiration` / SSE 等は現状どおりヘッダーから読む（S3 仕様どおり）
 
 ## 完了条件
 
-- `CompleteMultipartUploadFluentBuilder::parse_response` が XML ボディから checksum フィールドを取得すること
-- チェックサム付き MPU の統合テストまたは単体テストで `output.checksum_*` が `Some` になることを検証すること
-- `CHANGES.md` の `## develop` に `[FIX]` を記載すること
+- `CompleteMultipartUploadFluentBuilder::parse_response` が `ChecksumCRC32` / `ChecksumCRC32C` / `ChecksumCRC64NVME` / `ChecksumSHA1` / `ChecksumSHA256` / `ChecksumType` を XML ボディから `crate::xml::extract_element(body_text, ...)` で取得すること
+- 既存の統合テスト (`tests/minio.rs` / `tests/rustfs.rs`) で CompleteMultipartUpload のレスポンスに checksum フィールドのアサーションを追加すること。checksum が付与されるケース（`PutObject` の各パートに checksum を指定して MPU を完了する）で `output.checksum_*` が `Some` になることを検証する
+- `tests/test_complete_multipart_upload.rs` が存在しない場合は新規作成し、XML ボディに checksum を含むレスポンスに対する `parse_response` の単体テストを追加すること
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること

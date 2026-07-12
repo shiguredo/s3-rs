@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
+- Polished: 2026-07-12
 - Branch: feature/fix-complete-multipart-upload-required-validation
 
 ## 目的
@@ -30,14 +31,18 @@ if let Some(ref upload) = self.multipart_upload
 
 ## 設計方針
 
-`build_request()` と `presigned()` の両方で、`multipart_upload` が `None` の場合に `Error::InvalidInput("multipart_upload is required")` を返すチェックを追加する。`parts` が空の場合も同様にエラーとする。
+- `build_request` と `presigned` の先頭（`required` 呼び出し直後、parts 検証ブロックの前）に `multipart_upload` の必須チェックを追加する
+- `multipart_upload` が `None` の場合: `Error::InvalidInput("multipart_upload is required")` を返す
+- `parts` が `None` または空 `Vec` の場合: `Error::InvalidInput("at least one part is required")` を返す
+- `build_complete_multipart_xml` 側でも空 parts チェックを追加し、XML 生成前に早期エラーを返す
 
 ## 完了条件
 
-- `multipart_upload` が `None` の場合に `Error::InvalidInput` が返ること
-- `multipart_upload.parts` が `None` または空 `Vec` の場合に `Error::InvalidInput` が返ること
+- `build_request` と `presigned` の両方で `multipart_upload` が `None` の場合に `Error::InvalidInput` が返ること
+- `parts` が `None` または空 `Vec` の場合に `Error::InvalidInput` が返ること
+- `tests/test_complete_multipart_upload.rs` に上記 2 ケースのエラーパステストを追加すること
 - 既存のテストが全て通過すること
-- 単体テストが追加されていること
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
 
 ## 解決方法
 

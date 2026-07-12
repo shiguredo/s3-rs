@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
+- Polished: 2026-07-12
 - Branch: feature/fix-put-bucket-notification-configuration-content-md5
 
 ## 目的
@@ -25,7 +26,9 @@ let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xm
 
 ## 設計方針
 
-他の全 XML PUT API と同様に `Content-MD5` ヘッダーを追加する。
+- `put_bucket_notification_configuration.rs` の `build_request` に、他 API（`put_bucket_cors.rs` 等）と同様に `base64_md5` の計算と `content-md5` ヘッダーの追加を行う
+- `super::base64_md5` の import を追加する
+- 当該 API には `presigned` メソッドが存在しないため修正不要
 
 ## 完了条件
 
@@ -34,6 +37,6 @@ let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xm
 
 ## 解決方法
 
-1. `build_request()` 内で `base64_md5(xml_body)` を計算し `content-md5` ヘッダーを追加する
-2. `presigned()` にも同様の修正を適用する
+1. `build_request()` 内で `let content_md5 = base64_md5(xml_body.as_bytes());` を計算し、extra_headers に `("content-md5", content_md5.as_str())` を追加する
+2. import に `super::base64_md5` を追加する
 3. CHANGES.md の `## develop` に `[FIX]` エントリを追加する

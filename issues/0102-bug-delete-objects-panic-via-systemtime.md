@@ -3,6 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
+- Polished: 2026-07-12
 - Branch: feature/fix-delete-objects-panic-via-systemtime
 
 ## 目的
@@ -32,15 +33,18 @@ let c = crate::datetime::civil_from_unix_timestamp(secs)
 
 ## 設計方針
 
-1. `.unwrap_or(0)` を `Result` 型のエラーハンドリングに変更する
-2. `.expect()` を `?` によるエラー伝播に変更する
-3. エラーメッセージを適切なものに修正する
+1. `.unwrap_or(0)` を `?` によるエラー伝播に変更する: `t.duration_since(UNIX_EPOCH).map_err(|_| Error::InvalidInput("last_modified_time is before UNIX epoch"))?.as_secs()`
+2. `.expect()` を `?` に変更する: `let c = crate::datetime::civil_from_unix_timestamp(secs)?;`
+3. エラーメッセージを修正する（「S3 response」→「ユーザー入力」）
+
+**注意**: 本 issue と `0097`（DeleteObjects の LastModifiedTime 形式を ISO 8601 から IMF-fixdate に修正）は同一コードブロックを対象とする。0097 の修正（`format_imf_fixdate` への置き換え）を先に実施すれば、本 issue の `.expect()` パニックと `.unwrap_or(0)` 黙殺の両方が自動的に解消される。同時修正を推奨する。
 
 ## 完了条件
 
-- `ObjectIdentifier.last_modified_time` に UNIX_EPOCH 以前または極端に遠い未来の `SystemTime` を設定した場合にパニックせず `Error::InvalidInput` が返ること
-- 既存のテストが全て通過すること
-- 単体テストが追加されていること
+- `ObjectIdentifier.last_modified_time` に UNIX_EPOCH 以前の `SystemTime` を設定した場合にパニックせず `Error::InvalidInput` が返ること
+- `civil_from_unix_timestamp` が扱えない極端な値（オーバーフロー等）でも `Error::InvalidInput` が返ること
+- `tests/test_delete_objects.rs` に上記エラーパスのテストを追加すること。ただし 0097 と同時に修正する場合は 0097 のテストでカバーされるため、別途追加不要
+- `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること（0097 と同じコミットで修正する場合は 1 エントリに統合可能）
 
 ## 解決方法
 
