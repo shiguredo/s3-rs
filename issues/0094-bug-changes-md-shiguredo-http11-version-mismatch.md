@@ -2,6 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-07
+- Completed: 2026-07-07
 - Model: hy3-free
 - Branch: feature/fix-changes-md-shiguredo-http11-version
 
@@ -33,4 +34,6 @@
 
 ## 解決方法
 
-（未着手）
+commit `b926444` で修正済み。
+
+- `CHANGES.md` の `shiguredo_http11` バージョン記述を実コード（本体 2026.6 / examples 2026.6）と整合させた
