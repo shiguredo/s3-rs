@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
-- Polished: 2026-07-12
+- Polished: 2026-07-23
 - Branch: feature/fix-complete-multipart-upload-required-validation
 
 ## 目的
@@ -35,6 +35,7 @@ if let Some(ref upload) = self.multipart_upload
 - `multipart_upload` が `None` の場合: `Error::InvalidInput("multipart_upload is required")` を返す
 - `parts` が `None` または空 `Vec` の場合: `Error::InvalidInput("at least one part is required")` を返す
 - `build_complete_multipart_xml` 側でも空 parts チェックを追加し、XML 生成前に早期エラーを返す
+- issue 0099（presigned の parts 検証）と同一ファイルを対象とする。本 issue を先に実装すれば 0099 の `validate_completed_parts` は `None` を扱う必要がなくなるため、本 issue → 0099 の順で実装することを推奨する
 
 ## 完了条件
 
