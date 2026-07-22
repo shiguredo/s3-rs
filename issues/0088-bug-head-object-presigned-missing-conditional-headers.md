@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-07-07
+- Completed: 2026-07-07
 - Model: hy3-free
 - Branch: feature/fix-head-object-presigned-conditional-headers
 
@@ -47,4 +48,7 @@
 
 ## 解決方法
 
-（未着手）
+commit `cf179f2` で修正済み。
+
+- `head_object::presigned` の `extra_headers` に `range` / `if-match` / `if-none-match` / `if-modified-since` / `if-unmodified-since` / `x-amz-checksum-mode` を追加し、`build_request` と署名対象を一致させた
+- `presigned` の `part_number` に `validate_part_number` による `1..=10000` 範囲検証を追加した
