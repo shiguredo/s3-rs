@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-07-09
 - Model: Grok 4.5
-- Polished: 2026-07-12
+- Polished: 2026-07-23
 - Branch: feature/fix-complete-multipart-upload-checksum-xml
 
 ## AWS S3 API Reference
@@ -89,3 +89,10 @@ PutObject / GetObject / HeadObject / UploadPart がヘッダーから読むの�
 - 既存の統合テスト (`tests/minio.rs` / `tests/rustfs.rs`) で CompleteMultipartUpload のレスポンスに checksum フィールドのアサーションを追加すること。checksum が付与されるケース（`PutObject` の各パートに checksum を指定して MPU を完了する）で `output.checksum_*` が `Some` になることを検証する
 - `tests/test_complete_multipart_upload.rs` が存在しない場合は新規作成し、XML ボディに checksum を含むレスポンスに対する `parse_response` の単体テストを追加すること
 - `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
+
+## 解決方法
+
+1. `parse_response` 内の `checksum_crc32` / `checksum_crc32_c` / `checksum_crc64_nvme` / `checksum_sha1` / `checksum_sha256` / `checksum_type` の 6 フィールドを `response.get_header(...)` から `crate::xml::extract_element(body_text, ...)` に置き換える（`CopyObject::parse_response` の `src/api/copy_object.rs:445-450` と同一パターン）
+2. `tests/test_complete_multipart_upload.rs` を新規作成し、XML ボディに checksum を含むレスポンスに対する `parse_response` の単体テストを追加する
+3. 統合テスト (`tests/minio.rs` / `tests/rustfs.rs`) に checksum 付き MPU 完了時の `output.checksum_*` アサーションを追加する
+4. `CHANGES.md` の `## develop` に `[FIX]` エントリを追加する
