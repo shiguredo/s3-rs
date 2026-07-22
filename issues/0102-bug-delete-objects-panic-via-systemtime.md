@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
-- Polished: 2026-07-12
+- Polished: 2026-07-23
 - Branch: feature/fix-delete-objects-panic-via-systemtime
 
 ## 目的
@@ -37,7 +37,7 @@ let c = crate::datetime::civil_from_unix_timestamp(secs)
 2. `.expect()` を `?` に変更する: `let c = crate::datetime::civil_from_unix_timestamp(secs)?;`
 3. エラーメッセージを修正する（「S3 response」→「ユーザー入力」）
 
-**注意**: 本 issue と `0097`（DeleteObjects の LastModifiedTime 形式を ISO 8601 から IMF-fixdate に修正）は同一コードブロックを対象とする。0097 の修正（`format_imf_fixdate` への置き換え）を先に実施すれば、本 issue の `.expect()` パニックと `.unwrap_or(0)` 黙殺の両方が自動的に解消される。同時修正を推奨する。
+**注意**: 本 issue と issue 0097（DeleteObjects の LastModifiedTime 形式を ISO 8601 から IMF-fixdate に修正）は同一コードブロックを対象とする。0097 の修正（手動フォーマットブロック全体を `format_imf_fixdate(t)?` に置き換え）を実施すれば、本 issue の `.expect()` パニックと `.unwrap_or(0)` 黙殺の両方が自動的に解消される。0097 で一括修正し、本 issue は 0097 の完了後に close することを推奨する。
 
 ## 完了条件
 
