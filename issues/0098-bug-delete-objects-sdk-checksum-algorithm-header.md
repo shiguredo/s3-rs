@@ -2,6 +2,7 @@
 
 - Priority: High
 - Created: 2026-07-09
+- Completed: 2026-07-23
 - Model: Grok 4.5
 - Polished: 2026-07-12
 - Branch: feature/fix-delete-objects-sdk-checksum-algorithm-header
@@ -61,3 +62,7 @@ DeleteObjects でボディ整合性検証用のアルゴリズムヘッダーを
 - `src/api/delete_objects.rs:92` のヘッダー名を `x-amz-checksum-algorithm` から `x-amz-sdk-checksum-algorithm` に変更すること
 - `tests/test_delete_objects.rs` に `checksum_algorithm` 指定時のリクエストヘッダー検証テストを追加すること（`x-amz-sdk-checksum-algorithm` が含まれ、`x-amz-checksum-algorithm` が含まれないことを確認）
 - `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
+
+## 解決方法
+
+issue 0100（x-amz-checksum-algorithm ヘッダー名の sdk- 欠落を修正する）の部分集合のため、0100 に統合して close する。0100 が DeleteObjects を含む 10 ファイル 10 箇所を一括修正する。
