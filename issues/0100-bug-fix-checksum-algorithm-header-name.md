@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
-- Polished: 2026-07-12
+- Polished: 2026-07-23
 - Branch: feature/fix-checksum-algorithm-header-name
 
 ## 目的
@@ -19,7 +19,7 @@ XML ボディを送信する API において、チェックサムアルゴリ�
 ## 現状
 
 - `put_object.rs` と `upload_part.rs` では正しい `x-amz-sdk-checksum-algorithm` が使用されている
-- 以下の 10 ファイル (11 箇所) で誤った `x-amz-checksum-algorithm` が使用されている:
+- 以下の 10 ファイル (10 箇所) で誤った `x-amz-checksum-algorithm` が使用されている:
   - `src/api/put_bucket_cors.rs:75`
   - `src/api/put_bucket_encryption.rs:89`
   - `src/api/put_bucket_lifecycle_configuration.rs:88`
@@ -33,16 +33,17 @@ XML ボディを送信する API において、チェックサムアルゴリ�
 
 - `copy_object.rs:404` と `create_multipart_upload.rs:250,356` の `x-amz-checksum-algorithm` はリクエストボディを持たない API におけるオブジェクトチェックサム指定用の正しいヘッダーであり、修正不要
 - CHANGES.md の `[CHANGE]` エントリ「`x-amz-checksum-algorithm` ヘッダー名を `x-amz-sdk-checksum-algorithm` に変更する」が PutObject / UploadPart のみに反映され、他ファイルに反映漏れがある
+- issue 0098（DeleteObjects 固有の同ヘッダー名修正）は本 issue の部分集合であり、本 issue で一括修正される。0098 は close することを推奨する
 
 ## 設計方針
 
-- 上記 10 ファイル 11 箇所の `"x-amz-checksum-algorithm"` 文字列を `"x-amz-sdk-checksum-algorithm"` に置換する
+- 上記 10 ファイル 10 箇所の `"x-amz-checksum-algorithm"` 文字列を `"x-amz-sdk-checksum-algorithm"` に置換する
 - 各 API が `x-amz-sdk-checksum-algorithm` をサポートしているかは AWS S3 API Reference で確認すること。確認できない API については `checksum_algorithm` フィールドごと削除する（リクエストボディの SDK チェックサムが不要な場合）
 - `checksum_algorithm` フィールドの要否判断は本 issue のスコープ外とし、必要に応じて別 issue で対応する
 
 ## 完了条件
 
-- 上記 10 ファイル 11 箇所のヘッダー名が `x-amz-sdk-checksum-algorithm` に修正されていること
+- 上記 10 ファイル 10 箇所のヘッダー名が `x-amz-sdk-checksum-algorithm` に修正されていること
 - `x-amz-checksum-algorithm` が残っているのが CopyObject と CreateMultipartUpload のみであること（これらは正しい使用）
 - 既存のテストが全て通過すること
 - `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
