@@ -185,20 +185,14 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
             request_charged: response
                 .get_header("x-amz-request-charged")
                 .map(String::from),
-            checksum_crc32: response
-                .get_header("x-amz-checksum-crc32")
-                .map(String::from),
-            checksum_crc32_c: response
-                .get_header("x-amz-checksum-crc32c")
-                .map(String::from),
-            checksum_crc64_nvme: response
-                .get_header("x-amz-checksum-crc64nvme")
-                .map(String::from),
-            checksum_sha1: response.get_header("x-amz-checksum-sha1").map(String::from),
-            checksum_sha256: response
-                .get_header("x-amz-checksum-sha256")
-                .map(String::from),
-            checksum_type: response.get_header("x-amz-checksum-type").map(String::from),
+            // S3 仕様では checksum はレスポンスヘッダーではなく XML ボディに含まれる
+            // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+            checksum_crc32: crate::xml::extract_element(body_text, "ChecksumCRC32")?,
+            checksum_crc32_c: crate::xml::extract_element(body_text, "ChecksumCRC32C")?,
+            checksum_crc64_nvme: crate::xml::extract_element(body_text, "ChecksumCRC64NVME")?,
+            checksum_sha1: crate::xml::extract_element(body_text, "ChecksumSHA1")?,
+            checksum_sha256: crate::xml::extract_element(body_text, "ChecksumSHA256")?,
+            checksum_type: crate::xml::extract_element(body_text, "ChecksumType")?,
         })
     }
 
