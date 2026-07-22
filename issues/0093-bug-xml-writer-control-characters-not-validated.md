@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-07
+- Completed: 2026-07-07
 - Model: hy3-free
 - Branch: feature/fix-xml-writer-control-characters
 
@@ -42,4 +43,7 @@
 
 ## 解決方法
 
-（未着手）
+commit `1d6d49c` で修正済み。
+
+- `XmlWriter` に `validate_xml_characters` を追加し、XML 1.0 で禁止された制御文字（`0x00`〜`0x1F`、`0x9`/`0xA`/`0xD` を除く）を検出時に `Error::InvalidInput` を返すようにした
+- `text()` / `element()` の呼び出し前に検証を実行する
