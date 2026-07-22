@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-07
+- Completed: 2026-07-07
 - Model: hy3-free
 - Branch: feature/fix-cors-rule-builder-validation
 
@@ -41,4 +42,7 @@
 
 ## 解決方法
 
-（未着手）
+commit `e66d012` で修正済み。
+
+- `CorsRuleBuilder::id` の `panic!` を除去し、255 文字超え検証を `build()` 内で `Error::InvalidInput` を返す形に変更した
+- `build()` に `allowed_methods` / `allowed_origins` の未指定検証を追加した
