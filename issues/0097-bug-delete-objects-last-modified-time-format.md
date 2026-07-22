@@ -3,7 +3,7 @@
 - Priority: High
 - Created: 2026-07-09
 - Model: Grok 4.5
-- Polished: 2026-07-12
+- Polished: 2026-07-23
 - Branch: feature/fix-delete-objects-last-modified-time-format
 
 ## AWS S3 API Reference
@@ -65,6 +65,7 @@ inner_writer.data(var_3.fmt(::aws_smithy_types::date_time::Format::HttpDate)?.as
 - `build_delete_objects_xml` の `LastModifiedTime` 生成部分を、手動の ISO 8601 フォーマットから `crate::datetime::format_imf_fixdate(t)?` に置き換える
 - `format_imf_fixdate` は epoch 前の `SystemTime` に対して `Error::InvalidInput` を返すため、`unwrap_or(0)` で黙殺されていた問題も同時に解消される
 - `duration_since` / `civil_from_unix_timestamp` / `expect` のブロック全体を削除し、`format_imf_fixdate` 一発で置き換える
+- 本修正により issue 0102（`expect` パニック・`unwrap_or(0)` 黙殺）も同時に解消される。0102 と同一コードブロックを対象とするため、本 issue で一括修正する
 
 ## 完了条件
 
@@ -72,3 +73,9 @@ inner_writer.data(var_3.fmt(::aws_smithy_types::date_time::Format::HttpDate)?.as
 - epoch 前の `SystemTime` が `Error::InvalidInput` で拒否されること（`unwrap_or(0)` の黙殺が解消されること）
 - `tests/test_delete_objects.rs` に `build_request` で `last_modified_time` を指定した場合のフォーマット検証テストと、epoch 前に `Error::InvalidInput` になることを確認するエラーパステストを追加すること
 - `CHANGES.md` の `## develop` に `[FIX]` エントリを記載すること
+
+## 解決方法
+
+1. `build_delete_objects_xml` の `last_modified_time` 処理ブロック（`duration_since` / `unwrap_or(0)` / `civil_from_unix_timestamp` / `expect` / `format!`）を `crate::datetime::format_imf_fixdate(t)?` 一発に置き換える
+2. `tests/test_delete_objects.rs` に `last_modified_time` 指定時のフォーマット検証テストと epoch 前エラーパステストを追加する（issue 0102 のテストも兼ねる）
+3. `CHANGES.md` の `## develop` に `[FIX]` エントリを追加する（0102 と統合して 1 エントリで可）
