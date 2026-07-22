@@ -2,6 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-07
+- Completed: 2026-07-07
 - Model: hy3-free
 - Branch: feature/fix-changes-md-assignee-line
 
@@ -31,4 +32,6 @@
 
 ## 解決方法
 
-（未着手）
+commit `d1746fd` で修正済み。
+
+- `CHANGES.md` の `[ADD]` エントリに欠落していた `- @voluntas` 担当者行を追加した
