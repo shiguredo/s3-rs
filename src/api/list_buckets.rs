@@ -120,6 +120,7 @@ fn extract_xml_buckets(text: &str) -> Result<Vec<Bucket>, Error> {
             bucket_region: elem.get("BucketRegion").map(String::from),
             bucket_arn: elem.get("BucketArn").map(String::from),
         });
+        Ok(())
     })?;
     Ok(buckets)
 }

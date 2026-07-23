@@ -217,6 +217,8 @@
   - @voluntas
 - [FIX] PutBucketNotificationConfiguration で `Content-MD5` ヘッダーが欠落している問題を修正する
   - @voluntas
+- [FIX] `.parse::<bool>().ok()` による真偽値パースエラーの握り潰しを修正し、不正な値で `Error::InvalidResponse` を返すようにする
+  - @voluntas
 
 ### misc
 

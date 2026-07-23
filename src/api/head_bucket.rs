@@ -59,7 +59,8 @@ impl<'a> HeadBucketFluentBuilder<'a> {
                 .map(String::from),
             access_point_alias: response
                 .get_header("x-amz-access-point-alias")
-                .and_then(|s| s.parse::<bool>().ok()),
+                .map(crate::xml::parse_xml_bool)
+                .transpose()?,
         })
     }
 }

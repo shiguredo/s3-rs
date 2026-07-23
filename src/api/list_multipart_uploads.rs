@@ -141,7 +141,8 @@ impl<'a> ListMultipartUploadsFluentBuilder<'a> {
             max_uploads: crate::xml::extract_element(body_text, "MaxUploads")?
                 .and_then(|v| v.parse::<i32>().ok()),
             is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
-                .and_then(|v| v.parse::<bool>().ok()),
+                .map(|v| crate::xml::parse_xml_bool(&v))
+                .transpose()?,
             uploads: if uploads.is_empty() {
                 None
             } else {
@@ -174,6 +175,7 @@ fn extract_xml_uploads(text: &str) -> Result<Vec<MultipartUpload>, Error> {
                 .get("StorageClass")
                 .map(crate::types::StorageClass::from),
         });
+        Ok(())
     })?;
     Ok(uploads)
 }
@@ -184,6 +186,7 @@ fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
+        Ok(())
     })?;
     Ok(prefixes)
 }

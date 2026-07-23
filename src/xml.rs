@@ -119,7 +119,7 @@ impl ChildElements {
 /// パースエラー時は `Err(Error::InvalidResponse(...))` を返す。
 pub(crate) fn for_each_element<F>(xml_str: &str, parent_tag: &str, mut f: F) -> Result<(), Error>
 where
-    F: FnMut(&ChildElements),
+    F: FnMut(&ChildElements) -> Result<(), Error>,
 {
     use xml::reader::{EventReader, XmlEvent};
 
@@ -185,7 +185,7 @@ where
                     inside_parent = false;
                     f(&ChildElements {
                         children: children.clone(),
-                    });
+                    })?;
                     children.clear();
                     path_stack.clear();
                 }
@@ -233,6 +233,14 @@ pub(crate) fn parse_s3_error(body: &[u8]) -> Result<(String, String), Error> {
     let code = extract_element(text, "Code")?.unwrap_or_default();
     let message = extract_element(text, "Message")?.unwrap_or_default();
     Ok((code, message))
+}
+
+/// S3 レスポンス XML の真偽値テキストをパースする
+///
+/// S3 は `"true"` / `"false"` のみを返す。それ以外の値はエラーとする。
+pub(crate) fn parse_xml_bool(text: &str) -> Result<bool, Error> {
+    text.parse::<bool>()
+        .map_err(|_| Error::InvalidResponse(format!("invalid boolean value: {text}")))
 }
 
 // -------------------------------------------------------
@@ -311,5 +319,33 @@ impl XmlWriter {
     pub(crate) fn finish(self) -> String {
         let inner = self.writer.into_inner();
         String::from_utf8(inner).expect("XML output is not valid UTF-8")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_xml_bool_true() {
+        assert!(parse_xml_bool("true").expect("parse failed"));
+    }
+
+    #[test]
+    fn test_parse_xml_bool_false() {
+        assert!(!parse_xml_bool("false").expect("parse failed"));
+    }
+
+    #[test]
+    fn test_parse_xml_bool_invalid() {
+        assert!(matches!(
+            parse_xml_bool("yes"),
+            Err(Error::InvalidResponse(_))
+        ));
+        assert!(matches!(
+            parse_xml_bool("1"),
+            Err(Error::InvalidResponse(_))
+        ));
+        assert!(matches!(parse_xml_bool(""), Err(Error::InvalidResponse(_))));
     }
 }

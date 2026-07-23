@@ -131,7 +131,8 @@ impl<'a> ListObjectVersionsFluentBuilder<'a> {
 
         Ok(ListObjectVersionsOutput {
             is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
-                .and_then(|v| v.parse::<bool>().ok()),
+                .map(|v| crate::xml::parse_xml_bool(&v))
+                .transpose()?,
             next_key_marker: crate::xml::extract_element(body_text, "NextKeyMarker")?,
             next_version_id_marker: crate::xml::extract_element(body_text, "NextVersionIdMarker")?,
             versions: if versions.is_empty() {
@@ -177,7 +178,8 @@ fn extract_xml_versions(text: &str) -> Result<Vec<ObjectVersion>, Error> {
             Some(crate::types::RestoreStatus {
                 is_restore_in_progress: elem
                     .get_nested(&["RestoreStatus", "IsRestoreInProgress"])
-                    .and_then(|s| s.parse::<bool>().ok()),
+                    .map(crate::xml::parse_xml_bool)
+                    .transpose()?,
                 restore_expiry_date: elem
                     .get_nested(&["RestoreStatus", "RestoreExpiryDate"])
                     .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
@@ -200,7 +202,10 @@ fn extract_xml_versions(text: &str) -> Result<Vec<ObjectVersion>, Error> {
         versions.push(ObjectVersion {
             key: elem.get("Key").map(String::from),
             version_id: elem.get("VersionId").map(String::from),
-            is_latest: elem.get_parsed::<bool>("IsLatest"),
+            is_latest: elem
+                .get("IsLatest")
+                .map(crate::xml::parse_xml_bool)
+                .transpose()?,
             last_modified: elem
                 .get("LastModified")
                 .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
@@ -214,6 +219,7 @@ fn extract_xml_versions(text: &str) -> Result<Vec<ObjectVersion>, Error> {
             checksum_algorithm,
             checksum_type: elem.get("ChecksumType").map(String::from),
         });
+        Ok(())
     })?;
     Ok(versions)
 }
@@ -224,11 +230,15 @@ fn extract_xml_delete_markers(text: &str) -> Result<Vec<DeleteMarkerEntry>, Erro
         markers.push(DeleteMarkerEntry {
             key: elem.get("Key").map(String::from),
             version_id: elem.get("VersionId").map(String::from),
-            is_latest: elem.get_parsed::<bool>("IsLatest"),
+            is_latest: elem
+                .get("IsLatest")
+                .map(crate::xml::parse_xml_bool)
+                .transpose()?,
             last_modified: elem
                 .get("LastModified")
                 .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
         });
+        Ok(())
     })?;
     Ok(markers)
 }
@@ -239,6 +249,7 @@ fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
+        Ok(())
     })?;
     Ok(prefixes)
 }
