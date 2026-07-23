@@ -207,6 +207,8 @@
   - @voluntas
 - [FIX] CompleteMultipartUpload の checksum フィールドをレスポンスヘッダーではなく XML ボディから読み取るように修正する
   - @voluntas
+- [FIX] DeleteObjects の `LastModifiedTime` を ISO 8601 から IMF-fixdate (HTTP-date) 形式に修正し、epoch 前の `SystemTime` でパニックする問題を解消する
+  - @voluntas
 
 ### misc
 

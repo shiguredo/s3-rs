@@ -150,18 +150,9 @@ fn build_delete_objects_xml(objects: &[ObjectIdentifier], quiet: bool) -> Result
             w.element("ETag", e_tag)?;
         }
         if let Some(t) = obj.last_modified_time {
-            // S3 仕様では ISO 8601 (RFC 3339) フォーマットで送る
-            // ここではミリ秒を含めない秒精度
-            let secs = t
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let c = crate::datetime::civil_from_unix_timestamp(secs)
-                .expect("SystemTime from S3 response should be convertible to CivilDateTime");
-            let formatted = format!(
-                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-                c.year, c.month, c.day, c.hour, c.minute, c.second
-            );
+            // S3 仕様では LastModifiedTime は IMF-fixdate (HTTP-date) 形式で送る
+            // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ObjectIdentifier.html
+            let formatted = crate::datetime::format_imf_fixdate(t)?;
             w.element("LastModifiedTime", &formatted)?;
         }
         if let Some(size) = obj.size {
