@@ -86,7 +86,7 @@ impl<'a> PutBucketEncryptionFluentBuilder<'a> {
 
         let computed_checksum;
         if let Some(ref algorithm) = self.checksum_algorithm {
-            extra_headers.push(("x-amz-checksum-algorithm", algorithm.as_str()));
+            extra_headers.push(("x-amz-sdk-checksum-algorithm", algorithm.as_str()));
             let header_name = crate::checksum::header_name(algorithm)?;
             computed_checksum = crate::checksum::compute_checksum(algorithm, xml_body.as_bytes())?;
             extra_headers.push((header_name, &computed_checksum));
