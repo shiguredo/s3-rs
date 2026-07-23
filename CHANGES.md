@@ -205,6 +205,8 @@
   - @voluntas
 - [FIX] `XmlWriter` で XML 1.0 禁止制御文字を検証し、`Error::InvalidInput` を返すようにする
   - @voluntas
+- [FIX] CompleteMultipartUpload の checksum フィールドをレスポンスヘッダーではなく XML ボディから読み取るように修正する
+  - @voluntas
 
 ### misc
 

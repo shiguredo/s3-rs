@@ -830,6 +830,140 @@ async fn test_multipart_upload() {
     assert_eq!(&get_output.body[part_size..], &part2_data[..]);
 }
 
+/// checksum 付きマルチパートアップロードの完了を検証する
+///
+/// CreateMultipartUpload で checksum アルゴリズムを指定し、
+/// UploadPart で各パートの checksum を取得して CompleteMultipartUpload に渡すと、
+/// 完了レスポンスの XML ボディにオブジェクト全体の checksum が含まれる。
+///
+/// ## 検証項目
+/// - UploadPart のレスポンスヘッダーにパートの checksum が含まれる
+/// - CompleteMultipartUpload のレスポンス XML に checksum が含まれる
+#[tokio::test]
+async fn test_multipart_upload_with_checksum() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
+    let bucket = "test-mpu-checksum";
+    let key = "checksum.bin";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // CRC32 checksum アルゴリズムを指定してマルチパートアップロードを開始する
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32)
+        .build_request(now())
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id should exist");
+
+    // 各パートを 5 MB に設定する (S3 の最小パートサイズ)
+    let part_size = 5 * 1024 * 1024;
+    let part1_data: Vec<u8> = vec![0xCC; part_size];
+    let part2_data: Vec<u8> = vec![0xDD; part_size];
+
+    // パート 1 を checksum アルゴリズム付きでアップロードする
+    let request = client
+        .upload_part()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .part_number(1)
+        .body(part1_data)
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32)
+        .build_request(now())
+        .unwrap();
+    let part1_output = send(
+        request,
+        shiguredo_s3::api::UploadPartFluentBuilder::parse_response,
+    )
+    .await;
+    // UploadPart のレスポンスヘッダーに checksum が含まれる
+    let part1_crc32 = part1_output
+        .checksum_crc32
+        .expect("part1 checksum_crc32 should exist");
+
+    // パート 2 を checksum アルゴリズム付きでアップロードする
+    let request = client
+        .upload_part()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .part_number(2)
+        .body(part2_data)
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32)
+        .build_request(now())
+        .unwrap();
+    let part2_output = send(
+        request,
+        shiguredo_s3::api::UploadPartFluentBuilder::parse_response,
+    )
+    .await;
+    let part2_crc32 = part2_output
+        .checksum_crc32
+        .expect("part2 checksum_crc32 should exist");
+
+    // 各パートの checksum を渡してアップロードを完了する
+    let request = client
+        .complete_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![
+                CompletedPart {
+                    e_tag: part1_output.e_tag,
+                    part_number: Some(1),
+                    checksum_crc32: Some(part1_crc32),
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+                CompletedPart {
+                    e_tag: part2_output.e_tag,
+                    part_number: Some(2),
+                    checksum_crc32: Some(part2_crc32),
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+            ]),
+        })
+        .build_request(now())
+        .unwrap();
+    let complete_output = send(
+        request,
+        shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    // 完了後は結合オブジェクト全体の ETag が返る
+    assert!(complete_output.e_tag.is_some());
+    // S3 仕様では checksum は XML ボディに含まれる
+    // checksum 付き MPU の完了レスポンスに checksum が含まれることを検証する
+    assert!(
+        complete_output.checksum_crc32.is_some(),
+        "checksum_crc32 should be present in CompleteMultipartUpload response XML"
+    );
+}
+
 /// マルチパートアップロードの中断を検証する
 ///
 /// AbortMultipartUpload でアップロードを中断するとオブジェクトが作成されない。
