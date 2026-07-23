@@ -57,6 +57,7 @@ impl<'a> GetBucketOwnershipControlsFluentBuilder<'a> {
                     object_ownership: ownership.to_string(),
                 });
             }
+            Ok(())
         })?;
 
         Ok(GetBucketOwnershipControlsOutput { rules })

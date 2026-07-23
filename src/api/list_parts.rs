@@ -160,7 +160,8 @@ impl<'a> ListPartsFluentBuilder<'a> {
             max_parts: crate::xml::extract_element(body_text, "MaxParts")?
                 .and_then(|v| v.parse::<i32>().ok()),
             is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
-                .and_then(|v| v.parse::<bool>().ok()),
+                .map(|v| crate::xml::parse_xml_bool(&v))
+                .transpose()?,
             parts: if parts.is_empty() { None } else { Some(parts) },
             storage_class: crate::xml::extract_element(body_text, "StorageClass")?
                 .map(|s| crate::types::StorageClass::from(s.as_str())),
@@ -179,6 +180,7 @@ fn extract_xml_parts(text: &str) -> Result<Vec<Part>, Error> {
             e_tag: elem.get("ETag").map(String::from),
             size: elem.get_parsed::<i64>("Size"),
         });
+        Ok(())
     })?;
     Ok(parts)
 }

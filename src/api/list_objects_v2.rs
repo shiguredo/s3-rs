@@ -129,7 +129,8 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
 
         Ok(ListObjectsV2Output {
             is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
-                .and_then(|v| v.parse::<bool>().ok()),
+                .map(|v| crate::xml::parse_xml_bool(&v))
+                .transpose()?,
             contents: if contents.is_empty() {
                 None
             } else {
@@ -174,7 +175,8 @@ fn extract_xml_objects(text: &str) -> Result<Vec<Object>, Error> {
             Some(crate::types::RestoreStatus {
                 is_restore_in_progress: elem
                     .get_nested(&["RestoreStatus", "IsRestoreInProgress"])
-                    .and_then(|s| s.parse::<bool>().ok()),
+                    .map(crate::xml::parse_xml_bool)
+                    .transpose()?,
                 restore_expiry_date: elem
                     .get_nested(&["RestoreStatus", "RestoreExpiryDate"])
                     .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
@@ -209,6 +211,7 @@ fn extract_xml_objects(text: &str) -> Result<Vec<Object>, Error> {
             checksum_algorithm,
             checksum_type: elem.get("ChecksumType").map(String::from),
         });
+        Ok(())
     })?;
     Ok(objects)
 }
@@ -219,6 +222,7 @@ fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
         prefixes.push(CommonPrefix {
             prefix: elem.get("Prefix").map(String::from),
         });
+        Ok(())
     })?;
     Ok(prefixes)
 }

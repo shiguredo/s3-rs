@@ -100,6 +100,7 @@ fn extract_xml_tags(text: &str) -> Result<Vec<Tag>, Error> {
                 value: value.to_string(),
             });
         }
+        Ok(())
     })?;
     Ok(tags)
 }

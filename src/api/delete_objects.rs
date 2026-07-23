@@ -170,9 +170,13 @@ fn extract_xml_deleted_objects(text: &str) -> Result<Vec<DeletedObject>, Error> 
         deleted.push(DeletedObject {
             key: elem.get("Key").map(String::from),
             version_id: elem.get("VersionId").map(String::from),
-            delete_marker: elem.get_parsed::<bool>("DeleteMarker"),
+            delete_marker: elem
+                .get("DeleteMarker")
+                .map(crate::xml::parse_xml_bool)
+                .transpose()?,
             delete_marker_version_id: elem.get("DeleteMarkerVersionId").map(String::from),
         });
+        Ok(())
     })?;
     Ok(deleted)
 }
@@ -185,6 +189,7 @@ fn extract_xml_delete_errors(text: &str) -> Result<Vec<DeleteError>, Error> {
             code: elem.get("Code").map(String::from),
             message: elem.get("Message").map(String::from),
         });
+        Ok(())
     })?;
     Ok(errors)
 }

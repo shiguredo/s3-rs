@@ -623,7 +623,8 @@ impl<'a> PutObjectFluentBuilder<'a> {
                 .map(String::from),
             bucket_key_enabled: response
                 .get_header("x-amz-server-side-encryption-bucket-key-enabled")
-                .and_then(|s| s.parse::<bool>().ok()),
+                .map(crate::xml::parse_xml_bool)
+                .transpose()?,
             request_charged: response
                 .get_header("x-amz-request-charged")
                 .map(String::from),
