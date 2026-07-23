@@ -211,6 +211,8 @@
   - @voluntas
 - [FIX] CompleteMultipartUpload の `build_request` / `presigned` で `multipart_upload` と `parts` の必須検証を追加する
   - @voluntas
+- [FIX] CompleteMultipartUpload の `presigned` が parts 検証をスキップする問題を修正し、`build_request` と同じ検証を行うようにする
+  - @voluntas
 
 ### misc
 

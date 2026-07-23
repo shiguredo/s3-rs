@@ -5,7 +5,7 @@
 //! XML ボディの `<CompleteMultipartUploadResult>` 内に含まれる。
 
 use shiguredo_s3::api::{CompleteMultipartUploadFluentBuilder, S3Response};
-use shiguredo_s3::types::CompletedMultipartUpload;
+use shiguredo_s3::types::{CompletedMultipartUpload, CompletedPart};
 use shiguredo_s3::{Client, Config, Credentials, Error};
 use std::time::{Duration, SystemTime};
 
@@ -200,5 +200,88 @@ fn test_build_request_none_parts() {
         .upload_id("test-upload-id")
         .multipart_upload(CompletedMultipartUpload { parts: None })
         .build_request(test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// presigned で part_number 欠落の parts が InvalidInput を返す
+#[test]
+fn test_presigned_missing_part_number() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![CompletedPart {
+                e_tag: Some("\"etag\"".to_string()),
+                part_number: None,
+                checksum_crc32: None,
+                checksum_crc32_c: None,
+                checksum_crc64_nvme: None,
+                checksum_sha1: None,
+                checksum_sha256: None,
+            }]),
+        })
+        .presigned(3600, test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// presigned で e_tag 欠落の parts が InvalidInput を返す
+#[test]
+fn test_presigned_missing_e_tag() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![CompletedPart {
+                e_tag: None,
+                part_number: Some(1),
+                checksum_crc32: None,
+                checksum_crc32_c: None,
+                checksum_crc64_nvme: None,
+                checksum_sha1: None,
+                checksum_sha256: None,
+            }]),
+        })
+        .presigned(3600, test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// presigned で非昇順の parts が InvalidInput を返す
+#[test]
+fn test_presigned_non_ascending_parts() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![
+                CompletedPart {
+                    e_tag: Some("\"etag2\"".to_string()),
+                    part_number: Some(2),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+                CompletedPart {
+                    e_tag: Some("\"etag1\"".to_string()),
+                    part_number: Some(1),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+            ]),
+        })
+        .presigned(3600, test_now());
     assert!(matches!(result, Err(Error::InvalidInput(_))));
 }
