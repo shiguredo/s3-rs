@@ -5,6 +5,9 @@
 //! XML ボディの `<CompleteMultipartUploadResult>` 内に含まれる。
 
 use shiguredo_s3::api::{CompleteMultipartUploadFluentBuilder, S3Response};
+use shiguredo_s3::types::CompletedMultipartUpload;
+use shiguredo_s3::{Client, Config, Credentials, Error};
+use std::time::{Duration, SystemTime};
 
 /// XML ボディに checksum が含まれる場合、parse_response が checksum を Some で返す
 #[test]
@@ -135,4 +138,67 @@ fn test_parse_response_body_error() {
     };
     let result = CompleteMultipartUploadFluentBuilder::parse_response(&response);
     assert!(result.is_err());
+}
+
+/// テスト用の S3 クライアントを作成する
+fn test_client() -> Client {
+    let config = Config::builder()
+        .region("ap-northeast-1")
+        .credentials_provider(Credentials::new(
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            None,
+            "test",
+        ))
+        .build()
+        .expect("config build failed");
+    Client::from_conf(config)
+}
+
+fn test_now() -> SystemTime {
+    SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000)
+}
+
+/// multipart_upload 未指定で build_request が InvalidInput を返す
+#[test]
+fn test_build_request_missing_multipart_upload() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .build_request(test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// parts が空 Vec で build_request が InvalidInput を返す
+#[test]
+fn test_build_request_empty_parts() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![]),
+        })
+        .build_request(test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
+}
+
+/// parts が None で build_request が InvalidInput を返す
+#[test]
+fn test_build_request_none_parts() {
+    let client = test_client();
+    let result = client
+        .complete_multipart_upload()
+        .bucket("test-bucket")
+        .key("test-key")
+        .upload_id("test-upload-id")
+        .multipart_upload(CompletedMultipartUpload { parts: None })
+        .build_request(test_now());
+    assert!(matches!(result, Err(Error::InvalidInput(_))));
 }
