@@ -2,9 +2,10 @@
 
 - Priority: High
 - Created: 2026-07-12
+- Completed: 2026-07-23
 - Model: Composer 2.5 Fast
 - Polished: 2026-07-23
-- Branch: feature/fix-delete-objects-panic-via-systemtime
+- Branch: feature/fix-delete-objects-last-modified-time-format
 
 ## 目的
 
