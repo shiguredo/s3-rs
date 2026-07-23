@@ -215,6 +215,8 @@
   - @voluntas
 - [FIX] XML ボディを送信する 10 API のチェックサムアルゴリズムヘッダー名を `x-amz-checksum-algorithm` から `x-amz-sdk-checksum-algorithm` に修正する
   - @voluntas
+- [FIX] PutBucketNotificationConfiguration で `Content-MD5` ヘッダーが欠落している問題を修正する
+  - @voluntas
 
 ### misc
 

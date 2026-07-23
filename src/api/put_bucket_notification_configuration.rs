@@ -12,7 +12,7 @@ use crate::types::{
     TopicConfiguration,
 };
 
-use super::{S3Request, build_signed_request, parse_error_response, required};
+use super::{S3Request, base64_md5, build_signed_request, parse_error_response, required};
 
 pub struct PutBucketNotificationConfigurationFluentBuilder<'a> {
     client: &'a Client,
@@ -81,7 +81,11 @@ impl<'a> PutBucketNotificationConfigurationFluentBuilder<'a> {
             &self.lambda_function_configurations,
             self.event_bridge_enabled,
         )?;
-        let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];
+        let content_md5 = base64_md5(xml_body.as_bytes());
+        let mut extra_headers: Vec<(&str, &str)> = vec![
+            ("content-type", "application/xml"),
+            ("content-md5", content_md5.as_str()),
+        ];
 
         if self.skip_destination_validation == Some(true) {
             extra_headers.push(("x-amz-skip-destination-validation", "true"));
