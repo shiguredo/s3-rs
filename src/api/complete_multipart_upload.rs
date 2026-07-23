@@ -95,24 +95,31 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
 
-        if let Some(ref upload) = self.multipart_upload
-            && let Some(ref parts) = upload.parts
-        {
-            let mut prev_part_number = 0i32;
-            for (i, part) in parts.iter().enumerate() {
-                let pn = part.part_number.ok_or_else(|| {
-                    Error::InvalidInput(format!("part[{i}] is missing part_number"))
-                })?;
-                if part.e_tag.is_none() {
-                    return Err(Error::InvalidInput(format!("part[{i}] is missing e_tag")));
-                }
-                if pn <= prev_part_number {
-                    return Err(Error::InvalidInput(
-                        "parts must be in ascending order of part_number".to_string(),
-                    ));
-                }
-                prev_part_number = pn;
+        // multipart_upload は必須 (aws-sdk-rust 互換)
+        let upload = self
+            .multipart_upload
+            .as_ref()
+            .ok_or_else(|| Error::InvalidInput("multipart_upload is required".to_string()))?;
+        let parts = upload
+            .parts
+            .as_ref()
+            .filter(|p| !p.is_empty())
+            .ok_or_else(|| Error::InvalidInput("at least one part is required".to_string()))?;
+
+        let mut prev_part_number = 0i32;
+        for (i, part) in parts.iter().enumerate() {
+            let pn = part
+                .part_number
+                .ok_or_else(|| Error::InvalidInput(format!("part[{i}] is missing part_number")))?;
+            if part.e_tag.is_none() {
+                return Err(Error::InvalidInput(format!("part[{i}] is missing e_tag")));
             }
+            if pn <= prev_part_number {
+                return Err(Error::InvalidInput(
+                    "parts must be in ascending order of part_number".to_string(),
+                ));
+            }
+            prev_part_number = pn;
         }
 
         let xml_body = build_complete_multipart_xml(&self.multipart_upload)?;
@@ -211,6 +218,18 @@ impl<'a> CompleteMultipartUploadFluentBuilder<'a> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
         let key = required(self.key.as_deref(), "key")?;
         let upload_id = required(self.upload_id.as_deref(), "upload_id")?;
+
+        // multipart_upload は必須 (aws-sdk-rust 互換)
+        let upload = self
+            .multipart_upload
+            .as_ref()
+            .ok_or_else(|| Error::InvalidInput("multipart_upload is required".to_string()))?;
+        if upload.parts.as_ref().is_none_or(|p| p.is_empty()) {
+            return Err(Error::InvalidInput(
+                "at least one part is required".to_string(),
+            ));
+        }
+
         let xml_body = build_complete_multipart_xml(&self.multipart_upload)?;
 
         let mut extra_headers: Vec<(&str, &str)> = vec![("content-type", "application/xml")];

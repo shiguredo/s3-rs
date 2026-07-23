@@ -209,6 +209,8 @@
   - @voluntas
 - [FIX] DeleteObjects の `LastModifiedTime` を ISO 8601 から IMF-fixdate (HTTP-date) 形式に修正し、epoch 前の `SystemTime` でパニックする問題を解消する
   - @voluntas
+- [FIX] CompleteMultipartUpload の `build_request` / `presigned` で `multipart_upload` と `parts` の必須検証を追加する
+  - @voluntas
 
 ### misc
 
