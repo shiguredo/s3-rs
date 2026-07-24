@@ -158,6 +158,8 @@
   - @voluntas
 - [ADD] `HeadBucketOutput` に `bucket_arn` / `bucket_location_type` / `bucket_location_name` / `access_point_alias` を追加する
   - @voluntas
+- [ADD] kikyo-local (`ghcr.io/shiguredo/kikyo-local`) を使った統合テストを追加する
+  - @voluntas
 
 - [FIX] PutObject の `presigned()` で `acl`、`metadata`、`tagging`、`server_side_encryption`、`ssekms_key_id`、`if_match`、`if_none_match`、コンテント関連ヘッダー、`content_length`、`storage_class` が署名対象に含まれない問題を修正する
   - @voluntas

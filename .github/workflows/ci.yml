@@ -28,6 +28,8 @@ jobs:
         run: cargo test --test minio
       - name: RustFS integration tests
         run: cargo test --test rustfs
+      - name: kikyo-local integration tests
+        run: cargo test --test kikyo
 
   slack_notify:
     needs:
