@@ -32,7 +32,12 @@ xml = "1.3"
 
 [dev-dependencies]
 shiguredo_http11 = "2026.6"
-testcontainers = { version = "0.27", features = ["http_wait_plain"] }
+# 統合テストで MinIO / RustFS コンテナを起動するため
+# macOS では Apple container、Linux では Docker Engine API を利用する
+# http_wait_plain: RustFS の WaitFor::http に必要
+shiguredo_container = { version = "2026.1.0-canary.3", features = [
+  "http_wait_plain",
+] }
 tokio = { version = "1.52", features = [
   "io-util",
   "macros",

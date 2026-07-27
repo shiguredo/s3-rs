@@ -227,6 +227,8 @@
 
 ### misc
 
+- 統合テストのコンテナ管理を `testcontainers` から `shiguredo_container` に切り替える
+  - @voluntas
 - proptest (PBT) のインフラを導入する (`pbt/` Cargo.toml、`prop_datetime` ラウンドトリップテスト)
   - @voluntas
 - 依存クレートを更新する (`shiguredo_http11` 2026.1 → 2026.6、`hmac` 0.12 → 0.13、`md-5` / `sha1` / `sha2` 0.10 → 0.11)
