@@ -110,7 +110,7 @@ async fn start_minio() -> MinioGuard {
         .expect("コンテナのホスト名の取得に成功すること")
         .to_string();
     let port = container
-        .get_host_port_ipv4(9000.tcp())
+        .get_host_port_ipv4(9000)
         .await
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
