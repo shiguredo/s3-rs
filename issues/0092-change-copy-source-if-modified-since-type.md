@@ -2,6 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-07
+- Completed: 2026-07-29
 - Model: hy3-free
 - Branch: feature/change-copy-source-if-since-type
 
@@ -39,4 +40,4 @@
 
 ## 解決方法
 
-（未着手）
+コミット `d118f50` で実装済み。`copy_source_if_modified_since` / `copy_source_if_unmodified_since` を `Option<String>` から `Option<SystemTime>` に変更し、`format_imf_fixdate` で IMF-fixdate に整形。`copy_object.rs` / `upload_part_copy.rs` の両方で対応。CHANGES.md に `[CHANGE]` エントリ記載済み。
