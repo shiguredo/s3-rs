@@ -1493,7 +1493,9 @@ async fn test_bucket_encryption() {
         .build_request(now())
         .unwrap();
     let response = execute(request).await;
-    // AWS S3 ErrorResponses: ServerSideEncryptionConfigurationNotFoundError は 400
+    // GetBucketEncryption: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html
+    // Error Responses: https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+    // ServerSideEncryptionConfigurationNotFoundError の HTTP status code は 400 Bad Request
     assert_eq!(
         response.status_code, 400,
         "expected 400 after deleting encryption config, got {}",

@@ -1782,10 +1782,13 @@ async fn test_bucket_encryption() {
         .build_request(now())
         .unwrap();
     let response = execute(request).await;
-    // RustFS は削除後 400 を返す (MinIO は 404)
-    assert!(
-        response.status_code == 400 || response.status_code == 404,
-        "expected 400 or 404, got {}",
+    // GetBucketEncryption: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html
+    // Error Responses: https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
+    // ServerSideEncryptionConfigurationNotFoundError の HTTP status code は 400 Bad Request
+    // (MinIO は 404 を返すことがあるが、仕様は 400)
+    assert_eq!(
+        response.status_code, 400,
+        "expected 400 after deleting encryption config, got {}",
         response.status_code
     );
 }
