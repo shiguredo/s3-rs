@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-07
+- Completed: 2026-07-29
 - Model: hy3-free
 - Branch: feature/change-checksum-field-naming
 
@@ -47,4 +48,4 @@ aws-sdk-rust の `GetObjectOutput` / `HeadObjectOutput` は対応する Rust フ
 
 ## 解決方法
 
-（未着手）
+コミット `d715bd8` で実装済み。`checksum_crc32c` → `checksum_crc32_c`、`checksum_crc64nvme` → `checksum_crc64_nvme` にリネームし、`get_object.rs` / `head_object.rs` の構築コードも修正。CHANGES.md に `[CHANGE]` エントリ記載済み。

@@ -1,8 +1,8 @@
 [package]
 name = "shiguredo_s3"
-version = "2026.1.0-canary.5"
+version = "2026.1.0-canary.6"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.93"
 description = "Sans I/O Amazon S3 client library for Rust"
 readme = "README.md"
 homepage = "https://github.com/shiguredo/s3-rs"
@@ -21,8 +21,7 @@ exclude = ["fuzz"]
 aws-lc-rs = { version = "1.17", optional = true }
 base64ct = { version = "1.8", features = ["alloc"] }
 # チェックサム計算 (CRC32, CRC32C, CRC64NVME)
-# 1.10 は MSRV 1.89 を要求するため、本体の rust-version 1.88 を維持するために 1.9.x に固定する
-crc-fast = "~1.9"
+crc-fast = "1.10"
 hmac = { version = "0.13", optional = true }
 # Content-MD5 / SSE-C key MD5 計算
 md-5 = "0.11"
