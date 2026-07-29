@@ -2,6 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-29
+- Completed: 2026-07-29
 - Model: Cursor Grok 4.5
 - Branch: feature/fix-kikyo-delete-bucket-encryption-get-returns-400
 
@@ -22,3 +23,11 @@ HTTP ステータスの根拠は Error Responses の List of error codes であ�
 > **ServerSideEncryptionConfigurationNotFoundError**
 > Description: The server-side encryption configuration was not found.
 > HTTP status code: 400 Bad Request
+
+## 解決方法
+
+誤起票だったため closed にする。
+
+Error Responses では `ServerSideEncryptionConfigurationNotFoundError` の HTTP status code は **400 Bad Request** と明記されている。
+kikyo-local の 400 応答は仕様どおりであり、不具合ではない。
+`tests/kikyo.rs` の期待値も 400 に揃えた。
