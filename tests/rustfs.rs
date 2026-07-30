@@ -13,9 +13,8 @@
 //! RustFS は /health エンドポイントで HTTP 200 が返った後も S3 API の初期化に
 //! 若干の時間を要するため、ヘルスチェック通過後に 2 秒の追加待機を設けている。
 //!
-//! ## 既知の不具合 (RustFS 0.0.5)
+//! ## 既知の不具合
 //!
-//! - ListMultipartUploads: 進行中アップロードが空リストで返る
 //! - DeletePublicAccessBlock 後の GetPublicAccessBlock: 404 ではなく 500 が返る
 
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
@@ -1070,16 +1069,14 @@ async fn test_list_parts() {
     .await;
 }
 
-/// RustFS が ListMultipartUploads で進行中アップロードを返さないことを検証する
-///
-/// ## 既知の不具合 (RustFS 0.0.5)
-/// RustFS 0.0.5 は ListMultipartUploads で進行中アップロードを空リストで返す。
-/// aws-cli でも同様の結果になることを確認済み。
+/// 進行中マルチパートアップロードの一覧取得を検証する
 ///
 /// ## 検証項目
-/// - ListMultipartUploads が進行中のアップロードを返さない (None)
+/// - ListMultipartUploads で進行中のアップロード一覧が取得できる
+/// - 各アップロードに upload_id と key が含まれる
+/// - AbortMultipartUpload 後に一覧が空になる
 #[tokio::test]
-async fn test_list_multipart_uploads_not_supported() {
+async fn test_list_multipart_uploads() {
     let (_container, port) = start_rustfs().await;
     let client = build_client(port);
     let bucket = "test-list-mpu";
@@ -1114,19 +1111,19 @@ async fn test_list_multipart_uploads_not_supported() {
         upload_ids.push(output.upload_id.expect("upload_id should exist"));
     }
 
-    // RustFS は進行中アップロードを空リストで返す
+    // ListMultipartUploads で進行中の一覧を取得して 2 件であることを確認する
     let request = client
         .list_multipart_uploads()
         .bucket(bucket)
         .build_request(now())
         .unwrap();
     let output = send(request, ListMultipartUploadsFluentBuilder::parse_response).await;
-    assert!(
-        output.uploads.is_none(),
-        "RustFS should return empty uploads (known RustFS 0.0.5 issue)"
-    );
+    let uploads = output.uploads.expect("uploads should exist");
+    assert_eq!(uploads.len(), 2);
+    assert!(uploads.iter().all(|u| u.upload_id.is_some()));
+    assert!(uploads.iter().all(|u| u.key.is_some()));
 
-    // クリーンアップ
+    // 全てのアップロードを中止してクリーンアップする
     for (key, upload_id) in keys.iter().zip(upload_ids.iter()) {
         let request = client
             .abort_multipart_upload()
@@ -1141,6 +1138,15 @@ async fn test_list_multipart_uploads_not_supported() {
         )
         .await;
     }
+
+    // Abort 後は一覧が空 (None) になることを確認する
+    let request = client
+        .list_multipart_uploads()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    let output = send(request, ListMultipartUploadsFluentBuilder::parse_response).await;
+    assert!(output.uploads.is_none());
 }
 
 /// バケットバージョニングの有効化 / 停止のラウンドトリップを検証する

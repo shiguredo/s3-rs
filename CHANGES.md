@@ -245,5 +245,7 @@
   - @voluntas
 - RustFS 統合テストで使うアクセスキー / シークレットキーを `rustfsadmin` から `devadmin` に変更する (上流 `rustfs/rustfs` の `docker-compose.yml` で使用されている値に追従。最新の RustFS は `rustfsadmin` をデフォルト資格情報として non-loopback リスナーで拒否するためコンテナが起動しなくなっていた)
   - @Hexa
+- RustFS 統合テストの ListMultipartUploads を、進行中アップロードを返す正常系の検証に変更する (上流 `rustfs/rustfs:latest` で既知不具合が解消されたため)
+  - @voluntas
 - プロジェクト規約準拠の修正: `#[allow]` を `#[expect]` に変更、`compile_error!` を英語化、CHANGES.md の種別順序を整理、解決済み issue 参照 TODO を削除、CI clippy に `--all-targets` を追加、`shiguredo_http11` のバージョン指定を `"2026.6"` に修正、`docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
   - @voluntas
