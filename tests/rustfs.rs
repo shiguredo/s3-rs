@@ -6,7 +6,7 @@
 //! ## テスト構成
 //!
 //! 各テストは独立した RustFS コンテナを起動するため、テスト間の状態汚染がない。
-//! コンテナはガードの Drop で `rm_blocking` により明示削除する。
+//! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
 //!
 //! ## 起動待機について
 //!
@@ -56,33 +56,18 @@ const SECRET_KEY: &str = "devadmin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// RustFS コンテナの生存期間をテスト中に保つためのガード。
-struct RustfsGuard {
-    container: Option<ContainerAsync<GenericImage>>,
-    host: String,
-    port: u16,
-}
-
-impl Drop for RustfsGuard {
-    fn drop(&mut self) {
-        if let Some(container) = self.container.take() {
-            // Runtime 内の Drop からでも deadlock せず削除完了を待つ
-            let _ = container.rm_blocking();
-        }
-    }
-}
-
-/// RustFS コンテナを起動してガードを返す。
+/// RustFS コンテナを起動して (コンテナ, ホスト, ポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// /health エンドポイントが HTTP 200 を返すまで待機する。
 /// RustFS はログをファイル (/logs) に書き込むため、stdout/stderr では
 /// 起動完了を検知できないので HTTP ポーリングを使用する。
+/// コンテナは呼び出し側が保持し、Drop で削除する。
 ///
 /// ## 追加待機について
 /// ヘルスチェック通過直後は S3 API がまだ初期化中のことがあるため、
 /// 2 秒の追加待機を設けて安定性を確保する。
-async fn start_rustfs() -> RustfsGuard {
+async fn start_rustfs() -> (ContainerAsync<GenericImage>, String, u16) {
     let container = GenericImage::new("rustfs/rustfs", "latest")
         .with_exposed_port(9000.tcp())
         // /health が 200 を返すまでポーリングする
@@ -111,11 +96,7 @@ async fn start_rustfs() -> RustfsGuard {
         .await
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
-    RustfsGuard {
-        container: Some(container),
-        host,
-        port,
-    }
+    (container, host, port)
 }
 
 /// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
@@ -239,8 +220,8 @@ async fn send<T>(
 /// - 削除後に ListBuckets でバケットが消えていることを確認できる
 #[tokio::test]
 async fn test_bucket_lifecycle() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-bucket-lifecycle";
 
     // バケットを作成する
@@ -323,8 +304,8 @@ async fn test_bucket_lifecycle() {
 /// - 削除後に GetObject で 404 が返る
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-object-crud";
     let key = "hello.txt";
     let body = b"Hello, S3!";
@@ -424,8 +405,8 @@ async fn test_object_put_get_head_delete() {
 /// - delimiter 指定で共通プレフィックス (CommonPrefixes) が返る
 #[tokio::test]
 async fn test_list_objects_v2() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-list-objects";
 
     // テスト用バケットを作成する
@@ -498,8 +479,8 @@ async fn test_list_objects_v2() {
 /// - コピー先を GetObject で取得するとコピー元と同じボディが得られる
 #[tokio::test]
 async fn test_copy_object() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
     let dst_key = "copied.txt";
@@ -578,8 +559,8 @@ async fn test_copy_object() {
 /// - 削除後に ListObjectsV2 でバケットが空になっていることを確認できる
 #[tokio::test]
 async fn test_delete_objects() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-delete-objects";
 
     // テスト用バケットを作成する
@@ -668,8 +649,8 @@ async fn test_delete_objects() {
 /// - GetObject で結合後のボディが正しく取得できる
 #[tokio::test]
 async fn test_multipart_upload() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-multipart";
     let key = "large.bin";
 
@@ -809,8 +790,8 @@ async fn test_multipart_upload() {
 /// - CompleteMultipartUpload のレスポンス XML に checksum が含まれる
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
 
@@ -943,8 +924,8 @@ async fn test_multipart_upload_with_checksum() {
 /// - 中断後に GetObject で 404 が返る (オブジェクトが作成されていない)
 #[tokio::test]
 async fn test_abort_multipart_upload() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
 
@@ -1006,8 +987,8 @@ async fn test_abort_multipart_upload() {
 /// - パートが昇順で返ること
 #[tokio::test]
 async fn test_list_parts() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
 
@@ -1103,8 +1084,8 @@ async fn test_list_parts() {
 /// - AbortMultipartUpload 後に一覧が空になる
 #[tokio::test]
 async fn test_list_multipart_uploads() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-list-mpu";
 
     // テスト用バケットを作成する
@@ -1187,8 +1168,8 @@ async fn test_list_multipart_uploads() {
 /// - Suspended に変更すると Status が "Suspended" になる
 #[tokio::test]
 async fn test_bucket_versioning() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-versioning";
 
     // テスト用バケットを作成する
@@ -1260,8 +1241,8 @@ async fn test_bucket_versioning() {
 /// - 削除後に GetBucketTagging で 404 が返る
 #[tokio::test]
 async fn test_bucket_tagging() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-bucket-tagging";
 
     // テスト用バケットを作成する
@@ -1341,8 +1322,8 @@ async fn test_bucket_tagging() {
 /// オブジェクトタグの設定・取得・削除のラウンドトリップを検証する
 #[tokio::test]
 async fn test_object_tagging() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-object-tagging";
 
     // テスト用バケットを作成する
@@ -1455,8 +1436,8 @@ async fn test_object_tagging() {
 /// - DeletePublicAccessBlock で設定を削除できる
 #[tokio::test]
 async fn test_public_access_block() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-public-access-block";
 
     // テスト用バケットを作成する
@@ -1520,8 +1501,8 @@ async fn test_public_access_block() {
 /// - DeletePublicAccessBlock 後の GetPublicAccessBlock が 500 を返す
 #[tokio::test]
 async fn test_delete_public_access_block_returns_500() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-pab-delete-bug";
 
     // テスト用バケットを作成する
@@ -1581,8 +1562,8 @@ async fn test_delete_public_access_block_returns_500() {
 /// - 削除後に GetBucketPolicy で 404 が返る
 #[tokio::test]
 async fn test_bucket_policy() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-bucket-policy";
 
     // テスト用バケットを作成する
@@ -1647,8 +1628,8 @@ async fn test_bucket_policy() {
 /// - 削除後に Get するとエラーになる
 #[tokio::test]
 async fn test_bucket_lifecycle_configuration() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-lifecycle-config";
 
     // バケットを作成する
@@ -1740,8 +1721,8 @@ async fn test_bucket_lifecycle_configuration() {
 /// バケット暗号化設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_encryption() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-bucket-encryption";
 
     // テスト用バケットを作成する
@@ -1828,8 +1809,8 @@ async fn test_bucket_encryption() {
 /// バケット CORS 設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_cors() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
+    let (_container, host, port) = start_rustfs().await;
+    let client = build_client(&host, port);
     let bucket = "test-bucket-cors";
 
     // テスト用バケットを作成する
