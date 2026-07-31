@@ -1,36 +1,31 @@
-//! RustFS を使った統合テスト
+//! kikyo-local を使った統合テスト
 //!
-//! `shiguredo_container` で RustFS コンテナを起動し、全 API のラウンドトリップを検証する。
+//! `shiguredo_container` で `ghcr.io/shiguredo/kikyo-local` コンテナを起動し、
+//! 対応 API のラウンドトリップを検証する。
 //! macOS では Apple container、Linux では Docker Engine が必要。
 //!
 //! ## テスト構成
 //!
-//! 各テストは独立した RustFS コンテナを起動するため、テスト間の状態汚染がない。
+//! 各テストは独立した kikyo-local コンテナを起動するため、テスト間の状態汚染がない。
 //! コンテナはガードの Drop 時に明示削除する。
 //!
-//! ## 起動待機について
+//! ## kikyo-local の非対応 API
 //!
-//! RustFS は /health エンドポイントで HTTP 200 が返った後も S3 API の初期化に
-//! 若干の時間を要するため、ヘルスチェック通過後に 2 秒の追加待機を設けている。
-//!
-//! ## 既知の不具合
-//!
-//! - DeletePublicAccessBlock 後の GetPublicAccessBlock: 404 ではなく 500 が返る
+//! 以下は kikyo-local が非対応のため、このファイルでは検証しない。
+//! - バケットタグ (Put/Get/DeleteBucketTagging)
+//! - バケットポリシー (Put/Get/DeleteBucketPolicy)
+//! - Public Access Block
+//! - ACL
 
 use shiguredo_container::core::IntoContainerPort;
-use shiguredo_container::core::wait::HttpWaitStrategy;
 use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
-    DeleteBucketPolicyFluentBuilder, DeleteBucketTaggingFluentBuilder,
-    DeleteObjectTaggingFluentBuilder, DeletePublicAccessBlockFluentBuilder,
-    GetBucketCorsFluentBuilder, GetBucketPolicyFluentBuilder, GetBucketTaggingFluentBuilder,
-    GetBucketVersioningFluentBuilder, GetObjectTaggingFluentBuilder,
-    GetPublicAccessBlockFluentBuilder, ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder,
-    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder, PutBucketPolicyFluentBuilder,
-    PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutObjectTaggingFluentBuilder,
-    PutPublicAccessBlockFluentBuilder,
+    DeleteObjectTaggingFluentBuilder, GetBucketCorsFluentBuilder, GetBucketVersioningFluentBuilder,
+    GetObjectTaggingFluentBuilder, ListMultipartUploadsFluentBuilder, ListPartsFluentBuilder,
+    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder, PutBucketVersioningFluentBuilder,
+    PutObjectTaggingFluentBuilder,
 };
 use shiguredo_s3::types::{
     CompletedMultipartUpload, CompletedPart, CorsConfiguration, CorsRule, ObjectIdentifier,
@@ -44,13 +39,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 // テスト用定数
 // -------------------------------------------------------
 
-/// RustFS のアクセスキー
-/// rustfs/rustfs リポジトリの docker-compose.yml で使用されている値に合わせている
-const ACCESS_KEY: &str = "devadmin";
+/// kikyo-local のアクセスキー
+/// 公式 Docker 利用例 (`KIKYO_LOCAL_ACCESS_KEY=admin`) に合わせている
+const ACCESS_KEY: &str = "admin";
 
-/// RustFS のシークレットキー
-/// rustfs/rustfs リポジトリの docker-compose.yml で使用されている値に合わせている
-const SECRET_KEY: &str = "devadmin";
+/// kikyo-local のシークレットキー
+/// 公式 Docker 利用例 (`KIKYO_LOCAL_SECRET_KEY=admin`) に合わせている
+const SECRET_KEY: &str = "admin";
 
 // -------------------------------------------------------
 // テスト用ヘルパー
@@ -78,14 +73,14 @@ fn force_remove_container(id: &str) {
     }
 }
 
-/// RustFS コンテナの生存期間をテスト中に保つためのガード。
-struct RustfsGuard {
+/// kikyo-local コンテナの生存期間をテスト中に保つためのガード。
+struct KikyoGuard {
     container: Option<ContainerAsync<GenericImage>>,
     host: String,
     port: u16,
 }
 
-impl Drop for RustfsGuard {
+impl Drop for KikyoGuard {
     fn drop(&mut self) {
         if let Some(container) = self.container.take() {
             let id = container.id().to_string();
@@ -95,34 +90,25 @@ impl Drop for RustfsGuard {
     }
 }
 
-/// RustFS コンテナを起動してガードを返す。
+/// kikyo-local コンテナを起動してガードを返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
-/// /health エンドポイントが HTTP 200 を返すまで待機する。
-/// RustFS はログをファイル (/logs) に書き込むため、stdout/stderr では
-/// 起動完了を検知できないので HTTP ポーリングを使用する。
-///
-/// ## 追加待機について
-/// ヘルスチェック通過直後は S3 API がまだ初期化中のことがあるため、
-/// 2 秒の追加待機を設けて安定性を確保する。
-async fn start_rustfs() -> RustfsGuard {
-    let container = GenericImage::new("rustfs/rustfs", "latest")
+/// "S3 compatible server started" というログが出力されるまで待機する。
+/// この文字列は kikyo-local の S3 API が起動完了したことを示す。
+async fn start_kikyo() -> KikyoGuard {
+    let container = GenericImage::new("ghcr.io/shiguredo/kikyo-local", "latest")
         .with_exposed_port(9000.tcp())
-        // /health が 200 を返すまでポーリングする
-        .with_wait_for(WaitFor::http(
-            HttpWaitStrategy::new("/health")
-                .with_port(9000.tcp())
-                .with_expected_status_code(200_u16),
+        // S3 API の起動完了を示すログを待つ
+        .with_wait_for(WaitFor::message_on_either_std(
+            "S3 compatible server started",
         ))
-        // ヘルスチェック通過後も S3 API の初期化に時間がかかるため追加待機する
-        .with_wait_for(WaitFor::seconds(2))
-        .with_env_var("RUSTFS_ACCESS_KEY", ACCESS_KEY)
-        .with_env_var("RUSTFS_SECRET_KEY", SECRET_KEY)
-        // データを保存するボリュームパスを指定する
-        .with_env_var("RUSTFS_VOLUMES", "/data")
+        .with_env_var("KIKYO_LOCAL_ACCESS_KEY", ACCESS_KEY)
+        .with_env_var("KIKYO_LOCAL_SECRET_KEY", SECRET_KEY)
+        // コンテナ内のデータディレクトリを明示する
+        .with_env_var("KIKYO_LOCAL_DATA_DIR", "/data")
         .start()
         .await
-        .expect("RustFS コンテナの起動に成功すること");
+        .expect("kikyo-local コンテナの起動に成功すること");
 
     let host = container
         .get_host()
@@ -134,7 +120,7 @@ async fn start_rustfs() -> RustfsGuard {
         .await
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
-    RustfsGuard {
+    KikyoGuard {
         container: Some(container),
         host,
         port,
@@ -153,13 +139,13 @@ fn now() -> std::time::SystemTime {
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
 /// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
-/// - force_path_style: true (RustFS はパススタイルが必要)
+/// - force_path_style: true (パススタイルでバケットを指定する)
 fn build_client(host: &str, port: u16) -> Client {
     let config = Config::builder()
         .region("us-east-1")
         .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
         .endpoint(format!("http://{host}:{port}"))
-        // RustFS は仮想ホストスタイルに対応していないためパススタイルを使う
+        // 仮想ホストスタイルではなくパススタイルを使う
         .force_path_style(true)
         .build()
         .expect("Config の構築に成功すること");
@@ -262,7 +248,7 @@ async fn send<T>(
 /// - 削除後に ListBuckets でバケットが消えていることを確認できる
 #[tokio::test]
 async fn test_bucket_lifecycle() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-bucket-lifecycle";
 
@@ -346,7 +332,7 @@ async fn test_bucket_lifecycle() {
 /// - 削除後に GetObject で 404 が返る
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-object-crud";
     let key = "hello.txt";
@@ -447,7 +433,7 @@ async fn test_object_put_get_head_delete() {
 /// - delimiter 指定で共通プレフィックス (CommonPrefixes) が返る
 #[tokio::test]
 async fn test_list_objects_v2() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-list-objects";
 
@@ -521,7 +507,7 @@ async fn test_list_objects_v2() {
 /// - コピー先を GetObject で取得するとコピー元と同じボディが得られる
 #[tokio::test]
 async fn test_copy_object() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
@@ -601,7 +587,7 @@ async fn test_copy_object() {
 /// - 削除後に ListObjectsV2 でバケットが空になっていることを確認できる
 #[tokio::test]
 async fn test_delete_objects() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-delete-objects";
 
@@ -691,7 +677,7 @@ async fn test_delete_objects() {
 /// - GetObject で結合後のボディが正しく取得できる
 #[tokio::test]
 async fn test_multipart_upload() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-multipart";
     let key = "large.bin";
@@ -832,7 +818,7 @@ async fn test_multipart_upload() {
 /// - CompleteMultipartUpload のレスポンス XML に checksum が含まれる
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
@@ -966,7 +952,7 @@ async fn test_multipart_upload_with_checksum() {
 /// - 中断後に GetObject で 404 が返る (オブジェクトが作成されていない)
 #[tokio::test]
 async fn test_abort_multipart_upload() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
@@ -1029,7 +1015,7 @@ async fn test_abort_multipart_upload() {
 /// - パートが昇順で返ること
 #[tokio::test]
 async fn test_list_parts() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
@@ -1126,7 +1112,7 @@ async fn test_list_parts() {
 /// - AbortMultipartUpload 後に一覧が空になる
 #[tokio::test]
 async fn test_list_multipart_uploads() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-list-mpu";
 
@@ -1210,7 +1196,7 @@ async fn test_list_multipart_uploads() {
 /// - Suspended に変更すると Status が "Suspended" になる
 #[tokio::test]
 async fn test_bucket_versioning() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-versioning";
 
@@ -1272,99 +1258,10 @@ async fn test_bucket_versioning() {
     assert_eq!(output.status.as_deref(), Some("Suspended"));
 }
 
-/// バケットタグの設定 / 取得 / 削除のラウンドトリップを検証する
-///
-/// バケットタグはコスト配分や管理目的で使用される任意のキー・バリューペア。
-///
-/// ## 検証項目
-/// - PutBucketTagging で複数のタグを設定できる
-/// - GetBucketTagging で設定したタグが取得できる
-/// - DeleteBucketTagging でタグを全削除できる
-/// - 削除後に GetBucketTagging で 404 が返る
-#[tokio::test]
-async fn test_bucket_tagging() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
-    let bucket = "test-bucket-tagging";
-
-    // テスト用バケットを作成する
-    let request = client
-        .create_bucket()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
-    )
-    .await;
-
-    // 2 つのタグを設定する
-    let request = client
-        .put_bucket_tagging()
-        .bucket(bucket)
-        .tagging(
-            Tagging::builder()
-                .tag_set(Tag {
-                    key: "env".to_string(),
-                    value: "test".to_string(),
-                })
-                .tag_set(Tag {
-                    key: "project".to_string(),
-                    value: "s3-rs".to_string(),
-                })
-                .build(),
-        )
-        .build_request(now())
-        .unwrap();
-    send(request, PutBucketTaggingFluentBuilder::parse_response).await;
-
-    // タグを取得して設定した内容が含まれることを確認する
-    let request = client
-        .get_bucket_tagging()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let output = send(request, GetBucketTaggingFluentBuilder::parse_response).await;
-    // タグが 2 件返ることを確認する
-    assert_eq!(output.tag_set.len(), 2);
-    // "env=test" タグが含まれることを確認する
-    assert!(
-        output
-            .tag_set
-            .iter()
-            .any(|t| t.key == "env" && t.value == "test")
-    );
-    // "project=s3-rs" タグが含まれることを確認する
-    assert!(
-        output
-            .tag_set
-            .iter()
-            .any(|t| t.key == "project" && t.value == "s3-rs")
-    );
-
-    // タグを全削除する
-    let request = client
-        .delete_bucket_tagging()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(request, DeleteBucketTaggingFluentBuilder::parse_response).await;
-
-    // 削除後は GetBucketTagging で 404 が返ることを確認する
-    let request = client
-        .get_bucket_tagging()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let response = execute(request).await;
-    assert_eq!(response.status_code, 404);
-}
-
 /// オブジェクトタグの設定・取得・削除のラウンドトリップを検証する
 #[tokio::test]
 async fn test_object_tagging() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-object-tagging";
 
@@ -1467,200 +1364,6 @@ async fn test_object_tagging() {
     assert!(output.tag_set.is_empty());
 }
 
-/// パブリックアクセスブロック設定の設定 / 取得 / 削除のラウンドトリップを検証する
-///
-/// パブリックアクセスブロックはバケットへの公開アクセスを制限するセキュリティ機能。
-/// MinIO とは異なり、RustFS 0.0.5 では PutPublicAccessBlock が正常に動作する。
-///
-/// ## 検証項目
-/// - PutPublicAccessBlock で全フィールドを true に設定できる
-/// - GetPublicAccessBlock で設定値が正しく取得できる
-/// - DeletePublicAccessBlock で設定を削除できる
-#[tokio::test]
-async fn test_public_access_block() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
-    let bucket = "test-public-access-block";
-
-    // テスト用バケットを作成する
-    let request = client
-        .create_bucket()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
-    )
-    .await;
-
-    // 全フィールドを true にしてパブリックアクセスブロックを設定する
-    // RustFS 0.0.5 では MinIO と異なり PutPublicAccessBlock が正常に動作する
-    let request = client
-        .put_public_access_block()
-        .bucket(bucket)
-        .block_public_acls(true)
-        .ignore_public_acls(true)
-        .block_public_policy(true)
-        .restrict_public_buckets(true)
-        .build_request(now())
-        .unwrap();
-    send(request, PutPublicAccessBlockFluentBuilder::parse_response).await;
-
-    // 設定を取得して全フィールドが true であることを確認する
-    let request = client
-        .get_public_access_block()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let output = send(request, GetPublicAccessBlockFluentBuilder::parse_response).await;
-    assert_eq!(output.block_public_acls, Some(true));
-    assert_eq!(output.ignore_public_acls, Some(true));
-    assert_eq!(output.block_public_policy, Some(true));
-    assert_eq!(output.restrict_public_buckets, Some(true));
-
-    // 設定を削除する
-    let request = client
-        .delete_public_access_block()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        DeletePublicAccessBlockFluentBuilder::parse_response,
-    )
-    .await;
-}
-
-/// RustFS が DeletePublicAccessBlock 後の GET で 500 を返すことを検証する
-///
-/// ## 既知の不具合 (RustFS 0.0.5)
-/// DeletePublicAccessBlock 後に GetPublicAccessBlock を実行すると、
-/// 期待される 404 ではなく 500 が返る。aws-cli では
-/// NoSuchPublicAccessBlockConfiguration (404 相当) が返ることを確認済み。
-///
-/// ## 検証項目
-/// - DeletePublicAccessBlock 後の GetPublicAccessBlock が 500 を返す
-#[tokio::test]
-async fn test_delete_public_access_block_returns_500() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
-    let bucket = "test-pab-delete-bug";
-
-    // テスト用バケットを作成する
-    let request = client
-        .create_bucket()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
-    )
-    .await;
-
-    // パブリックアクセスブロックを設定して削除する
-    let request = client
-        .put_public_access_block()
-        .bucket(bucket)
-        .block_public_acls(true)
-        .build_request(now())
-        .unwrap();
-    send(request, PutPublicAccessBlockFluentBuilder::parse_response).await;
-
-    let request = client
-        .delete_public_access_block()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        DeletePublicAccessBlockFluentBuilder::parse_response,
-    )
-    .await;
-
-    // RustFS は削除後の GET で 404 ではなく 500 を返す
-    let request = client
-        .get_public_access_block()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let response = execute(request).await;
-    assert_eq!(
-        response.status_code, 500,
-        "RustFS should return 500 after DeletePublicAccessBlock (known RustFS 0.0.5 issue)"
-    );
-}
-
-/// バケットポリシーの設定 / 取得 / 削除のラウンドトリップを検証する
-///
-/// バケットポリシーは IAM ポリシー形式の JSON 文字列で、
-/// バケットへのアクセス制御を詳細に制御できる。
-///
-/// ## 検証項目
-/// - PutBucketPolicy で JSON ポリシーを設定できる
-/// - GetBucketPolicy でポリシーが取得できる
-/// - DeleteBucketPolicy でポリシーを削除できる
-/// - 削除後に GetBucketPolicy で 404 が返る
-#[tokio::test]
-async fn test_bucket_policy() {
-    let guard = start_rustfs().await;
-    let client = build_client(&guard.host, guard.port);
-    let bucket = "test-bucket-policy";
-
-    // テスト用バケットを作成する
-    let request = client
-        .create_bucket()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(
-        request,
-        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
-    )
-    .await;
-
-    // バケット内の全オブジェクトへの匿名読み取りを許可するポリシーを設定する
-    // 実際の運用では Principal を "*" にするのは避けること
-    let policy = format!(
-        r#"{{"Version":"2012-10-17","Statement":[{{"Effect":"Allow","Principal":"*","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::{bucket}/*"]}}]}}"#
-    );
-    let request = client
-        .put_bucket_policy()
-        .bucket(bucket)
-        .policy(&policy)
-        .build_request(now())
-        .unwrap();
-    send(request, PutBucketPolicyFluentBuilder::parse_response).await;
-
-    // ポリシーを取得して存在することを確認する
-    // レスポンスは JSON 文字列として返される
-    let request = client
-        .get_bucket_policy()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let output = send(request, GetBucketPolicyFluentBuilder::parse_response).await;
-    assert!(output.policy.is_some());
-
-    // ポリシーを削除する
-    let request = client
-        .delete_bucket_policy()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    send(request, DeleteBucketPolicyFluentBuilder::parse_response).await;
-
-    // 削除後は GetBucketPolicy で 404 が返ることを確認する
-    let request = client
-        .get_bucket_policy()
-        .bucket(bucket)
-        .build_request(now())
-        .unwrap();
-    let response = execute(request).await;
-    assert_eq!(response.status_code, 404);
-}
-
 /// バケットライフサイクル設定の Put / Get / Delete を検証する
 ///
 /// ## 検証項目
@@ -1670,7 +1373,7 @@ async fn test_bucket_policy() {
 /// - 削除後に Get するとエラーになる
 #[tokio::test]
 async fn test_bucket_lifecycle_configuration() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-lifecycle-config";
 
@@ -1763,7 +1466,7 @@ async fn test_bucket_lifecycle_configuration() {
 /// バケット暗号化設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_encryption() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-bucket-encryption";
 
@@ -1840,18 +1543,22 @@ async fn test_bucket_encryption() {
     // GetBucketEncryption: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketEncryption.html
     // Error Responses: https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
     // ServerSideEncryptionConfigurationNotFoundError の HTTP status code は 400 Bad Request
-    // (MinIO は 404 を返すことがあるが、仕様は 400)
     assert_eq!(
         response.status_code, 400,
         "expected 400 after deleting encryption config, got {}",
         response.status_code
+    );
+    let body = String::from_utf8_lossy(&response.body);
+    assert!(
+        body.contains("ServerSideEncryptionConfigurationNotFoundError"),
+        "unexpected error body: {body}"
     );
 }
 
 /// バケット CORS 設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_cors() {
-    let guard = start_rustfs().await;
+    let guard = start_kikyo().await;
     let client = build_client(&guard.host, guard.port);
     let bucket = "test-bucket-cors";
 

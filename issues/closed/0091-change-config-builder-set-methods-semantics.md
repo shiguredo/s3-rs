@@ -2,6 +2,7 @@
 
 - Priority: Low
 - Created: 2026-07-07
+- Completed: 2026-07-29
 - Model: hy3-free
 - Branch: feature/change-config-builder-set-semantics
 
@@ -32,4 +33,4 @@
 
 ## 解決方法
 
-（未着手）
+コミット `b85ba28` で実装済み。`set_force_path_style` / `set_ignore_cert_check` を `self.x = x;`（Option で丸ごと置換）に統一。全ビルダーの `set_*` も統一済みであることを確認。CHANGES.md に `[CHANGE]` エントリ記載済み。

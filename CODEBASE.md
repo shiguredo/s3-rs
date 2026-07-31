@@ -17,4 +17,4 @@
 ## テストの禁止事項
 
 - モックやスタブを使わないこと
-- 実際の S3 互換サーバー (MinIO, RustFS 等) を `shiguredo_container` で起動した統合テストで検証すること（macOS: Apple container、Linux: Docker Engine）
+- 実際の S3 互換サーバー (MinIO, RustFS, kikyo-local 等) を `shiguredo_container` で起動した統合テストで検証すること（macOS: Apple container、Linux: Docker Engine）
