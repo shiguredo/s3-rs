@@ -47,13 +47,13 @@ const SECRET_KEY: &str = "minioadmin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// MinIO コンテナを起動して (コンテナ, ホスト, ポート) を返す。
+/// MinIO コンテナを起動して (コンテナ, ホストポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// "API:" というログが出力されるまで待機する。
 /// この文字列は MinIO の S3 API が起動完了したことを示す。
 /// コンテナは呼び出し側が保持し、Drop で削除する。
-async fn start_minio() -> (ContainerAsync<GenericImage>, String, u16) {
+async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
     let container = GenericImage::new("minio/minio", "latest")
         .with_exposed_port(9000.tcp())
         // MinIO が S3 API の起動完了を示すログを待つ
@@ -66,17 +66,12 @@ async fn start_minio() -> (ContainerAsync<GenericImage>, String, u16) {
         .await
         .expect("MinIO コンテナの起動に成功すること");
 
-    let host = container
-        .get_host()
-        .await
-        .expect("コンテナのホスト名の取得に成功すること")
-        .to_string();
     let port = container
         .get_host_port_ipv4(9000)
         .await
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
-    (container, host, port)
+    (container, port)
 }
 
 /// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
@@ -90,13 +85,13 @@ fn now() -> std::time::SystemTime {
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
+/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
 /// - force_path_style: true (MinIO はパススタイルが必要)
-fn build_client(host: &str, port: u16) -> Client {
+fn build_client(port: u16) -> Client {
     let config = Config::builder()
         .region("us-east-1")
         .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
-        .endpoint(format!("http://{host}:{port}"))
+        .endpoint(format!("http://127.0.0.1:{port}"))
         // MinIO は仮想ホストスタイルに対応していないためパススタイルを使う
         .force_path_style(true)
         .build()
@@ -261,8 +256,8 @@ async fn send<T>(
 /// DeleteBucketLifecycle のラウンドトリップを検証する。
 #[tokio::test]
 async fn test_bucket_lifecycle() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-bucket-lifecycle";
 
     // テスト用バケットを作成する
@@ -360,8 +355,8 @@ async fn test_bucket_lifecycle() {
 /// - 削除後に GetObject で 404 が返る
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-object-crud";
     let key = "hello.txt";
     let body = b"Hello, S3!";
@@ -461,8 +456,8 @@ async fn test_object_put_get_head_delete() {
 /// - delimiter 指定で共通プレフィックス (CommonPrefixes) が返る
 #[tokio::test]
 async fn test_list_objects_v2() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-objects";
 
     // テスト用バケットを作成する
@@ -535,8 +530,8 @@ async fn test_list_objects_v2() {
 /// - コピー先を GetObject で取得するとコピー元と同じボディが得られる
 #[tokio::test]
 async fn test_copy_object() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
     let dst_key = "copied.txt";
@@ -615,8 +610,8 @@ async fn test_copy_object() {
 /// - 削除後に ListObjectsV2 でバケットが空になっていることを確認できる
 #[tokio::test]
 async fn test_delete_objects() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-delete-objects";
 
     // テスト用バケットを作成する
@@ -705,8 +700,8 @@ async fn test_delete_objects() {
 /// - GetObject で結合後のボディが正しく取得できる
 #[tokio::test]
 async fn test_multipart_upload() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-multipart";
     let key = "large.bin";
 
@@ -846,8 +841,8 @@ async fn test_multipart_upload() {
 /// - CompleteMultipartUpload のレスポンス XML に checksum が含まれる
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
 
@@ -980,8 +975,8 @@ async fn test_multipart_upload_with_checksum() {
 /// - 中断後に GetObject で 404 が返る (オブジェクトが作成されていない)
 #[tokio::test]
 async fn test_abort_multipart_upload() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
 
@@ -1043,8 +1038,8 @@ async fn test_abort_multipart_upload() {
 /// - パートが昇順で返ること
 #[tokio::test]
 async fn test_list_parts() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
 
@@ -1140,8 +1135,8 @@ async fn test_list_parts() {
 /// - AbortMultipartUpload 後に一覧が空になる
 #[tokio::test]
 async fn test_list_multipart_uploads() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-mpu";
 
     // テスト用バケットを作成する
@@ -1226,8 +1221,8 @@ async fn test_list_multipart_uploads() {
 /// - Suspended に変更すると Status が "Suspended" になる
 #[tokio::test]
 async fn test_bucket_versioning() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-versioning";
 
     // テスト用バケットを作成する
@@ -1299,8 +1294,8 @@ async fn test_bucket_versioning() {
 /// - 削除後に GetBucketTagging で 404 が返る
 #[tokio::test]
 async fn test_bucket_tagging() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-bucket-tagging";
 
     // テスト用バケットを作成する
@@ -1390,8 +1385,8 @@ async fn test_bucket_tagging() {
 /// - 削除後に GetObject で 404 が返る
 #[tokio::test]
 async fn test_presigned_put_get_head_delete() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-presigned-crud";
     let key = "presigned.txt";
     let body = b"Hello, Presigned!";
@@ -1482,8 +1477,8 @@ async fn test_presigned_put_get_head_delete() {
 /// - 完了後に GetObject で結合されたボディを取得できる
 #[tokio::test]
 async fn test_presigned_multipart_upload() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-presigned-mpu";
     let key = "presigned-multipart.bin";
 
@@ -1623,8 +1618,8 @@ async fn test_presigned_multipart_upload() {
 /// - 1 秒と 604800 秒 (境界値) は成功する
 #[tokio::test]
 async fn test_presigned_expires_validation() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-presigned-expires";
 
     // テスト用バケットを作成する
@@ -1679,8 +1674,8 @@ async fn test_presigned_expires_validation() {
 /// - 中断後にオブジェクトが存在しないことを確認する
 #[tokio::test]
 async fn test_presigned_abort_multipart_upload() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-presigned-abort";
     let key = "presigned-abort.bin";
 
@@ -1746,8 +1741,8 @@ async fn test_presigned_abort_multipart_upload() {
 /// - PutPublicAccessBlock が 400 (MalformedXML) を返す
 #[tokio::test]
 async fn test_public_access_block_not_supported() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-public-access-block";
 
     // テスト用バケットを作成する
@@ -1791,8 +1786,8 @@ async fn test_public_access_block_not_supported() {
 /// - 削除後に GetBucketPolicy で 404 が返る
 #[tokio::test]
 async fn test_bucket_policy() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-bucket-policy";
 
     // テスト用バケットを作成する
@@ -1857,8 +1852,8 @@ async fn test_bucket_policy() {
 /// - If-None-Match に異なる ETag を指定すると 200 が返る
 #[tokio::test]
 async fn test_conditional_headers_etag() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-conditional-etag";
     let key = "cond.txt";
 
@@ -1940,8 +1935,8 @@ async fn test_conditional_headers_etag() {
 /// - If-Unmodified-Since に古い日時を指定すると 412 が返る
 #[tokio::test]
 async fn test_conditional_headers_date() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-conditional-date";
     let key = "cond-date.txt";
 
@@ -2004,8 +1999,8 @@ async fn test_conditional_headers_date() {
 /// - HeadObject + If-None-Match で 304 が正しく返る
 #[tokio::test]
 async fn test_head_object_conditional_headers() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-head-conditional";
     let key = "head-cond.txt";
 
@@ -2065,8 +2060,8 @@ async fn test_head_object_conditional_headers() {
 /// - ボディが指定範囲のバイト列と一致する
 #[tokio::test]
 async fn test_range_request() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-range";
     let key = "range.txt";
     let body = b"0123456789ABCDEF";
@@ -2127,8 +2122,8 @@ async fn test_range_request() {
 /// - メタデータのキーと値が正しく往復する
 #[tokio::test]
 async fn test_custom_metadata() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-metadata";
     let key = "meta.txt";
 
@@ -2204,8 +2199,8 @@ async fn test_custom_metadata() {
 /// - PutObject で設定した System Metadata が HeadObject で取得できる
 #[tokio::test]
 async fn test_system_metadata() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-sys-metadata";
     let key = "sys-meta.txt";
 
@@ -2264,8 +2259,8 @@ async fn test_system_metadata() {
 /// - コピー先の Content-Type とカスタムメタデータがコピー元と異なる
 #[tokio::test]
 async fn test_copy_object_metadata_replace() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-copy-meta-replace";
     let src_key = "original.txt";
     let dst_key = "replaced.txt";
@@ -2351,8 +2346,8 @@ async fn test_copy_object_metadata_replace() {
 /// - 全ページを結合すると全件取得できる
 #[tokio::test]
 async fn test_list_objects_v2_pagination() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-pagination";
 
     let request = client
@@ -2449,8 +2444,8 @@ async fn test_list_objects_v2_pagination() {
 /// - start_after で指定したキーより後のオブジェクトのみ返る
 #[tokio::test]
 async fn test_list_objects_v2_start_after() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-start-after";
 
     let request = client
@@ -2508,8 +2503,8 @@ async fn test_list_objects_v2_start_after() {
 /// - version_id を指定して DeleteObject で特定バージョンを削除できる
 #[tokio::test]
 async fn test_versioned_object_operations() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-versioned-ops";
     let key = "versioned.txt";
 
@@ -2658,8 +2653,8 @@ async fn test_versioned_object_operations() {
 /// - デフォルト (CRC32) と同じくオブジェクトが正しく保存される
 #[tokio::test]
 async fn test_checksum_algorithm() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-checksum-algo";
 
     let request = client
@@ -2744,8 +2739,8 @@ async fn test_checksum_algorithm() {
 /// - prefix を指定してもエラーにならない
 #[tokio::test]
 async fn test_list_multipart_uploads_filter_params() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-mpu-filter";
 
     let request = client
@@ -2820,8 +2815,8 @@ async fn test_list_multipart_uploads_filter_params() {
 /// - part_number_marker で指定したパート番号以降を取得できる
 #[tokio::test]
 async fn test_list_parts_pagination() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-parts-page";
     let key = "parts-page.bin";
 
@@ -2920,8 +2915,8 @@ async fn test_list_parts_pagination() {
 /// - acl="private" を指定して PutObject が成功する
 #[tokio::test]
 async fn test_put_object_acl() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-put-acl";
     let key = "acl.txt";
 
@@ -2973,8 +2968,8 @@ async fn test_put_object_acl() {
 /// - storage_class="STANDARD" を指定して PutObject が成功する
 #[tokio::test]
 async fn test_put_object_storage_class() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-storage-class";
     let key = "standard.txt";
 
@@ -3050,8 +3045,8 @@ async fn test_put_object_storage_class() {
 /// - 削除後は空のタグセットが返る
 #[tokio::test]
 async fn test_object_tagging() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-object-tagging";
     let key = "tagged-object.txt";
 
@@ -3159,8 +3154,8 @@ async fn test_object_tagging() {
 /// - CompleteMultipartUpload で結合したオブジェクトの内容がコピー元と一致する
 #[tokio::test]
 async fn test_upload_part_copy() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-upload-part-copy";
     let src_key = "source.txt";
     let dst_key = "destination.txt";
@@ -3270,8 +3265,8 @@ async fn test_upload_part_copy() {
 /// - 削除後に削除マーカーが返る
 #[tokio::test]
 async fn test_list_object_versions() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-list-object-versions";
     let key = "versioned.txt";
 
@@ -3364,8 +3359,8 @@ async fn test_list_object_versions() {
 /// リクエスト構築とエラーハンドリングが正しく動作することを検証する。
 #[tokio::test]
 async fn test_bucket_cors_not_supported() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-bucket-cors";
 
     // テスト用バケットを作成する
@@ -3408,8 +3403,8 @@ async fn test_bucket_cors_not_supported() {
 /// リクエスト構築とエラーハンドリングが正しく動作することを検証する。
 #[tokio::test]
 async fn test_bucket_encryption() {
-    let (_container, host, port) = start_minio().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_minio().await;
+    let client = build_client(port);
     let bucket = "test-bucket-encryption";
 
     // テスト用バケットを作成する

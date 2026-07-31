@@ -51,13 +51,13 @@ const SECRET_KEY: &str = "admin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// kikyo-local コンテナを起動して (コンテナ, ホスト, ポート) を返す。
+/// kikyo-local コンテナを起動して (コンテナ, ホストポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// "S3 compatible server started" というログが出力されるまで待機する。
 /// この文字列は kikyo-local の S3 API が起動完了したことを示す。
 /// コンテナは呼び出し側が保持し、Drop で削除する。
-async fn start_kikyo() -> (ContainerAsync<GenericImage>, String, u16) {
+async fn start_kikyo() -> (ContainerAsync<GenericImage>, u16) {
     let container = GenericImage::new("ghcr.io/shiguredo/kikyo-local", "latest")
         .with_exposed_port(9000.tcp())
         // S3 API の起動完了を示すログを待つ
@@ -72,17 +72,12 @@ async fn start_kikyo() -> (ContainerAsync<GenericImage>, String, u16) {
         .await
         .expect("kikyo-local コンテナの起動に成功すること");
 
-    let host = container
-        .get_host()
-        .await
-        .expect("コンテナのホスト名の取得に成功すること")
-        .to_string();
     let port = container
         .get_host_port_ipv4(9000)
         .await
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
-    (container, host, port)
+    (container, port)
 }
 
 /// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
@@ -96,13 +91,13 @@ fn now() -> std::time::SystemTime {
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
+/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
 /// - force_path_style: true (パススタイルでバケットを指定する)
-fn build_client(host: &str, port: u16) -> Client {
+fn build_client(port: u16) -> Client {
     let config = Config::builder()
         .region("us-east-1")
         .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
-        .endpoint(format!("http://{host}:{port}"))
+        .endpoint(format!("http://127.0.0.1:{port}"))
         // 仮想ホストスタイルではなくパススタイルを使う
         .force_path_style(true)
         .build()
@@ -206,8 +201,8 @@ async fn send<T>(
 /// - 削除後に ListBuckets でバケットが消えていることを確認できる
 #[tokio::test]
 async fn test_bucket_lifecycle() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-bucket-lifecycle";
 
     // バケットを作成する
@@ -290,8 +285,8 @@ async fn test_bucket_lifecycle() {
 /// - 削除後に GetObject で 404 が返る
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-object-crud";
     let key = "hello.txt";
     let body = b"Hello, S3!";
@@ -391,8 +386,8 @@ async fn test_object_put_get_head_delete() {
 /// - delimiter 指定で共通プレフィックス (CommonPrefixes) が返る
 #[tokio::test]
 async fn test_list_objects_v2() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-list-objects";
 
     // テスト用バケットを作成する
@@ -465,8 +460,8 @@ async fn test_list_objects_v2() {
 /// - コピー先を GetObject で取得するとコピー元と同じボディが得られる
 #[tokio::test]
 async fn test_copy_object() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
     let dst_key = "copied.txt";
@@ -545,8 +540,8 @@ async fn test_copy_object() {
 /// - 削除後に ListObjectsV2 でバケットが空になっていることを確認できる
 #[tokio::test]
 async fn test_delete_objects() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-delete-objects";
 
     // テスト用バケットを作成する
@@ -635,8 +630,8 @@ async fn test_delete_objects() {
 /// - GetObject で結合後のボディが正しく取得できる
 #[tokio::test]
 async fn test_multipart_upload() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-multipart";
     let key = "large.bin";
 
@@ -776,8 +771,8 @@ async fn test_multipart_upload() {
 /// - CompleteMultipartUpload のレスポンス XML に checksum が含まれる
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
 
@@ -910,8 +905,8 @@ async fn test_multipart_upload_with_checksum() {
 /// - 中断後に GetObject で 404 が返る (オブジェクトが作成されていない)
 #[tokio::test]
 async fn test_abort_multipart_upload() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
 
@@ -973,8 +968,8 @@ async fn test_abort_multipart_upload() {
 /// - パートが昇順で返ること
 #[tokio::test]
 async fn test_list_parts() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
 
@@ -1070,8 +1065,8 @@ async fn test_list_parts() {
 /// - AbortMultipartUpload 後に一覧が空になる
 #[tokio::test]
 async fn test_list_multipart_uploads() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-list-mpu";
 
     // テスト用バケットを作成する
@@ -1154,8 +1149,8 @@ async fn test_list_multipart_uploads() {
 /// - Suspended に変更すると Status が "Suspended" になる
 #[tokio::test]
 async fn test_bucket_versioning() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-versioning";
 
     // テスト用バケットを作成する
@@ -1219,8 +1214,8 @@ async fn test_bucket_versioning() {
 /// オブジェクトタグの設定・取得・削除のラウンドトリップを検証する
 #[tokio::test]
 async fn test_object_tagging() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-object-tagging";
 
     // テスト用バケットを作成する
@@ -1331,8 +1326,8 @@ async fn test_object_tagging() {
 /// - 削除後に Get するとエラーになる
 #[tokio::test]
 async fn test_bucket_lifecycle_configuration() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-lifecycle-config";
 
     // バケットを作成する
@@ -1424,8 +1419,8 @@ async fn test_bucket_lifecycle_configuration() {
 /// バケット暗号化設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_encryption() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-bucket-encryption";
 
     // テスト用バケットを作成する
@@ -1516,8 +1511,8 @@ async fn test_bucket_encryption() {
 /// バケット CORS 設定の Put → Get → Delete のラウンドトリップを検証する
 #[tokio::test]
 async fn test_bucket_cors() {
-    let (_container, host, port) = start_kikyo().await;
-    let client = build_client(&host, port);
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port);
     let bucket = "test-bucket-cors";
 
     // テスト用バケットを作成する
