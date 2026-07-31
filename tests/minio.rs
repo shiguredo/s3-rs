@@ -6,7 +6,7 @@
 //! ## テスト構成
 //!
 //! 各テストは独立した MinIO コンテナを起動するため、テスト間の状態汚染がない。
-//! コンテナはガードの Drop 時に明示削除する。
+//! コンテナはガードの Drop で `rm_blocking` により明示削除する。
 //!
 //! ## 既知の不具合
 //!
@@ -47,28 +47,6 @@ const SECRET_KEY: &str = "minioadmin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// コンテナランタイム向けに、指定 ID のコンテナを同期的に削除する。
-///
-/// `ContainerAsync` の Drop は tokio Runtime 内だと削除スレッドを join しないため、
-/// 連続テストで孤立コンテナが溜まり得る。ガードの Drop から明示的に掃除する。
-fn force_remove_container(id: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let _ = std::process::Command::new("container")
-            .args(["stop", id])
-            .output();
-        let _ = std::process::Command::new("container")
-            .args(["rm", id])
-            .output();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = std::process::Command::new("docker")
-            .args(["rm", "-f", id])
-            .output();
-    }
-}
-
 /// MinIO コンテナの生存期間をテスト中に保つためのガード。
 struct MinioGuard {
     container: Option<ContainerAsync<GenericImage>>,
@@ -79,9 +57,8 @@ struct MinioGuard {
 impl Drop for MinioGuard {
     fn drop(&mut self) {
         if let Some(container) = self.container.take() {
-            let id = container.id().to_string();
-            drop(container);
-            force_remove_container(&id);
+            // Runtime 内の Drop からでも deadlock せず削除完了を待つ
+            let _ = container.rm_blocking();
         }
     }
 }

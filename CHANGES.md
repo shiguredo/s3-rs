@@ -227,7 +227,7 @@
 
 ### misc
 
-- 統合テストのコンテナ管理を `testcontainers` から `shiguredo_container` に切り替える
+- 統合テストのコンテナ管理を `testcontainers` から `shiguredo_container` (`2026.1.0-canary.4`) に切り替え、削除は `rm_blocking` を使う
   - @voluntas
 - kikyo-local (`ghcr.io/shiguredo/kikyo-local`) を使った統合テストを追加する
   - @voluntas
