@@ -1,12 +1,12 @@
 //! RustFS を使った統合テスト
 //!
-//! testcontainers で RustFS コンテナを起動し、全 API のラウンドトリップを検証する。
-//! Docker が起動していない環境ではテストがスキップされる。
+//! `shiguredo_container` で RustFS コンテナを起動し、全 API のラウンドトリップを検証する。
+//! macOS では Apple container、Linux では Docker Engine が必要。
 //!
 //! ## テスト構成
 //!
 //! 各テストは独立した RustFS コンテナを起動するため、テスト間の状態汚染がない。
-//! コンテナはテスト終了時に自動的に破棄される。
+//! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
 //!
 //! ## 起動待機について
 //!
@@ -17,6 +17,9 @@
 //!
 //! - DeletePublicAccessBlock 後の GetPublicAccessBlock: 404 ではなく 500 が返る
 
+use shiguredo_container::core::IntoContainerPort;
+use shiguredo_container::core::wait::HttpWaitStrategy;
+use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
@@ -35,10 +38,6 @@ use shiguredo_s3::types::{
     Tag, Tagging,
 };
 use shiguredo_s3::{Client, Config, Credentials, S3Request, S3Response};
-use testcontainers::core::wait::HttpWaitStrategy;
-use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // -------------------------------------------------------
@@ -57,12 +56,13 @@ const SECRET_KEY: &str = "devadmin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// RustFS コンテナを起動して (コンテナ, ホストポート) を返す
+/// RustFS コンテナを起動して (コンテナ, ホストポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// /health エンドポイントが HTTP 200 を返すまで待機する。
 /// RustFS はログをファイル (/logs) に書き込むため、stdout/stderr では
 /// 起動完了を検知できないので HTTP ポーリングを使用する。
+/// コンテナは呼び出し側が保持し、Drop で削除する。
 ///
 /// ## 追加待機について
 /// ヘルスチェック通過直後は S3 API がまだ初期化中のことがあるため、
@@ -72,7 +72,9 @@ async fn start_rustfs() -> (ContainerAsync<GenericImage>, u16) {
         .with_exposed_port(9000.tcp())
         // /health が 200 を返すまでポーリングする
         .with_wait_for(WaitFor::http(
-            HttpWaitStrategy::new("/health").with_expected_status_code(200u16),
+            HttpWaitStrategy::new("/health")
+                .with_port(9000.tcp())
+                .with_expected_status_code(200_u16),
         ))
         // ヘルスチェック通過後も S3 API の初期化に時間がかかるため追加待機する
         .with_wait_for(WaitFor::seconds(2))
@@ -82,12 +84,12 @@ async fn start_rustfs() -> (ContainerAsync<GenericImage>, u16) {
         .with_env_var("RUSTFS_VOLUMES", "/data")
         .start()
         .await
-        .expect("failed to start RustFS container");
+        .expect("RustFS コンテナの起動に成功すること");
 
     let port = container
         .get_host_port_ipv4(9000)
         .await
-        .expect("failed to get host port");
+        .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
     (container, port)
 }
@@ -103,7 +105,7 @@ fn now() -> std::time::SystemTime {
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
+/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
 /// - force_path_style: true (RustFS はパススタイルが必要)
 fn build_client(port: u16) -> Client {
     let config = Config::builder()
@@ -113,7 +115,7 @@ fn build_client(port: u16) -> Client {
         // RustFS は仮想ホストスタイルに対応していないためパススタイルを使う
         .force_path_style(true)
         .build()
-        .expect("failed to build Config");
+        .expect("Config の構築に成功すること");
     Client::from_conf(config)
 }
 

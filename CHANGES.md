@@ -227,6 +227,8 @@
 
 ### misc
 
+- 統合テストのコンテナ管理を `testcontainers` から `shiguredo_container` (`2026.1.0-canary.4`) に切り替え、削除は `ContainerAsync` の Drop に任せる
+  - @voluntas
 - kikyo-local (`ghcr.io/shiguredo/kikyo-local`) を使った統合テストを追加する
   - @voluntas
 - proptest (PBT) のインフラを導入する (`pbt/` Cargo.toml、`prop_datetime` ラウンドトリップテスト)

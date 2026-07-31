@@ -1,13 +1,13 @@
 //! kikyo-local を使った統合テスト
 //!
-//! testcontainers で `ghcr.io/shiguredo/kikyo-local` コンテナを起動し、
+//! `shiguredo_container` で `ghcr.io/shiguredo/kikyo-local` コンテナを起動し、
 //! 対応 API のラウンドトリップを検証する。
-//! Docker が起動していない環境ではテストが失敗する。
+//! macOS では Apple container、Linux では Docker Engine が必要。
 //!
 //! ## テスト構成
 //!
 //! 各テストは独立した kikyo-local コンテナを起動するため、テスト間の状態汚染がない。
-//! コンテナはテスト終了時に自動的に破棄される。
+//! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
 //!
 //! ## kikyo-local の非対応 API
 //!
@@ -17,6 +17,8 @@
 //! - Public Access Block
 //! - ACL
 
+use shiguredo_container::core::IntoContainerPort;
+use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
@@ -31,9 +33,6 @@ use shiguredo_s3::types::{
     Tag, Tagging,
 };
 use shiguredo_s3::{Client, Config, Credentials, S3Request, S3Response};
-use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // -------------------------------------------------------
@@ -52,11 +51,12 @@ const SECRET_KEY: &str = "admin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// kikyo-local コンテナを起動して (コンテナ, ホストポート) を返す
+/// kikyo-local コンテナを起動して (コンテナ, ホストポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// "S3 compatible server started" というログが出力されるまで待機する。
 /// この文字列は kikyo-local の S3 API が起動完了したことを示す。
+/// コンテナは呼び出し側が保持し、Drop で削除する。
 async fn start_kikyo() -> (ContainerAsync<GenericImage>, u16) {
     let container = GenericImage::new("ghcr.io/shiguredo/kikyo-local", "latest")
         .with_exposed_port(9000.tcp())
@@ -70,12 +70,12 @@ async fn start_kikyo() -> (ContainerAsync<GenericImage>, u16) {
         .with_env_var("KIKYO_LOCAL_DATA_DIR", "/data")
         .start()
         .await
-        .expect("failed to start kikyo-local container");
+        .expect("kikyo-local コンテナの起動に成功すること");
 
     let port = container
         .get_host_port_ipv4(9000)
         .await
-        .expect("failed to get host port");
+        .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
     (container, port)
 }
@@ -91,7 +91,7 @@ fn now() -> std::time::SystemTime {
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
+/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
 /// - force_path_style: true (パススタイルでバケットを指定する)
 fn build_client(port: u16) -> Client {
     let config = Config::builder()
@@ -101,7 +101,7 @@ fn build_client(port: u16) -> Client {
         // 仮想ホストスタイルではなくパススタイルを使う
         .force_path_style(true)
         .build()
-        .expect("failed to build Config");
+        .expect("Config の構築に成功すること");
     Client::from_conf(config)
 }
 

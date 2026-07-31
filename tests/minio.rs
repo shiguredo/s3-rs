@@ -1,12 +1,12 @@
 //! MinIO を使った統合テスト
 //!
-//! testcontainers で MinIO コンテナを起動し、全 API のラウンドトリップを検証する。
-//! Docker が起動していない環境ではテストがスキップされる。
+//! `shiguredo_container` で MinIO コンテナを起動し、全 API のラウンドトリップを検証する。
+//! macOS では Apple container、Linux では Docker Engine が必要。
 //!
 //! ## テスト構成
 //!
 //! 各テストは独立した MinIO コンテナを起動するため、テスト間の状態汚染がない。
-//! コンテナはテスト終了時に自動的に破棄される。
+//! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
 //!
 //! ## 既知の不具合
 //!
@@ -14,6 +14,8 @@
 //! MalformedXML (400) を返す。aws-cli でも同じ結果になることを確認済み。
 //! 該当テストでは 400 が返ることを明示的に検証する。
 
+use shiguredo_container::core::IntoContainerPort;
+use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
@@ -29,9 +31,6 @@ use shiguredo_s3::types::{
     ServerSideEncryptionRule, Tag,
 };
 use shiguredo_s3::{Client, Config, Credentials, PresignedRequest, S3Request, S3Response};
-use testcontainers::core::{IntoContainerPort, WaitFor};
-use testcontainers::runners::AsyncRunner;
-use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // -------------------------------------------------------
@@ -48,11 +47,12 @@ const SECRET_KEY: &str = "minioadmin";
 // テスト用ヘルパー
 // -------------------------------------------------------
 
-/// MinIO コンテナを起動して (コンテナ, ホストポート) を返す
+/// MinIO コンテナを起動して (コンテナ, ホストポート) を返す。
 ///
 /// コンテナのポート 9000 をホストのランダムポートにマッピングし、
 /// "API:" というログが出力されるまで待機する。
 /// この文字列は MinIO の S3 API が起動完了したことを示す。
+/// コンテナは呼び出し側が保持し、Drop で削除する。
 async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
     let container = GenericImage::new("minio/minio", "latest")
         .with_exposed_port(9000.tcp())
@@ -61,15 +61,15 @@ async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
         .with_env_var("MINIO_ROOT_USER", ACCESS_KEY)
         .with_env_var("MINIO_ROOT_PASSWORD", SECRET_KEY)
         // MinIO をシングルノードのオブジェクトストレージとして起動する
-        .with_cmd(vec!["server", "/data"])
+        .with_cmd(["server", "/data"])
         .start()
         .await
-        .expect("failed to start MinIO container");
+        .expect("MinIO コンテナの起動に成功すること");
 
     let port = container
         .get_host_port_ipv4(9000)
         .await
-        .expect("failed to get host port");
+        .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
     (container, port)
 }
@@ -85,7 +85,7 @@ fn now() -> std::time::SystemTime {
 /// テスト用の Client を構築する
 ///
 /// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: コンテナのホストポートに接続する HTTP エンドポイント
+/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
 /// - force_path_style: true (MinIO はパススタイルが必要)
 fn build_client(port: u16) -> Client {
     let config = Config::builder()
@@ -95,7 +95,7 @@ fn build_client(port: u16) -> Client {
         // MinIO は仮想ホストスタイルに対応していないためパススタイルを使う
         .force_path_style(true)
         .build()
-        .expect("failed to build Config");
+        .expect("Config の構築に成功すること");
     Client::from_conf(config)
 }
 
