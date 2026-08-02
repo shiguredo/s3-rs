@@ -4,11 +4,23 @@
 - Created: 2026-07-12
 - Model: Composer 2.5 Fast
 - Branch: feature/refactor-sse-c-header-construction-duplication
-- Polished: 2026-07-29
+- Polished: 2026-08-02
 
 ## 目的
 
 SSE-C (Server-Side Encryption with Customer-provided keys) のヘッダー構築ロジックが 9 ファイル 17 箇所で重複している。共通ヘルパー関数として抽出する。
+
+### 参照仕様
+
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
+
+> x-amz-server-side-encryption-customer-algorithm: Specifies the algorithm to use to when encrypting the object (for example, AES256).
+> x-amz-server-side-encryption-customer-key: Specifies the customer-provided encryption key for Amazon S3 to use in encrypting data.
+> x-amz-server-side-encryption-customer-key-MD5: Specifies the 128-bit MD5 digest of the encryption key according to RFC 1321.
+
+- https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
+
+> x-amz-copy-source-server-side-encryption-customer-algorithm: Specifies the algorithm to use to when decrypting the source object (for example, AES256).
 
 ## 優先度根拠
 
@@ -57,11 +69,13 @@ pub(crate) fn add_sse_c_headers(
     sse_customer_algorithm: Option<&str>,
     sse_customer_key: Option<&str>,
     computed_key_md5: &mut Option<String>,
+    copy_source: bool,
 ) -> Result<(), Error>
 ```
 
-- `computed_key_md5` は呼び出し側で宣言した `Option<String>` を `&mut` で渡す（MD5 計算結果のライフタイムを呼び出し側が管理する。関数が `String` を返すと vec 内の参照がダングリングするため）
-- コピー元 SSE-C 用にヘッダー名のプレフィックスを引数で受け取るか、`copy_source: bool` フラグで切り替える（ヘッダー名は静的文字列で選択する。動的な文字列生成は避ける）
+- `computed_key_md5` は呼び出し側で宣言した `Option<String>` を `&mut` で渡す（MD5 計算結果のライフタイムを呼び出し側が管理する。関数が `String` を返すと vec 内の参照がダングリングするため。タプル返し等の代替案も検討したが、vec 内に `&str` 参照を push する既存パターンとの整合性から `&mut Option<String>` が最も自然である）
+- コピー元 SSE-C 用には `copy_source: bool` フラグで切り替える（ヘッダー名は静的文字列で選択する。動的な文字列生成は避ける）。`copy_source: true` の場合は `x-amz-copy-source-server-side-encryption-customer-*`、`false` の場合は `x-amz-server-side-encryption-customer-*` を使用する
+- 呼び出し側では `self.sse_customer_algorithm.as_deref()` のように `Option<String>` から `Option<&str>` に変換して渡す
 
 ## 完了条件
 
