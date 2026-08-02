@@ -4,7 +4,7 @@
 - Created: 2026-07-31
 - Completed: {YYYY-MM-DD}
 - Branch: feature/add-list-objects-v1
-- Polished: {YYYY-MM-DD}
+- Polished: 2026-08-02
 - Model: GPT-5
 
 ## 目的
@@ -17,19 +17,41 @@ src/api/ には ListObjectsV2 は存在するが、ListObjects v1 に対応す�
 
 ## 設計方針
 
-- aws-sdk-rust の ListObjectsInput / ListObjectsOutput と同じフィールド名・型を採用する。
-- marker、delimiter、encoding_type、max_keys、prefix、expected_bucket_owner、request_payer、optional_object_attributes を仕様どおりに扱う。
-- ListBucketResult の Contents、CommonPrefixes、NextMarker、EncodingType、request charged を既存の共通 XML パース方針で処理する。
-- 実際の S3 互換サーバーを使う統合テストを追加する。
+- aws-sdk-rust の ListObjectsInput / ListObjectsOutput と同じフィールド名・型を採用する
+- 入力フィールド: `bucket` (必須)、`marker`、`delimiter`、`encoding_type`、`max_keys`、`prefix` を仕様どおりに扱う。`expected_bucket_owner` / `request_payer` は pending issue 0057 が全 API 横断で管理しており、`optional_object_attributes` は issue 0126 が管理しているため、本 issue のスコープ外とする
+- ListObjects v1 と v2 の差分:
+  - 入力: v1 は `marker` を使う（v2 の `continuation_token` / `start_after` に対応）。v1 は `list-type=2` クエリパラメータを送らない。v1 は `fetch_owner` パラメータを持たない
+  - 出力: v1 は `Marker` / `NextMarker` を持つ（v2 の `ContinuationToken` / `NextContinuationToken` / `KeyCount` / `StartAfter` に対応しない）
+- ListObjectsOutput のフィールド: `is_truncated`, `marker`, `next_marker`, `contents` (`Vec<Object>`), `name`, `prefix`, `delimiter`, `max_keys`, `common_prefixes` (`Vec<CommonPrefix>`), `encoding_type`, `request_charged`
+- ListBucketResult の Contents、CommonPrefixes、NextMarker、EncodingType を既存の共通 XML パース方針で処理する。`request_charged` は `x-amz-request-charged` レスポンスヘッダーから取得する（XML 要素ではない）
+- 既存の `src/api/list_objects_v2.rs` の builder パターン（`build_request` / `parse_response` の分離、`required()` による必須検証、`build_signed_request` の呼び出し）を踏襲する。XML パースヘルパー（`extract_xml_objects` / `extract_xml_common_prefixes`）は list_objects_v2.rs のプライベート関数であるため、共通化または複製の判断は実装時に行う
+- 実際の S3 互換サーバーを使う統合テストを追加する
+
+### 変更対象ファイル
+
+- `src/api/list_objects_v1.rs` (新規作成)
+- `src/api/mod.rs` (モジュール宣言 + FluentBuilder の pub use 追加)
+- `src/types.rs` (`ListObjectsOutput` 追加)
+- `src/client.rs` (`list_objects()` メソッド追加)
+- `src/lib.rs` (`ListObjectsOutput` の公開)
+- `tests/test_list_objects_v1.rs` (新規作成)
 
 ## 完了条件
 
-- client.list_objects() からリクエストを構築できる。
-- ListObjects v1 のレスポンスを aws-sdk-rust 互換の output としてパースできる。
-- ページングに必要な NextMarker と全ての入力項目を検証する統合テストが通る。
+- `client.list_objects()` からリクエストを構築できる
+- ListObjects v1 のレスポンスを aws-sdk-rust 互換の `ListObjectsOutput` としてパースできる
+- ページングに必要な `NextMarker` と本 issue のスコープ内の入力項目（`marker`、`delimiter`、`encoding_type`、`max_keys`、`prefix`）を検証する統合テストが通る
+- 既存のテストが全て通過すること
+- `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
 
 ## AWS S3 API Reference
 
 - ListObjects: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html
 
 > Returns some or all (up to 1,000) of the objects in a bucket.
+
+## 他 issue との依存関係
+
+- 0057（pending: expected_bucket_owner / request_payer）は全 API 横断で管理。本 issue では対応しない
+- 0126（operation specific input fields）は `optional_object_attributes` を ListObjectsV2 / ListObjectVersions に追加する。本 issue では対応しない
+- 0129（remaining output fields）は `ListObjectsV2Output` の `request_charged` 等を追加する。本 issue の `ListObjectsOutput.request_charged` は独立に追加する
