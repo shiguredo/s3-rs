@@ -8,6 +8,7 @@
 //!
 //! 各テストは独立した kikyo-local コンテナを起動するため、テスト間の状態汚染がない。
 //! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
+//! テストプロセスのクラッシュ時は `watchdog` feature が孤立コンテナを掃除する（macOS のみ）。
 //!
 //! ## kikyo-local の非対応 API
 //!
@@ -17,9 +18,12 @@
 //! - Public Access Block
 //! - ACL
 
+use std::time::Duration;
+
+mod helpers;
+use helpers::*;
 use shiguredo_container::core::IntoContainerPort;
 use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
-use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketCorsFluentBuilder, DeleteBucketEncryptionFluentBuilder,
     DeleteObjectTaggingFluentBuilder, GetBucketCorsFluentBuilder, GetBucketVersioningFluentBuilder,
@@ -32,8 +36,6 @@ use shiguredo_s3::types::{
     ServerSideEncryptionByDefault, ServerSideEncryptionConfiguration, ServerSideEncryptionRule,
     Tag, Tagging,
 };
-use shiguredo_s3::{Client, Config, Credentials, S3Request, S3Response};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 // -------------------------------------------------------
 // テスト用定数
@@ -64,6 +66,8 @@ async fn start_kikyo() -> (ContainerAsync<GenericImage>, u16) {
         .with_wait_for(WaitFor::message_on_either_std(
             "S3 compatible server started",
         ))
+        // 起動タイムアウトを 120 秒に設定する (イメージ pull を含む)
+        .with_startup_timeout(Duration::from_secs(120))
         .with_env_var("KIKYO_LOCAL_ACCESS_KEY", ACCESS_KEY)
         .with_env_var("KIKYO_LOCAL_SECRET_KEY", SECRET_KEY)
         // コンテナ内のデータディレクトリを明示する
@@ -78,113 +82,6 @@ async fn start_kikyo() -> (ContainerAsync<GenericImage>, u16) {
         .expect("コンテナの 9000 ポート番号の取得に成功すること");
 
     (container, port)
-}
-
-/// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
-///
-/// shiguredo_s3 は Sans I/O のため `build_request` / `presigned` に
-/// 現在時刻を引数で渡す。テスト側で副作用を 1 箇所に閉じ込める目的。
-fn now() -> std::time::SystemTime {
-    std::time::SystemTime::now()
-}
-
-/// テスト用の Client を構築する
-///
-/// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
-/// - force_path_style: true (パススタイルでバケットを指定する)
-fn build_client(port: u16) -> Client {
-    let config = Config::builder()
-        .region("us-east-1")
-        .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
-        .endpoint(format!("http://127.0.0.1:{port}"))
-        // 仮想ホストスタイルではなくパススタイルを使う
-        .force_path_style(true)
-        .build()
-        .expect("Config の構築に成功すること");
-    Client::from_conf(config)
-}
-
-/// S3Request を HTTP/1.1 で送信して S3Response を返す
-///
-/// shiguredo_http11 の ResponseDecoder を使って TCP ストリームからレスポンスを読む。
-/// HEAD レスポンスのようにボディを持たないレスポンスは
-/// `ResponseDecoder::set_request_method` でリクエストメソッドを通知する。
-async fn execute(s3_request: S3Request) -> S3Response {
-    let addr = format!("{}:{}", s3_request.host, s3_request.port);
-    let tcp = tokio::net::TcpStream::connect(&addr)
-        .await
-        .expect("failed to connect");
-
-    let encoded = encode_request(&s3_request);
-    let (mut reader, mut writer) = tokio::io::split(tcp);
-    writer
-        .write_all(&encoded)
-        .await
-        .expect("failed to write request");
-
-    let mut decoder = ResponseDecoder::new();
-    decoder.set_request_method(&s3_request.method);
-
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buf).await.expect("failed to read");
-        if n == 0 {
-            // サーバーが接続を閉じた場合は EOF を通知してパースを試みる
-            decoder.mark_eof();
-            if let Some(response) = decoder.decode().expect("decode error") {
-                return into_s3_response(response);
-            }
-            panic!("unexpected EOF");
-        }
-        decoder.feed(&buf[..n]).expect("feed error");
-        if let Some(response) = decoder.decode().expect("decode error") {
-            return into_s3_response(response);
-        }
-    }
-}
-
-/// S3Request を shiguredo_http11 の Request に変換してエンコードする
-fn encode_request(s3_request: &S3Request) -> Vec<u8> {
-    let method = Method::new(&s3_request.method).expect("failed to parse method");
-    let mut request =
-        shiguredo_http11::Request::new(method, &s3_request.uri).expect("failed to build request");
-    for (name, value) in &s3_request.headers {
-        let header_name = HeaderName::new(name).expect("failed to parse header name");
-        request
-            .add_header(header_name, value)
-            .expect("failed to add header");
-    }
-    if !s3_request.body.is_empty() {
-        request.set_body(s3_request.body.clone());
-    }
-    request.encode().expect("failed to encode request")
-}
-
-/// shiguredo_http11 の Response を S3Response に変換する
-fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
-    let headers: Vec<(String, String)> = response
-        .headers()
-        .iter()
-        .map(|(name, value)| (name.to_string(), value.clone()))
-        .collect();
-    S3Response {
-        status_code: response.status_code(),
-        headers,
-        body: response.body_bytes().unwrap_or_default().to_vec(),
-    }
-}
-
-/// build_request + execute + parse_response をまとめた便利関数
-///
-/// レスポンスのパースに失敗した場合はパニックする。
-/// エラーレスポンスを直接検査したい場合は execute() を直接使うこと。
-async fn send<T>(
-    request: S3Request,
-    parse: impl FnOnce(&S3Response) -> Result<T, shiguredo_s3::Error>,
-) -> T {
-    let response = execute(request).await;
-    parse(&response).expect("failed to parse response")
 }
 
 // -------------------------------------------------------
@@ -202,7 +99,7 @@ async fn send<T>(
 #[tokio::test]
 async fn test_bucket_lifecycle() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-lifecycle";
 
     // バケットを作成する
@@ -286,7 +183,7 @@ async fn test_bucket_lifecycle() {
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-object-crud";
     let key = "hello.txt";
     let body = b"Hello, S3!";
@@ -387,7 +284,7 @@ async fn test_object_put_get_head_delete() {
 #[tokio::test]
 async fn test_list_objects_v2() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-objects";
 
     // テスト用バケットを作成する
@@ -461,7 +358,7 @@ async fn test_list_objects_v2() {
 #[tokio::test]
 async fn test_copy_object() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
     let dst_key = "copied.txt";
@@ -541,7 +438,7 @@ async fn test_copy_object() {
 #[tokio::test]
 async fn test_delete_objects() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-delete-objects";
 
     // テスト用バケットを作成する
@@ -631,7 +528,7 @@ async fn test_delete_objects() {
 #[tokio::test]
 async fn test_multipart_upload() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-multipart";
     let key = "large.bin";
 
@@ -772,7 +669,7 @@ async fn test_multipart_upload() {
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
 
@@ -906,7 +803,7 @@ async fn test_multipart_upload_with_checksum() {
 #[tokio::test]
 async fn test_abort_multipart_upload() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
 
@@ -969,7 +866,7 @@ async fn test_abort_multipart_upload() {
 #[tokio::test]
 async fn test_list_parts() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
 
@@ -1066,7 +963,7 @@ async fn test_list_parts() {
 #[tokio::test]
 async fn test_list_multipart_uploads() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-mpu";
 
     // テスト用バケットを作成する
@@ -1150,7 +1047,7 @@ async fn test_list_multipart_uploads() {
 #[tokio::test]
 async fn test_bucket_versioning() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-versioning";
 
     // テスト用バケットを作成する
@@ -1215,7 +1112,7 @@ async fn test_bucket_versioning() {
 #[tokio::test]
 async fn test_object_tagging() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-object-tagging";
 
     // テスト用バケットを作成する
@@ -1327,7 +1224,7 @@ async fn test_object_tagging() {
 #[tokio::test]
 async fn test_bucket_lifecycle_configuration() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-lifecycle-config";
 
     // バケットを作成する
@@ -1420,7 +1317,7 @@ async fn test_bucket_lifecycle_configuration() {
 #[tokio::test]
 async fn test_bucket_encryption() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-encryption";
 
     // テスト用バケットを作成する
@@ -1512,7 +1409,7 @@ async fn test_bucket_encryption() {
 #[tokio::test]
 async fn test_bucket_cors() {
     let (_container, port) = start_kikyo().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-cors";
 
     // テスト用バケットを作成する

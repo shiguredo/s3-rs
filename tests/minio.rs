@@ -7,6 +7,7 @@
 //!
 //! 各テストは独立した MinIO コンテナを起動するため、テスト間の状態汚染がない。
 //! コンテナは `ContainerAsync` の Drop で削除する（Runtime 内でも最大 5 秒待ち）。
+//! テストプロセスのクラッシュ時は `watchdog` feature が孤立コンテナを掃除する（macOS のみ）。
 //!
 //! ## 既知の不具合
 //!
@@ -14,9 +15,12 @@
 //! MalformedXML (400) を返す。aws-cli でも同じ結果になることを確認済み。
 //! 該当テストでは 400 が返ることを明示的に検証する。
 
+use std::time::Duration;
+
+mod helpers;
+use helpers::*;
 use shiguredo_container::core::IntoContainerPort;
 use shiguredo_container::{AsyncRunner, ContainerAsync, GenericImage, ImageExt, WaitFor};
-use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
 use shiguredo_s3::api::{
     DeleteBucketLifecycleFluentBuilder, DeleteBucketPolicyFluentBuilder,
     DeleteBucketTaggingFluentBuilder, GetBucketEncryptionFluentBuilder,
@@ -30,8 +34,7 @@ use shiguredo_s3::types::{
     CompletedMultipartUpload, CompletedPart, ObjectIdentifier, ServerSideEncryptionByDefault,
     ServerSideEncryptionRule, Tag,
 };
-use shiguredo_s3::{Client, Config, Credentials, PresignedRequest, S3Request, S3Response};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use shiguredo_s3::{PresignedRequest, S3Request, S3Response};
 
 // -------------------------------------------------------
 // テスト用定数
@@ -58,6 +61,8 @@ async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
         .with_exposed_port(9000.tcp())
         // MinIO が S3 API の起動完了を示すログを待つ
         .with_wait_for(WaitFor::message_on_either_std("API:"))
+        // 起動タイムアウトを 120 秒に設定する (イメージ pull を含む)
+        .with_startup_timeout(Duration::from_secs(120))
         .with_env_var("MINIO_ROOT_USER", ACCESS_KEY)
         .with_env_var("MINIO_ROOT_PASSWORD", SECRET_KEY)
         // MinIO をシングルノードのオブジェクトストレージとして起動する
@@ -74,105 +79,10 @@ async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
     (container, port)
 }
 
-/// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
-///
-/// shiguredo_s3 は Sans I/O のため `build_request` / `presigned` に
-/// 現在時刻を引数で渡す。テスト側で副作用を 1 箇所に閉じ込める目的。
-fn now() -> std::time::SystemTime {
-    std::time::SystemTime::now()
-}
-
-/// テスト用の Client を構築する
-///
-/// - region: us-east-1 (CreateBucket で LocationConstraint を省略できる)
-/// - endpoint: 127.0.0.1 のホストポートに接続する HTTP エンドポイント
-/// - force_path_style: true (MinIO はパススタイルが必要)
-fn build_client(port: u16) -> Client {
-    let config = Config::builder()
-        .region("us-east-1")
-        .credentials_provider(Credentials::new(ACCESS_KEY, SECRET_KEY, None, None, "test"))
-        .endpoint(format!("http://127.0.0.1:{port}"))
-        // MinIO は仮想ホストスタイルに対応していないためパススタイルを使う
-        .force_path_style(true)
-        .build()
-        .expect("Config の構築に成功すること");
-    Client::from_conf(config)
-}
-
-/// S3Request を HTTP/1.1 で送信して S3Response を返す
-///
-/// shiguredo_http11 の ResponseDecoder を使って TCP ストリームからレスポンスを読む。
-/// HEAD レスポンスのようにボディを持たないレスポンスは
-/// `ResponseDecoder::set_request_method` でリクエストメソッドを通知する。
-async fn execute(s3_request: S3Request) -> S3Response {
-    let addr = format!("{}:{}", s3_request.host, s3_request.port);
-    let tcp = tokio::net::TcpStream::connect(&addr)
-        .await
-        .expect("failed to connect");
-
-    let encoded = encode_request(&s3_request);
-    let (mut reader, mut writer) = tokio::io::split(tcp);
-    writer
-        .write_all(&encoded)
-        .await
-        .expect("failed to write request");
-
-    let mut decoder = ResponseDecoder::new();
-    decoder.set_request_method(&s3_request.method);
-
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buf).await.expect("failed to read");
-        if n == 0 {
-            // サーバーが接続を閉じた場合は EOF を通知してパースを試みる
-            decoder.mark_eof();
-            if let Some(response) = decoder.decode().expect("decode error") {
-                return into_s3_response(response);
-            }
-            panic!("unexpected EOF");
-        }
-        decoder.feed(&buf[..n]).expect("feed error");
-        if let Some(response) = decoder.decode().expect("decode error") {
-            return into_s3_response(response);
-        }
-    }
-}
-
-/// S3Request を shiguredo_http11 の Request に変換してエンコードする
-fn encode_request(s3_request: &S3Request) -> Vec<u8> {
-    let method = Method::new(&s3_request.method).expect("failed to parse method");
-    let mut request =
-        shiguredo_http11::Request::new(method, &s3_request.uri).expect("failed to build request");
-    for (name, value) in &s3_request.headers {
-        let header_name = HeaderName::new(name).expect("failed to parse header name");
-        request
-            .add_header(header_name, value)
-            .expect("failed to add header");
-    }
-    if !s3_request.body.is_empty() {
-        request.set_body(s3_request.body.clone());
-    }
-    request.encode().expect("failed to encode request")
-}
-
-/// shiguredo_http11 の Response を S3Response に変換する
-fn into_s3_response(response: shiguredo_http11::Response) -> S3Response {
-    let headers: Vec<(String, String)> = response
-        .headers()
-        .iter()
-        .map(|(name, value)| (name.to_string(), value.clone()))
-        .collect();
-    S3Response {
-        status_code: response.status_code(),
-        headers,
-        body: response.body_bytes().unwrap_or_default().to_vec(),
-    }
-}
-
 /// PresignedRequest を HTTP/1.1 で送信して S3Response を返す
 ///
-/// presigned URL をパースして host / port / path+query を抽出し、
-/// 署名なしの HTTP リクエストとして送信する。
+/// presigned URL をパースして S3Request に変換し、共通の execute() で送信する。
+/// presigned リクエストは署名済みのため、そのままの method / uri / headers を使う。
 async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
     // "http://127.0.0.1:PORT/path?query" をパースする
     let url = &presigned.url;
@@ -183,67 +93,28 @@ async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
     let (authority, path_and_query) = without_scheme
         .split_once('/')
         .expect("presigned URL must have path");
+    let (host, port) = authority
+        .rsplit_once(':')
+        .expect("presigned URL must have host:port");
     let uri = format!("/{path_and_query}");
 
-    let tcp = tokio::net::TcpStream::connect(authority)
-        .await
-        .expect("failed to connect for presigned request");
+    // Host ヘッダーを presigned ヘッダーの先頭に追加する
+    // (execute は S3Request の headers をそのまま送信する)
+    let mut headers = vec![("host".to_string(), authority.to_string())];
+    headers.extend(presigned.headers.iter().cloned());
 
-    let method = Method::new(&presigned.method).expect("failed to parse presigned method");
-    let mut request =
-        shiguredo_http11::Request::new(method, &uri).expect("failed to build presigned request");
-    request
-        .add_header("host", authority)
-        .expect("failed to add host header");
-    for (name, value) in &presigned.headers {
-        let header_name = HeaderName::new(name).expect("failed to parse presigned header name");
-        request
-            .add_header(header_name, value)
-            .expect("failed to add presigned header");
-    }
-    if !presigned.body.is_empty() {
-        request.set_body(presigned.body.clone());
-    }
-    let encoded = request
-        .encode()
-        .expect("failed to encode presigned request");
-
-    let (mut reader, mut writer) = tokio::io::split(tcp);
-    writer
-        .write_all(&encoded)
-        .await
-        .expect("failed to write presigned request");
-
-    let mut decoder = ResponseDecoder::new();
-    decoder.set_request_method(&presigned.method);
-
-    let mut buf = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buf).await.expect("failed to read");
-        if n == 0 {
-            decoder.mark_eof();
-            if let Some(response) = decoder.decode().expect("decode error") {
-                return into_s3_response(response);
-            }
-            panic!("unexpected EOF");
-        }
-        decoder.feed(&buf[..n]).expect("feed error");
-        if let Some(response) = decoder.decode().expect("decode error") {
-            return into_s3_response(response);
-        }
-    }
-}
-
-/// build_request + execute + parse_response をまとめた便利関数
-///
-/// レスポンスのパースに失敗した場合はパニックする。
-/// エラーレスポンスを直接検査したい場合は execute() を直接使うこと。
-async fn send<T>(
-    request: S3Request,
-    parse: impl FnOnce(&S3Response) -> Result<T, shiguredo_s3::Error>,
-) -> T {
-    let response = execute(request).await;
-    parse(&response).expect("failed to parse response")
+    let request = S3Request {
+        method: presigned.method.clone(),
+        uri,
+        headers,
+        body: presigned.body.clone(),
+        host: host.to_string(),
+        port: port.parse().expect("presigned port must be a number"),
+        https: false,
+        ignore_cert_check: false,
+        expect_no_body: false,
+    };
+    execute(request).await
 }
 
 // -------------------------------------------------------
@@ -257,7 +128,7 @@ async fn send<T>(
 #[tokio::test]
 async fn test_bucket_lifecycle() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-lifecycle";
 
     // テスト用バケットを作成する
@@ -356,7 +227,7 @@ async fn test_bucket_lifecycle() {
 #[tokio::test]
 async fn test_object_put_get_head_delete() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-object-crud";
     let key = "hello.txt";
     let body = b"Hello, S3!";
@@ -457,7 +328,7 @@ async fn test_object_put_get_head_delete() {
 #[tokio::test]
 async fn test_list_objects_v2() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-objects";
 
     // テスト用バケットを作成する
@@ -531,7 +402,7 @@ async fn test_list_objects_v2() {
 #[tokio::test]
 async fn test_copy_object() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-copy-object";
     let src_key = "original.txt";
     let dst_key = "copied.txt";
@@ -611,7 +482,7 @@ async fn test_copy_object() {
 #[tokio::test]
 async fn test_delete_objects() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-delete-objects";
 
     // テスト用バケットを作成する
@@ -701,7 +572,7 @@ async fn test_delete_objects() {
 #[tokio::test]
 async fn test_multipart_upload() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-multipart";
     let key = "large.bin";
 
@@ -842,7 +713,7 @@ async fn test_multipart_upload() {
 #[tokio::test]
 async fn test_multipart_upload_with_checksum() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-mpu-checksum";
     let key = "checksum.bin";
 
@@ -976,7 +847,7 @@ async fn test_multipart_upload_with_checksum() {
 #[tokio::test]
 async fn test_abort_multipart_upload() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-abort-multipart";
     let key = "aborted.bin";
 
@@ -1039,7 +910,7 @@ async fn test_abort_multipart_upload() {
 #[tokio::test]
 async fn test_list_parts() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-parts";
     let key = "multipart.bin";
 
@@ -1136,7 +1007,7 @@ async fn test_list_parts() {
 #[tokio::test]
 async fn test_list_multipart_uploads() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-mpu";
 
     // テスト用バケットを作成する
@@ -1222,7 +1093,7 @@ async fn test_list_multipart_uploads() {
 #[tokio::test]
 async fn test_bucket_versioning() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-versioning";
 
     // テスト用バケットを作成する
@@ -1295,7 +1166,7 @@ async fn test_bucket_versioning() {
 #[tokio::test]
 async fn test_bucket_tagging() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-tagging";
 
     // テスト用バケットを作成する
@@ -1386,7 +1257,7 @@ async fn test_bucket_tagging() {
 #[tokio::test]
 async fn test_presigned_put_get_head_delete() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-presigned-crud";
     let key = "presigned.txt";
     let body = b"Hello, Presigned!";
@@ -1478,7 +1349,7 @@ async fn test_presigned_put_get_head_delete() {
 #[tokio::test]
 async fn test_presigned_multipart_upload() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-presigned-mpu";
     let key = "presigned-multipart.bin";
 
@@ -1619,7 +1490,7 @@ async fn test_presigned_multipart_upload() {
 #[tokio::test]
 async fn test_presigned_expires_validation() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-presigned-expires";
 
     // テスト用バケットを作成する
@@ -1675,7 +1546,7 @@ async fn test_presigned_expires_validation() {
 #[tokio::test]
 async fn test_presigned_abort_multipart_upload() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-presigned-abort";
     let key = "presigned-abort.bin";
 
@@ -1742,7 +1613,7 @@ async fn test_presigned_abort_multipart_upload() {
 #[tokio::test]
 async fn test_public_access_block_not_supported() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-public-access-block";
 
     // テスト用バケットを作成する
@@ -1787,7 +1658,7 @@ async fn test_public_access_block_not_supported() {
 #[tokio::test]
 async fn test_bucket_policy() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-policy";
 
     // テスト用バケットを作成する
@@ -1853,7 +1724,7 @@ async fn test_bucket_policy() {
 #[tokio::test]
 async fn test_conditional_headers_etag() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-conditional-etag";
     let key = "cond.txt";
 
@@ -1936,7 +1807,7 @@ async fn test_conditional_headers_etag() {
 #[tokio::test]
 async fn test_conditional_headers_date() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-conditional-date";
     let key = "cond-date.txt";
 
@@ -2000,7 +1871,7 @@ async fn test_conditional_headers_date() {
 #[tokio::test]
 async fn test_head_object_conditional_headers() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-head-conditional";
     let key = "head-cond.txt";
 
@@ -2061,7 +1932,7 @@ async fn test_head_object_conditional_headers() {
 #[tokio::test]
 async fn test_range_request() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-range";
     let key = "range.txt";
     let body = b"0123456789ABCDEF";
@@ -2123,7 +1994,7 @@ async fn test_range_request() {
 #[tokio::test]
 async fn test_custom_metadata() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-metadata";
     let key = "meta.txt";
 
@@ -2200,7 +2071,7 @@ async fn test_custom_metadata() {
 #[tokio::test]
 async fn test_system_metadata() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-sys-metadata";
     let key = "sys-meta.txt";
 
@@ -2260,7 +2131,7 @@ async fn test_system_metadata() {
 #[tokio::test]
 async fn test_copy_object_metadata_replace() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-copy-meta-replace";
     let src_key = "original.txt";
     let dst_key = "replaced.txt";
@@ -2347,7 +2218,7 @@ async fn test_copy_object_metadata_replace() {
 #[tokio::test]
 async fn test_list_objects_v2_pagination() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-pagination";
 
     let request = client
@@ -2445,7 +2316,7 @@ async fn test_list_objects_v2_pagination() {
 #[tokio::test]
 async fn test_list_objects_v2_start_after() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-start-after";
 
     let request = client
@@ -2504,7 +2375,7 @@ async fn test_list_objects_v2_start_after() {
 #[tokio::test]
 async fn test_versioned_object_operations() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-versioned-ops";
     let key = "versioned.txt";
 
@@ -2654,7 +2525,7 @@ async fn test_versioned_object_operations() {
 #[tokio::test]
 async fn test_checksum_algorithm() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-checksum-algo";
 
     let request = client
@@ -2740,7 +2611,7 @@ async fn test_checksum_algorithm() {
 #[tokio::test]
 async fn test_list_multipart_uploads_filter_params() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-mpu-filter";
 
     let request = client
@@ -2816,7 +2687,7 @@ async fn test_list_multipart_uploads_filter_params() {
 #[tokio::test]
 async fn test_list_parts_pagination() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-parts-page";
     let key = "parts-page.bin";
 
@@ -2916,7 +2787,7 @@ async fn test_list_parts_pagination() {
 #[tokio::test]
 async fn test_put_object_acl() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-put-acl";
     let key = "acl.txt";
 
@@ -2969,7 +2840,7 @@ async fn test_put_object_acl() {
 #[tokio::test]
 async fn test_put_object_storage_class() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-storage-class";
     let key = "standard.txt";
 
@@ -3046,7 +2917,7 @@ async fn test_put_object_storage_class() {
 #[tokio::test]
 async fn test_object_tagging() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-object-tagging";
     let key = "tagged-object.txt";
 
@@ -3155,7 +3026,7 @@ async fn test_object_tagging() {
 #[tokio::test]
 async fn test_upload_part_copy() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-upload-part-copy";
     let src_key = "source.txt";
     let dst_key = "destination.txt";
@@ -3266,7 +3137,7 @@ async fn test_upload_part_copy() {
 #[tokio::test]
 async fn test_list_object_versions() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-list-object-versions";
     let key = "versioned.txt";
 
@@ -3360,7 +3231,7 @@ async fn test_list_object_versions() {
 #[tokio::test]
 async fn test_bucket_cors_not_supported() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-cors";
 
     // テスト用バケットを作成する
@@ -3404,7 +3275,7 @@ async fn test_bucket_cors_not_supported() {
 #[tokio::test]
 async fn test_bucket_encryption() {
     let (_container, port) = start_minio().await;
-    let client = build_client(port);
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
     let bucket = "test-bucket-encryption";
 
     // テスト用バケットを作成する

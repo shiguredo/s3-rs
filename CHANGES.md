@@ -251,3 +251,9 @@
   - @voluntas
 - プロジェクト規約準拠の修正: `#[allow]` を `#[expect]` に変更、`compile_error!` を英語化、CHANGES.md の種別順序を整理、解決済み issue 参照 TODO を削除、CI clippy に `--all-targets` を追加、`shiguredo_http11` のバージョン指定を `"2026.6"` に修正、`docs/AWS_SDK_RUST.md` の未使用 `(*)` 凡例を削除
   - @voluntas
+- `shiguredo_container` を `2026.1.0-canary.4` から `2026.1.0-canary.7` に更新し、`watchdog` feature (テストプロセスクラッシュ時の孤立コンテナ掃除、macOS のみ) を有効化する
+  - @voluntas
+- 統合テストのコンテナ起動に `with_startup_timeout` (120 秒) を設定し、イメージ pull を含む起動を安定化する
+  - @voluntas
+- 統合テスト間で重複していた HTTP/1.1 送信層と Client 構築ヘルパー (`now` / `build_client` / `execute` / `send` 等) を `tests/helpers/` に集約する
+  - @voluntas
