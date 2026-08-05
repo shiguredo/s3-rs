@@ -36,7 +36,7 @@ shiguredo_http11 = "2026.6"
 # macOS では Apple container、Linux では Docker Engine API を利用する
 # - http_wait_plain: RustFS の WaitFor::http に必要
 # - watchdog: テストプロセスのクラッシュ (SIGKILL 含む) 時に孤立コンテナを掃除する (macOS のみ)
-shiguredo_container = { version = "2026.1.0-canary.7", features = [
+shiguredo_container = { version = "2026.1.0-canary.8", features = [
   "http_wait_plain",
   "watchdog",
 ] }
