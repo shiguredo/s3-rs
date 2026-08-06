@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-12
+- Completed: 2026-08-06
 - Model: Composer 2.5 Fast
 - Branch: feature/refactor-types-rs-split
 - Polished: 2026-08-02
@@ -50,13 +51,15 @@
 
 ## 解決方法
 
-1. `src/types/` ディレクトリを作成する
-2. `src/types/output.rs` に出力型を移動する
-3. `src/types/model.rs` に入力・設定・Builder 型を移動する
-4. `src/types/enums.rs` に enum 型を移動する
-5. `src/types/mod.rs` を `pub use` の再エクスポートと `validate_imf_fixdate` のみに縮小する
-6. `lib.rs` の `mod types;` 宣言がディレクトリモジュールとして解決されることを確認する
-7. CHANGES.md の `## develop` の `### misc` にエントリを追加する
+設計方針どおり `src/types/` ディレクトリモジュールに分割した。ただし、ルートファイルは設計方針の `src/types/mod.rs` ではなく、`shiguredo-rust` の「`mod.rs` を使わないこと」規約に従い `src/types.rs` とした（`src/types.rs` + `src/types/` ディレクトリ構成。api/mod.rs → api.rs のリネームと同一の規約適用）。
+
+1. `src/types/output.rs` を新設し、出力型 (`*Output` 構造体 56 個) とレスポンスコンポーネント型 (`Object` / `Owner` / `Bucket` / `Part` / `MultipartUpload` / `ObjectVersion` / `DeleteMarkerEntry` / `CommonPrefix` / `DeletedObject` / `DeleteError` / `CopyObjectResult` / `RestoreStatus` の 12 個) を移動した
+2. `src/types/model.rs` を新設し、入力・リクエストボディ型・設定型・Builder 型 (`ObjectIdentifier` / `Delete` / `CompletedPart` / `CorsRule` / `LifecycleRule` / `ServerSideEncryptionConfiguration` 等 46 個) を移動した。セクション区切りコメント (暗号化設定 / CORS 設定 / ライフサイクル設定) も維持した
+3. `src/types/enums.rs` を新設し、enum 型 9 個を移動した。「型付き enum (aws-sdk-rust 互換)」の区切りコメントと 4 項目の実装方針も先頭に移動した。`ExpirationStatus` が方針の例外 (Unknown variant なし・FromStr 実装) であることを注記した
+4. `src/types.rs` を `pub use` の再エクスポートと `validate_imf_fixdate` のみのルートファイルに縮小した (1938 行 → 172 行)。サブモジュールは private (`mod output;` 等) とし、外部からは `shiguredo_s3::types::Xxx` パスのみが見える
+5. 依存方向は output → model → enums の一方向で循環なし。`crate::types::Xxx` パスと `shiguredo_s3::types::Xxx` パスは再エクスポートで維持し、tests / fuzz / examples のビルドで確認した
+
+CHANGES.md の `## develop` の `### misc` にエントリを追加した。
 
 ## 他 issue との依存関係
 
