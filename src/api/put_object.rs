@@ -497,22 +497,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
         if let Some(ref v) = self.ssekms_key_id {
             extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
         }
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_key_md5,
-            ));
-        }
+        let mut computed_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_key_md5,
+            false,
+        )?;
         // チェックサムの処理 (PutObject 仕様):
         // - 個別 checksum_* フィールド指定あり: 該当ヘッダー (x-amz-checksum-{algo}) に値を設定
         // - checksum_algorithm 指定あり: x-amz-sdk-checksum-algorithm ヘッダーに設定
@@ -704,22 +696,14 @@ impl<'a> PutObjectFluentBuilder<'a> {
         if let Some(ref v) = self.ssekms_key_id {
             extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
         }
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_key_md5,
-            ));
-        }
+        let mut computed_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_key_md5,
+            false,
+        )?;
         // チェックサムの処理 (presigned はボディがないため自動計算しない)
         if let Some(ref v) = self.checksum_algorithm {
             extra_headers.push(("x-amz-sdk-checksum-algorithm", v.as_str()));

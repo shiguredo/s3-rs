@@ -363,41 +363,25 @@ impl<'a> CopyObjectFluentBuilder<'a> {
         if let Some(ref v) = self.ssekms_key_id {
             extra_headers.push(("x-amz-server-side-encryption-aws-kms-key-id", v.as_str()));
         }
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // コピー先の SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_key_md5,
-            ));
-        }
-        if let Some(ref v) = self.copy_source_sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // コピー元の SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_copy_source_key_md5;
-        if let Some(ref v) = self.copy_source_sse_customer_key {
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-key",
-                v.as_str(),
-            ));
-            computed_copy_source_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-key-md5",
-                &computed_copy_source_key_md5,
-            ));
-        }
+        // コピー先の SSE-C
+        let mut computed_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_key_md5,
+            false,
+        )?;
+
+        // コピー元の SSE-C
+        let mut computed_copy_source_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.copy_source_sse_customer_algorithm.as_deref(),
+            self.copy_source_sse_customer_key.as_deref(),
+            &mut computed_copy_source_key_md5,
+            true,
+        )?;
 
         if let Some(ref v) = self.checksum_algorithm {
             // CopyObject ではボディがないためヘッダーのみ指定する

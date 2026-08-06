@@ -263,3 +263,5 @@
   - @voluntas
 - types.rs を責務別に分割し、出力型を `src/types/output.rs`、入力・設定・Builder 型を `src/types/model.rs`、enum 型を `src/types/enums.rs` に移動する (公開 API パスは再エクスポートで維持)
   - @voluntas
+- 9 ファイル 17 箇所に重複していた SSE-C ヘッダー構築ロジックを `add_sse_c_headers` ヘルパー関数に集約する (コピー元 SSE-C 対応を含む)
+  - @voluntas

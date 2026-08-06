@@ -171,6 +171,64 @@ pub(crate) fn compute_sse_c_key_md5(base64_key: &str) -> Result<String, Error> {
     Ok(Base64::encode_string(hash.as_slice()))
 }
 
+/// SSE-C ヘッダーを構築して追加する
+///
+/// リクエストヘッダーに `x-amz-server-side-encryption-customer-algorithm` /
+/// `-key` / `-key-md5` を追加する。`copy_source` が true の場合は
+/// `x-amz-copy-source-server-side-encryption-customer-*` を使用する。
+/// `computed_key_md5` は呼び出し側で宣言した `Option<String>` の参照で、
+/// MD5 計算結果の生存期間を呼び出し側が管理する (追加したヘッダー値の参照が
+/// 関数終了後も有効である必要があるため)。
+///
+/// 仕様: https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
+/// > x-amz-server-side-encryption-customer-algorithm: Specifies the algorithm to use when encrypting the object (for example, AES256).
+/// > x-amz-server-side-encryption-customer-key: Specifies the customer-provided encryption key for Amazon S3 to use in encrypting data.
+/// > x-amz-server-side-encryption-customer-key-MD5: Specifies the 128-bit MD5 digest of the encryption key according to RFC 1321.
+///
+/// コピー元 SSE-C のヘッダー名は CopyObject API の仕様に基づく。
+/// 仕様: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
+/// > x-amz-copy-source-server-side-encryption-customer-algorithm: Specifies the algorithm to use when decrypting the source object (for example, AES256).
+/// > x-amz-copy-source-server-side-encryption-customer-key: Specifies the customer-provided encryption key for Amazon S3 to use to decrypt the source object.
+/// > x-amz-copy-source-server-side-encryption-customer-key-MD5: Specifies the 128-bit MD5 digest of the encryption key according to RFC 1321.
+///
+/// ヘッダー名は AWS の仕様変更により将来変わる可能性がある。
+pub(crate) fn add_sse_c_headers<'a>(
+    extra_headers: &mut Vec<(&'a str, &'a str)>,
+    sse_customer_algorithm: Option<&'a str>,
+    sse_customer_key: Option<&'a str>,
+    computed_key_md5: &'a mut Option<String>,
+    copy_source: bool,
+) -> Result<(), Error> {
+    let (algorithm_header, key_header, key_md5_header) = if copy_source {
+        (
+            "x-amz-copy-source-server-side-encryption-customer-algorithm",
+            "x-amz-copy-source-server-side-encryption-customer-key",
+            "x-amz-copy-source-server-side-encryption-customer-key-md5",
+        )
+    } else {
+        (
+            "x-amz-server-side-encryption-customer-algorithm",
+            "x-amz-server-side-encryption-customer-key",
+            "x-amz-server-side-encryption-customer-key-md5",
+        )
+    };
+
+    if let Some(v) = sse_customer_algorithm {
+        extra_headers.push((algorithm_header, v));
+    }
+    if let Some(v) = sse_customer_key {
+        extra_headers.push((key_header, v));
+        *computed_key_md5 = Some(compute_sse_c_key_md5(v)?);
+        extra_headers.push((
+            key_md5_header,
+            computed_key_md5
+                .as_deref()
+                .expect("computed_key_md5 is set just above"),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +362,200 @@ mod tests {
             compute_sse_c_key_md5("invalid!"),
             Err(Error::InvalidInput(_))
         ));
+    }
+
+    /// `add_sse_c_headers()` は標準 SSE-C ヘッダーを algorithm → key → MD5 の順に追加する
+    #[test]
+    fn test_add_sse_c_headers_standard() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        add_sse_c_headers(
+            &mut headers,
+            Some("AES256"),
+            Some("MDEyMzQ1Njc4OWFiY2RlZg=="),
+            &mut computed_key_md5,
+            false,
+        )
+        .expect("有効なヘッダーであること");
+
+        assert_eq!(headers.len(), 3);
+        assert_eq!(
+            headers[0],
+            ("x-amz-server-side-encryption-customer-algorithm", "AES256")
+        );
+        assert_eq!(
+            headers[1],
+            (
+                "x-amz-server-side-encryption-customer-key",
+                "MDEyMzQ1Njc4OWFiY2RlZg=="
+            )
+        );
+        assert_eq!(
+            headers[2].0,
+            "x-amz-server-side-encryption-customer-key-md5"
+        );
+        // MD5 は "0123456789abcdef" の MD5 を Base64 で表現した値と一致すること
+        assert_eq!(headers[2].1, "QDKvjWEDUSOQbljgZxQMxQ==");
+        // 計算結果が呼び出し側の Option にも保存されること
+        assert_eq!(
+            computed_key_md5.as_deref(),
+            Some("QDKvjWEDUSOQbljgZxQMxQ==")
+        );
+    }
+
+    /// `add_sse_c_headers()` は copy_source 指定時にコピー元用ヘッダーを使う
+    #[test]
+    fn test_add_sse_c_headers_copy_source() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        add_sse_c_headers(
+            &mut headers,
+            Some("AES256"),
+            Some("MDEyMzQ1Njc4OWFiY2RlZg=="),
+            &mut computed_key_md5,
+            true,
+        )
+        .expect("有効なヘッダーであること");
+
+        assert_eq!(headers.len(), 3);
+        assert_eq!(
+            headers[0],
+            (
+                "x-amz-copy-source-server-side-encryption-customer-algorithm",
+                "AES256"
+            )
+        );
+        assert_eq!(
+            headers[1],
+            (
+                "x-amz-copy-source-server-side-encryption-customer-key",
+                "MDEyMzQ1Njc4OWFiY2RlZg=="
+            )
+        );
+        assert_eq!(
+            headers[2].0,
+            "x-amz-copy-source-server-side-encryption-customer-key-md5"
+        );
+        // MD5 は "0123456789abcdef" の MD5 を Base64 で表現した値と一致すること
+        assert_eq!(headers[2].1, "QDKvjWEDUSOQbljgZxQMxQ==");
+        // 計算結果が呼び出し側の Option にも保存されること
+        assert_eq!(
+            computed_key_md5.as_deref(),
+            Some("QDKvjWEDUSOQbljgZxQMxQ==")
+        );
+    }
+
+    /// `add_sse_c_headers()` は algorithm / key が未指定の場合は何も追加しない
+    #[test]
+    fn test_add_sse_c_headers_none() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        add_sse_c_headers(&mut headers, None, None, &mut computed_key_md5, false)
+            .expect("有効なヘッダーであること");
+
+        assert!(headers.is_empty());
+        assert!(computed_key_md5.is_none());
+    }
+
+    /// `add_sse_c_headers()` は algorithm のみ指定時に algorithm ヘッダーのみ追加する
+    #[test]
+    fn test_add_sse_c_headers_algorithm_only() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        add_sse_c_headers(
+            &mut headers,
+            Some("AES256"),
+            None,
+            &mut computed_key_md5,
+            false,
+        )
+        .expect("有効なヘッダーであること");
+
+        assert_eq!(headers.len(), 1);
+        assert_eq!(
+            headers[0],
+            ("x-amz-server-side-encryption-customer-algorithm", "AES256")
+        );
+        assert!(computed_key_md5.is_none());
+    }
+
+    /// `add_sse_c_headers()` は key のみ指定時に key と MD5 ヘッダーを追加する
+    #[test]
+    fn test_add_sse_c_headers_key_only() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        add_sse_c_headers(
+            &mut headers,
+            None,
+            Some("MDEyMzQ1Njc4OWFiY2RlZg=="),
+            &mut computed_key_md5,
+            false,
+        )
+        .expect("有効なヘッダーであること");
+
+        assert_eq!(headers.len(), 2);
+        assert_eq!(
+            headers[0],
+            (
+                "x-amz-server-side-encryption-customer-key",
+                "MDEyMzQ1Njc4OWFiY2RlZg=="
+            )
+        );
+        assert_eq!(
+            headers[1].0,
+            "x-amz-server-side-encryption-customer-key-md5"
+        );
+        assert_eq!(headers[1].1, "QDKvjWEDUSOQbljgZxQMxQ==");
+    }
+
+    /// `add_sse_c_headers()` は copy_source 指定時の不正な Base64 キーを拒否する
+    ///
+    /// エラー時はコピー元用の key ヘッダーが push 済みの状態になること、
+    /// MD5 が未計算のままであることを検証する。
+    #[test]
+    fn test_add_sse_c_headers_copy_source_invalid_base64() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        let result = add_sse_c_headers(
+            &mut headers,
+            None,
+            Some("invalid!"),
+            &mut computed_key_md5,
+            true,
+        );
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+        // コピー元用の key ヘッダーが push 済みの状態でエラーになること
+        assert_eq!(headers.len(), 1);
+        assert_eq!(
+            headers[0].0,
+            "x-amz-copy-source-server-side-encryption-customer-key"
+        );
+        assert!(computed_key_md5.is_none());
+    }
+
+    /// `add_sse_c_headers()` は不正な Base64 キーを Error::InvalidInput として拒否する
+    #[test]
+    fn test_add_sse_c_headers_invalid_base64() {
+        let mut headers = Vec::new();
+        let mut computed_key_md5 = None;
+
+        let result = add_sse_c_headers(
+            &mut headers,
+            None,
+            Some("invalid!"),
+            &mut computed_key_md5,
+            false,
+        );
+        assert!(matches!(result, Err(Error::InvalidInput(_))));
+        // key ヘッダーは push 済みの状態でエラーになること、MD5 は未計算のままであること
+        assert_eq!(headers.len(), 1);
+        assert_eq!(headers[0].0, "x-amz-server-side-encryption-customer-key");
+        assert!(computed_key_md5.is_none());
     }
 }

@@ -116,8 +116,8 @@ pub use upload_part_copy::UploadPartCopyFluentBuilder;
 
 pub use crate::request::{PresignedRequest, S3Request, S3Response};
 pub(crate) use util::{
-    base64_md5, check_body_error, compute_sse_c_key_md5, head_error_from_status,
-    parse_error_response, required, validate_part_number, validate_presign_expires, xml_body_text,
+    add_sse_c_headers, base64_md5, check_body_error, head_error_from_status, parse_error_response,
+    required, validate_part_number, validate_presign_expires, xml_body_text,
 };
 
 use crate::client::Client;
@@ -473,5 +473,133 @@ mod sans_io_tests {
             .key("test.txt")
             .build_request(pre_epoch);
         assert!(matches!(result, Err(Error::InvalidInput(_))));
+    }
+
+    /// SSE-C を指定した `build_request` に標準 SSE-C ヘッダーが含まれる
+    ///
+    /// ヘルパー `add_sse_c_headers` への置換が正しく行われていることを、
+    /// API 経由の出力で検証する。MD5 は "0123456789abcdef" の MD5 を
+    /// Base64 で表現した値。
+    #[test]
+    fn test_get_object_build_request_sse_c_headers() {
+        let client = build_test_client();
+        let request = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .sse_customer_algorithm("AES256")
+            .sse_customer_key("MDEyMzQ1Njc4OWFiY2RlZg==")
+            .build_request(fixed_now())
+            .expect("build_request");
+
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-algorithm" && v == "AES256"
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-key" && v == "MDEyMzQ1Njc4OWFiY2RlZg=="
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-key-md5" && v == "QDKvjWEDUSOQbljgZxQMxQ=="
+        }));
+    }
+
+    /// CopyObject の `build_request` に標準 SSE-C とコピー元 SSE-C の両方のヘッダーが含まれる
+    ///
+    /// 標準 (`x-amz-server-side-encryption-customer-*`) とコピー元
+    /// (`x-amz-copy-source-server-side-encryption-customer-*`) でヘッダー名が
+    /// 正しく切り替わることを検証する。
+    #[test]
+    fn test_copy_object_build_request_sse_c_headers() {
+        let client = build_test_client();
+        let request = client
+            .copy_object()
+            .bucket("destbucket")
+            .key("dest.txt")
+            .copy_source("srcbucket/src.txt")
+            .sse_customer_algorithm("AES256")
+            .sse_customer_key("MDEyMzQ1Njc4OWFiY2RlZg==")
+            .copy_source_sse_customer_algorithm("AES256")
+            .copy_source_sse_customer_key("MDEyMzQ1Njc4OWFiY2RlZg==")
+            .build_request(fixed_now())
+            .expect("build_request");
+
+        // コピー先 (標準) SSE-C ヘッダー
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-algorithm" && v == "AES256"
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-key" && v == "MDEyMzQ1Njc4OWFiY2RlZg=="
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-server-side-encryption-customer-key-md5" && v == "QDKvjWEDUSOQbljgZxQMxQ=="
+        }));
+        // コピー元 SSE-C ヘッダー
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-copy-source-server-side-encryption-customer-algorithm" && v == "AES256"
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-copy-source-server-side-encryption-customer-key"
+                && v == "MDEyMzQ1Njc4OWFiY2RlZg=="
+        }));
+        assert!(request.headers.iter().any(|(k, v)| {
+            k == "x-amz-copy-source-server-side-encryption-customer-key-md5"
+                && v == "QDKvjWEDUSOQbljgZxQMxQ=="
+        }));
+        // コピー元指定が x-amz-copy-source ヘッダーに正規化されて含まれること
+        assert!(
+            request
+                .headers
+                .iter()
+                .any(|(k, v)| { k == "x-amz-copy-source" && v == "/srcbucket/src.txt" })
+        );
+    }
+
+    /// SSE-C を指定した `presigned` の署名対象ヘッダーに SSE-C ヘッダーが含まれる
+    ///
+    /// presigned URL は SSE-C ヘッダーを X-Amz-SignedHeaders に含めないと
+    /// S3 がリクエストを拒否するため、署名対象への包含を検証する。
+    #[test]
+    fn test_get_object_presigned_sse_c_headers() {
+        let client = build_test_client();
+        let presigned = client
+            .get_object()
+            .bucket("examplebucket")
+            .key("test.txt")
+            .sse_customer_algorithm("AES256")
+            .sse_customer_key("MDEyMzQ1Njc4OWFiY2RlZg==")
+            .presigned(3600, fixed_now())
+            .expect("presigned");
+
+        // URL の X-Amz-SignedHeaders に SSE-C ヘッダーが含まれること
+        let signed_headers = presigned
+            .url
+            .split("X-Amz-SignedHeaders=")
+            .nth(1)
+            .expect("X-Amz-SignedHeaders が含まれること")
+            .split('&')
+            .next()
+            .expect("SignedHeaders 値が取得できること");
+        assert!(signed_headers.contains("x-amz-server-side-encryption-customer-algorithm"));
+        assert!(signed_headers.contains("x-amz-server-side-encryption-customer-key"));
+        assert!(signed_headers.contains("x-amz-server-side-encryption-customer-key-md5"));
+        // リクエスト時に付与が必要なヘッダーにも含まれること
+        assert!(
+            presigned
+                .headers
+                .iter()
+                .any(|(k, _)| k == "x-amz-server-side-encryption-customer-algorithm")
+        );
+        assert!(
+            presigned
+                .headers
+                .iter()
+                .any(|(k, _)| k == "x-amz-server-side-encryption-customer-key")
+        );
+        assert!(
+            presigned
+                .headers
+                .iter()
+                .any(|(k, _)| k == "x-amz-server-side-encryption-customer-key-md5")
+        );
     }
 }
