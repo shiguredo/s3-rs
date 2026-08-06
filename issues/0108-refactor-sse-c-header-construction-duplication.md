@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-12
+- Completed: 2026-08-06
 - Model: Composer 2.5 Fast
 - Branch: feature/refactor-sse-c-header-construction-duplication
 - Polished: 2026-08-02
@@ -86,9 +87,14 @@ pub(crate) fn add_sse_c_headers(
 
 ## 解決方法
 
-1. `src/api/mod.rs` に `add_sse_c_headers` 関数を実装する（コピー元 SSE-C 対応を含む）
-2. 全 9 ファイル 17 箇所の重複コードをヘルパー関数呼び出しに置き換える
-3. CHANGES.md の `## develop` の `### misc` にエントリを追加する
+設計方針の `add_sse_c_headers` ヘルパーを実装し、全 9 ファイル 17 箇所の重複コードを置き換えた。配置場所は issue の設計方針にあった `src/api/mod.rs` ではなく、0106 (api/mod.rs 責務分離) の依存関係の記述どおり **`src/api/util.rs` に直接追加** した（0106 実装後に util.rs が新設されていたため。`src/api.rs` の再エクスポートに `add_sse_c_headers` を追加し、サブモジュールから `super::add_sse_c_headers` で呼び出す）。
+
+1. `src/api/util.rs` に `add_sse_c_headers` を実装した。`computed_key_md5` は `&mut Option<String>` で受け、ヘッダーに追加する参照の生存期間を呼び出し側が管理する。コピー元 SSE-C は `copy_source: bool` フラグでヘッダー名を静的文字列から選択する。doc には PutObject / CopyObject の仕様 URL と原文引用を記載した
+2. 標準 SSE-C 15 箇所 + コピー元 SSE-C 2 箇所の計 17 箇所をヘルパー呼び出しに置き換えた（copy_object.rs は「コピー先 → コピー元」、upload_part_copy.rs は「コピー元 → コピー先」の元の順序を維持）
+3. `api.rs` の再エクスポートから `compute_sse_c_key_md5` を削除した（ヘルパー内でのみ使用するようになったため）
+4. テストを追加した: `src/api/util.rs` にヘルパーの単体テスト 8 件（標準 / コピー元 / 未指定 / algorithm のみ / key のみ / 不正 Base64 2 種）、`src/api.rs` の sans_io_tests に API 経由のテスト 3 件（GetObject の build_request / CopyObject の build_request / GetObject の presigned 署名対象ヘッダー）
+
+CHANGES.md の `## develop` の `### misc` にエントリを追加した。
 
 ## 他 issue との依存関係
 
