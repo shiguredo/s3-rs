@@ -15,6 +15,7 @@ mod delete_object;
 mod delete_object_tagging;
 mod delete_objects;
 mod delete_public_access_block;
+mod endpoint;
 mod get_bucket_cors;
 mod get_bucket_encryption;
 mod get_bucket_lifecycle_configuration;
@@ -54,6 +55,7 @@ mod put_object_tagging;
 mod put_public_access_block;
 mod upload_part;
 mod upload_part_copy;
+mod util;
 
 pub use abort_multipart_upload::AbortMultipartUploadFluentBuilder;
 pub use complete_multipart_upload::CompleteMultipartUploadFluentBuilder;
@@ -112,151 +114,26 @@ pub use put_public_access_block::PutPublicAccessBlockFluentBuilder;
 pub use upload_part::UploadPartFluentBuilder;
 pub use upload_part_copy::UploadPartCopyFluentBuilder;
 
+pub use crate::request::{PresignedRequest, S3Request, S3Response};
+pub(crate) use util::{
+    base64_md5, check_body_error, compute_sse_c_key_md5, head_error_from_status,
+    parse_error_response, required, validate_part_number, validate_presign_expires, xml_body_text,
+};
+
 use crate::client::Client;
-use crate::credential::Credentials;
 use crate::error::Error;
 use crate::signing::{
     PresignParams, SigningParams, UtcDateTime, build_canonical_query_string, build_scope,
-    compute_authorization, compute_presigned_signature, hex_sha256, uri_encode_path,
+    compute_authorization, compute_presigned_signature, hex_sha256,
+};
+use endpoint::{
+    ClientConfig, extract_connect_host, extract_port, host_for_bucket, parse_endpoint_scheme,
+    path_for_key, service_host,
 };
 
 // -------------------------------------------------------
-// PresignedRequest
+// 設定参照の構築 (ライフタイム付き、Sans I/O で使用)
 // -------------------------------------------------------
-
-/// Presigned リクエスト
-///
-/// URL だけでなく、リクエストに必要なボディも保持する。
-/// GET / HEAD / DELETE など body が不要な場合は `body` は空。
-/// CompleteMultipartUpload のように POST body が必要な場合は XML 等が入る。
-#[derive(Debug, Clone)]
-pub struct PresignedRequest {
-    /// Presigned URL
-    pub url: String,
-    /// HTTP メソッド
-    pub method: String,
-    /// リクエスト時に付与が必要な header (署名対象に含まれる)
-    pub headers: Vec<(String, String)>,
-    /// リクエストボディ (不要な場合は空)
-    pub body: Vec<u8>,
-}
-
-// -------------------------------------------------------
-// S3Request / S3Response
-// -------------------------------------------------------
-
-/// 署名済み S3 リクエスト
-///
-/// `build_request()` で構築する。
-/// 利用者は各フィールドを使って任意の HTTP クライアントでリクエストを送信する。
-#[derive(Debug, Clone)]
-pub struct S3Request {
-    /// HTTP メソッド (GET, PUT, DELETE, POST, HEAD)
-    pub method: String,
-    /// リクエスト URI (パス + クエリ文字列)
-    pub uri: String,
-    /// HTTP リクエストヘッダー (名前, 値) のリスト (署名済み)
-    pub headers: Vec<(String, String)>,
-    /// リクエストボディ
-    pub body: Vec<u8>,
-    /// 接続先ホスト名
-    pub host: String,
-    /// 接続先ポート番号
-    pub port: u16,
-    /// HTTPS を使用するかどうか
-    pub https: bool,
-    /// TLS 証明書の検証を無視する (テスト環境向け)
-    pub ignore_cert_check: bool,
-    /// レスポンスにボディがないことを期待するか (HEAD リクエスト)
-    pub expect_no_body: bool,
-}
-
-/// S3 レスポンス
-///
-/// HTTP レスポンスのステータスコード、ヘッダー、ボディを保持する。
-/// 利用者が任意の HTTP クライアントから構築して `parse_response()` に渡す。
-#[derive(Debug, Clone)]
-pub struct S3Response {
-    /// HTTP ステータスコード
-    pub status_code: u16,
-    /// HTTP レスポンスヘッダー (名前, 値) のリスト
-    pub headers: Vec<(String, String)>,
-    /// レスポンスボディ
-    pub body: Vec<u8>,
-}
-
-impl S3Response {
-    /// レスポンスが成功 (2xx) かどうかを返す
-    pub fn is_success(&self) -> bool {
-        (200..300).contains(&self.status_code)
-    }
-
-    /// 指定した名前のヘッダー値を返す (大文字小文字を区別しない)
-    pub fn get_header(&self, name: &str) -> Option<&str> {
-        let name_lower = name.to_ascii_lowercase();
-        self.headers
-            .iter()
-            .find(|(k, _)| k.to_ascii_lowercase() == name_lower)
-            .map(|(_, v)| v.as_str())
-    }
-
-    /// Content-Length ヘッダーの値を返す
-    pub fn content_length(&self) -> Option<u64> {
-        self.get_header("content-length")
-            .and_then(|v| v.parse().ok())
-    }
-
-    /// x-amz-meta-* ヘッダーからカスタムメタデータを抽出する
-    ///
-    /// メタデータが存在しない場合は None を返す。
-    /// aws-sdk-rust と同様に、キーの大文字小文字は元のヘッダー名を保持する。
-    pub fn extract_metadata(&self) -> Option<std::collections::HashMap<String, String>> {
-        let prefix = "x-amz-meta-";
-        let prefix_len = prefix.len();
-        let map: std::collections::HashMap<String, String> = self
-            .headers
-            .iter()
-            .filter_map(|(k, v)| {
-                k.to_ascii_lowercase()
-                    .strip_prefix(prefix)
-                    .map(|_| (k[prefix_len..].to_string(), v.clone()))
-            })
-            .collect();
-        if map.is_empty() { None } else { Some(map) }
-    }
-}
-
-// -------------------------------------------------------
-// 設定参照 (ライフタイム付き、Sans I/O で使用)
-// -------------------------------------------------------
-
-/// `Client` の設定への参照
-pub(crate) struct ClientConfig<'a> {
-    pub(crate) region: &'a str,
-    pub(crate) credentials: &'a Credentials,
-    /// スキームを除去したホスト名 (ポート含む場合あり)
-    pub(crate) endpoint: Option<&'a str>,
-    pub(crate) force_path_style: bool,
-    /// HTTPS を使用するかどうか (endpoint のスキームから判定)
-    pub(crate) https: bool,
-    /// TLS 証明書の検証を無視する
-    pub(crate) ignore_cert_check: bool,
-}
-
-/// endpoint 文字列からスキームを解析する
-///
-/// - `"http://localhost:9000"` → `(false, "localhost:9000")`
-/// - `"https://minio.example.com"` → `(true, "minio.example.com")`
-/// - `"minio.example.com"` → `(true, "minio.example.com")` (スキーム省略時は HTTPS)
-fn parse_endpoint_scheme(endpoint: &str) -> (bool, &str) {
-    if let Some(rest) = endpoint.strip_prefix("http://") {
-        (false, rest)
-    } else if let Some(rest) = endpoint.strip_prefix("https://") {
-        (true, rest)
-    } else {
-        (true, endpoint)
-    }
-}
 
 impl Client {
     pub(crate) fn config_ref(&self) -> ClientConfig<'_> {
@@ -484,290 +361,6 @@ pub(crate) fn build_presigned_url(
     Ok(format!(
         "{scheme}://{host}{path}?{canonical_query_string}&X-Amz-Signature={signature}"
     ))
-}
-
-// -------------------------------------------------------
-// ホスト・パス計算
-// -------------------------------------------------------
-
-fn service_host(config: &ClientConfig<'_>) -> String {
-    config
-        .endpoint
-        .map(String::from)
-        .unwrap_or_else(|| format!("s3.{}.amazonaws.com", config.region))
-}
-
-/// HTTPS かつバケット名にドットを含む場合は path-style にフォールバックが必要
-fn use_path_style_for_bucket(config: &ClientConfig<'_>, bucket: &str) -> bool {
-    config.force_path_style || (config.https && bucket.contains('.'))
-}
-
-fn host_for_bucket(config: &ClientConfig<'_>, bucket: &str) -> String {
-    let base = service_host(config);
-    if use_path_style_for_bucket(config, bucket) {
-        base
-    } else {
-        format!("{bucket}.{base}")
-    }
-}
-
-/// ホスト文字列からポート部分を除去して接続先ホスト名を返す
-///
-/// IPv6 アドレス (`[::1]:9000` や `[::1]`) を正しく処理する
-fn extract_connect_host(host: &str) -> String {
-    if let Some(end) = host.find(']') {
-        // IPv6: `[::1]:9000` → `[::1]`, `[::1]` → `[::1]`
-        host[..=end].to_string()
-    } else if let Some(pos) = host.rfind(':') {
-        // IPv4 / ホスト名でポート付き: `localhost:9000` → `localhost`
-        // ただしコロンが含まれていてもポート部分が数値でなければホスト名全体を返す
-        if host[pos + 1..].parse::<u16>().is_ok() {
-            host[..pos].to_string()
-        } else {
-            host.to_string()
-        }
-    } else {
-        host.to_string()
-    }
-}
-
-/// endpoint からポートを抽出する (明示的なポートがない場合は HTTPS なら 443、HTTP なら 80)
-///
-/// IPv6 アドレス (`[::1]:9000`) を正しく処理する
-fn extract_port(config: &ClientConfig<'_>) -> u16 {
-    if let Some(endpoint) = config.endpoint
-        && let Some(port) = parse_port_from_authority(endpoint)
-    {
-        return port;
-    }
-    if config.https { 443 } else { 80 }
-}
-
-/// authority 文字列からポートを解析する
-///
-/// `[::1]:9000` → `Some(9000)`, `localhost:9000` → `Some(9000)`, `[::1]` → `None`
-fn parse_port_from_authority(authority: &str) -> Option<u16> {
-    if authority.starts_with('[') {
-        // IPv6: `]` の後に `:port` があればポート
-        let after_bracket = authority.find(']')?;
-        let rest = &authority[after_bracket + 1..];
-        let port_str = rest.strip_prefix(':')?;
-        port_str.parse().ok()
-    } else {
-        // IPv4 / ホスト名: 最後の `:` 以降がポート
-        let port_str = authority.rsplit(':').next()?;
-        port_str.parse().ok()
-    }
-}
-
-fn path_for_key(config: &ClientConfig<'_>, bucket: &str, key: &str) -> String {
-    let encoded_key = uri_encode_path(key);
-    if use_path_style_for_bucket(config, bucket) {
-        if encoded_key.is_empty() {
-            format!("/{bucket}")
-        } else {
-            format!("/{bucket}/{encoded_key}")
-        }
-    } else if encoded_key.is_empty() {
-        "/".to_string()
-    } else {
-        format!("/{encoded_key}")
-    }
-}
-
-// -------------------------------------------------------
-// ヘルパー関数
-// -------------------------------------------------------
-
-/// 必須パラメータのバリデーション
-///
-/// `None` または空文字列の場合に `Error::InvalidInput` を返す。
-pub(crate) fn required<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str, Error> {
-    let v = value.ok_or_else(|| Error::InvalidInput(format!("{name} is required")))?;
-    if v.is_empty() {
-        return Err(Error::InvalidInput(format!("{name} must not be empty")));
-    }
-    Ok(v)
-}
-
-/// Presigned URL の最小有効期限 (秒)
-///
-/// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-const PRESIGN_MIN_EXPIRES_SECS: u64 = 1;
-/// Presigned URL の最大有効期限 (秒) — 7 日間
-///
-/// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-const PRESIGN_MAX_EXPIRES_SECS: u64 = 604800;
-
-/// Presigned URL の有効期限を検証する (1〜604800 秒)
-pub(crate) fn validate_presign_expires(expires_in_secs: u64) -> Result<(), Error> {
-    if !(PRESIGN_MIN_EXPIRES_SECS..=PRESIGN_MAX_EXPIRES_SECS).contains(&expires_in_secs) {
-        return Err(Error::InvalidInput(format!(
-            "expires_in_secs must be between {PRESIGN_MIN_EXPIRES_SECS} and {PRESIGN_MAX_EXPIRES_SECS} (7 days)"
-        )));
-    }
-    Ok(())
-}
-
-/// パート番号を検証する (1〜10000)
-///
-/// HeadObject / GetObject / UploadPart / UploadPartCopy で共通して使う。
-/// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
-pub(crate) fn validate_part_number(part_number: i32) -> Result<(), Error> {
-    if !(1..=10000).contains(&part_number) {
-        return Err(Error::InvalidInput(
-            "part_number must be between 1 and 10000".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-/// 2xx レスポンスのボディに `<Error>` が含まれていないか検査する
-///
-/// CompleteMultipartUpload と CopyObject は 200 OK でボディにエラーを返すことがある。
-/// ボディサイズが 10MB 以下の場合は XML 全体をパースして `<Error>` ルートタグの存在を確認する。
-/// 10MB 超の場合は先頭 8KB をスキャンして `<Error` 文字列の有無を確認する。
-pub(crate) fn check_body_error(response: &S3Response) -> Result<(), Error> {
-    let has_error = if response.body.len() <= MAX_XML_BODY_SIZE {
-        let text = std::str::from_utf8(&response.body).unwrap_or("");
-        crate::xml::has_error_root(text)
-    } else {
-        // 10MB 超のボディは先頭 8KB で <Error の存在を簡易スキャンする
-        let scan_len = std::cmp::min(response.body.len(), 8192);
-        let head = &response.body[..scan_len];
-        let head_str = std::str::from_utf8(head).unwrap_or("");
-        head_str.contains("<Error") || head_str.contains("<Error ")
-    };
-
-    if has_error {
-        return Err(parse_error_response_with_status(
-            response.status_code,
-            &response.body,
-        ));
-    }
-    Ok(())
-}
-
-/// XML レスポンスのボディサイズ上限 (10MB)
-///
-/// xml-rs には入力サイズの制限機能がないため、パース前にサイズチェックを行う。
-/// S3 の XML レスポンスは通常数百 KB 以内（ListObjectsV2 の max-keys=1000 でも十分収まる）。
-/// 10MB はプロキシ経由での改ざんや予期しない巨大レスポンスに対する防御ライン。
-const MAX_XML_BODY_SIZE: usize = 10 * 1024 * 1024;
-
-/// レスポンスボディを XML テキストとしてパースする（サイズチェック付き）
-pub(crate) fn xml_body_text(body: &[u8]) -> Result<&str, Error> {
-    if body.len() > MAX_XML_BODY_SIZE {
-        return Err(Error::InvalidResponse(format!(
-            "XML response body too large: {} bytes (max {})",
-            body.len(),
-            MAX_XML_BODY_SIZE
-        )));
-    }
-    std::str::from_utf8(body)
-        .map_err(|_| Error::InvalidResponse("non-UTF-8 response body".to_string()))
-}
-
-/// S3 エラーレスポンスを解析する
-pub(crate) fn parse_error_response(response: &S3Response) -> Error {
-    parse_error_response_with_status(response.status_code, &response.body)
-}
-
-/// HEAD レスポンスの失敗時に HTTP ステータスコードからエラーを構築する
-///
-/// HEAD レスポンスは body を返さないため、XML ベースのエラー解析は不可能。
-/// HTTP ステータスコードから推定可能な範囲でエラーコードを設定する。
-pub(crate) fn head_error_from_status(status_code: u16) -> Error {
-    if status_code == 304 {
-        return Error::NotModified;
-    }
-    if status_code == 412 {
-        return Error::PreconditionFailed;
-    }
-    let (code, message) = match status_code {
-        400 => ("BadRequest", "bad request"),
-        403 => ("AccessDenied", "access denied"),
-        404 => ("NotFound", "not found"),
-        405 => ("MethodNotAllowed", "method not allowed"),
-        416 => ("InvalidRange", "invalid range"),
-        500 => ("InternalError", "internal server error"),
-        503 => ("ServiceUnavailable", "service unavailable"),
-        _ => ("HttpError", "request failed"),
-    };
-    Error::S3 {
-        status_code,
-        code: code.to_string(),
-        message: message.to_string(),
-    }
-}
-
-/// ステータスコードとボディから S3 エラーを構築する
-fn parse_error_response_with_status(status_code: u16, body: &[u8]) -> Error {
-    let (code, message) = parse_s3_error_xml(body)
-        .unwrap_or_else(|_| ("UnknownError".to_string(), "unknown error".to_string()));
-
-    Error::S3 {
-        status_code,
-        code,
-        message,
-    }
-}
-
-fn parse_s3_error_xml(body: &[u8]) -> Result<(String, String), Error> {
-    crate::xml::parse_s3_error(body)
-}
-
-pub(crate) fn base64_md5(data: &[u8]) -> String {
-    use base64ct::{Base64, Encoding};
-    use md5::{Digest, Md5};
-    let hash = Md5::digest(data);
-    Base64::encode_string(hash.as_slice())
-}
-
-/// SSE-C キー (Base64) から MD5 (Base64) を自動計算する
-///
-/// sse_customer_key が指定されていて sse_customer_key_md5 が未指定の場合に
-/// 自動的に MD5 を計算する。
-pub(crate) fn compute_sse_c_key_md5(base64_key: &str) -> Result<String, Error> {
-    use base64ct::{Base64, Encoding};
-    use md5::{Digest, Md5};
-    let key_bytes = Base64::decode_vec(base64_key)
-        .map_err(|_| Error::InvalidInput("SSE-C key must be valid Base64".to_string()))?;
-    let hash = Md5::digest(&key_bytes);
-    Ok(Base64::encode_string(hash.as_slice()))
-}
-
-#[cfg(test)]
-mod required_tests {
-    use super::*;
-
-    /// `required()` は Some(非空) をそのまま返す
-    #[test]
-    fn test_required_some_non_empty() {
-        let result = required(Some("hello"), "test_field");
-        assert_eq!(result.expect("非空の値が通ること"), "hello");
-    }
-
-    /// `required()` は None を Error::InvalidInput として拒否する
-    #[test]
-    fn test_required_none() {
-        let result = required(None, "test_field");
-        assert!(matches!(result, Err(Error::InvalidInput(_))));
-    }
-
-    /// `required()` は空文字列を Error::InvalidInput として拒否する
-    #[test]
-    fn test_required_empty_string() {
-        let result = required(Some(""), "test_field");
-        assert!(matches!(result, Err(Error::InvalidInput(_))));
-    }
-
-    /// `required()` は空白のみの文字列は許容する (trim は行わない)
-    #[test]
-    fn test_required_whitespace_only() {
-        let result = required(Some("   "), "test_field");
-        assert_eq!(result.expect("空白のみは空ではないので通ること"), "   ");
-    }
 }
 
 #[cfg(test)]
