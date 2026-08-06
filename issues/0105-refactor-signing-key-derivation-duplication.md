@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-12
+- Completed: 2026-08-06
 - Model: Composer 2.5 Fast
 - Branch: feature/refactor-signing-duplication
 - Polished: 2026-08-02
@@ -75,10 +76,17 @@ let signed_headers: String = headers
 
 ## 解決方法
 
-1. `compute_presigned_signature` の回帰テストを追加する（リファクタリング前の挙動を固定する。AWS 公式ドキュメントの Presigned URL 例に基づくテストベクトルを使用する）。既存の `test_compute_authorization` も Signature の完全一致を検証するよう強化する
-2. `derive_signing_key` 関数を実装する
-3. `build_canonical_headers` 関数を実装する
-4. `build_scope` 関数を `pub(crate)` で実装する
-5. `compute_authorization` と `compute_presigned_signature` をリファクタリングする
-6. `src/api/mod.rs` の `build_presigned_url` 内のスコープ構築を `build_scope` に置き換える
-7. CHANGES.md の `## develop` の `### misc` にエントリを追加する
+`src/signing.rs` に共通関数を抽出し、重複していた 3 つのロジックを集約した:
+
+1. `derive_signing_key` 関数 (private) を追加し、`compute_authorization` と `compute_presigned_signature` の 4 段階 HMAC 署名キー導出を置き換えた
+2. `build_canonical_headers` 関数 (private) を追加し、両関数のカノニカルヘッダー構築と署名対象ヘッダー名の構築を置き換えた
+3. `build_scope` 関数 (`pub(crate)`) を追加し、`compute_authorization` / `compute_presigned_signature` / `src/api/mod.rs` の `build_presigned_url` のスコープ文字列構築を置き換えた
+
+テストは以下のとおり:
+
+- `test_compute_presigned_signature` を追加し、AWS 公式ドキュメント (sigv4-query-string-auth.html) の GET Object 例の署名 `aeeed9bb...` と完全一致することを検証する
+- `test_compute_authorization` を強化し、AWS 公式ドキュメント (sig-v4-authenticating-requests.html) の GET Object 例の署名 `f0e8bdb8...` と完全一致することを検証する
+- `test_build_canonical_headers_whitespace_folding` を追加し、ヘッダー値の空白正規化 (trim と連続空白の畳み込み) を検証する
+- テストのセットアップを共通の `TEST_*` const と `test_credentials` / `test_datetime` ヘルパーに集約した
+
+CHANGES.md の `## develop` の `### misc` にリファクタリングのエントリを追加した。
