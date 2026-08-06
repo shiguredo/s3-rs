@@ -394,6 +394,350 @@ async fn test_list_objects_v2() {
     assert!(prefixes.iter().any(|p| p.prefix.as_deref() == Some("dir/")));
 }
 
+/// ListObjects (v1) でオブジェクト一覧を取得できることを検証する
+///
+/// ## 検証項目
+/// - prefix でフィルタリングした一覧が返る
+/// - delimiter で仮想的なディレクトリ構造が表現できる
+#[tokio::test]
+async fn test_list_objects_v1() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // "dir/" プレフィックスを持つオブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("dir/file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // prefix="dir/" で一覧取得すると 3 件が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .prefix("dir/")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let contents = output.contents.expect("contents が存在すること");
+    assert_eq!(contents.len(), 3);
+    // 基本フィールドがパースされていること
+    assert_eq!(output.name.as_deref(), Some(bucket));
+    assert_eq!(output.is_truncated, Some(false));
+    assert_eq!(output.prefix.as_deref(), Some("dir/"));
+    // prefix フィルタが機能し、対象キーのみが返ること
+    let mut keys: Vec<&str> = contents
+        .iter()
+        .map(|o| o.key.as_deref().expect("key が存在すること"))
+        .collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        vec!["dir/file0.txt", "dir/file1.txt", "dir/file2.txt"]
+    );
+
+    // delimiter="/" で取得すると "dir/" が CommonPrefixes に含まれることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let prefixes = output
+        .common_prefixes
+        .expect("common_prefixes が存在すること");
+    assert!(prefixes.iter().any(|p| p.prefix.as_deref() == Some("dir/")));
+    // delimiter で丸められた結果、contents は空になること
+    assert!(output.contents.is_none());
+}
+
+/// ListObjects (v1) のページネーションを検証する
+///
+/// delimiter 未指定では AWS 仕様により NextMarker は返らないため、
+/// 前ページの最後の Key を marker に渡してページングする。
+///
+/// ## 検証項目
+/// - max_keys で 1 件ずつ取得できる
+/// - 最後の Key を marker に渡して次ページを取得できる
+/// - 最終ページで is_truncated が false になる
+/// - 全ページの合計が全件数と一致する
+#[tokio::test]
+async fn test_list_objects_v1_pagination() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-pagination";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // 全ページを走査して 3 件すべて取得できることを確認する
+    let mut all_keys = Vec::new();
+    let mut marker: Option<String> = None;
+    loop {
+        let mut builder = client.list_objects().bucket(bucket).max_keys(1);
+        if let Some(ref m) = marker {
+            builder = builder.marker(m.clone());
+        }
+        let request = builder.build_request(now()).unwrap();
+        let output = send(
+            request,
+            shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+        )
+        .await;
+        let contents = output.contents.expect("contents が存在すること");
+        for object in &contents {
+            all_keys.push(object.key.clone().expect("key が存在すること"));
+        }
+        // marker がレスポンスにエコーされること
+        if let Some(ref m) = marker {
+            assert_eq!(output.marker.as_deref(), Some(m.as_str()));
+        }
+        if output.is_truncated == Some(true) {
+            // delimiter 未指定なので前ページの最後の Key を marker に使う
+            marker = contents.last().and_then(|o| o.key.clone());
+            // 切り詰められたのに contents が空のレスポンスは異常なので打ち切る
+            if marker.is_none() {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    assert_eq!(all_keys.len(), 3);
+    assert_eq!(
+        all_keys,
+        vec![
+            "file0.txt".to_string(),
+            "file1.txt".to_string(),
+            "file2.txt".to_string()
+        ]
+    );
+}
+
+/// ListObjects (v1) の delimiter 指定時の NextMarker ページネーションを検証する
+///
+/// AWS 仕様では NextMarker は delimiter 指定時のみ返る。
+///
+/// ## 検証項目
+/// - delimiter 指定時に NextMarker が返る
+/// - NextMarker を marker に渡して次ページを取得できる
+#[tokio::test]
+async fn test_list_objects_v1_next_marker() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-next-marker";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // delimiter 付き max_keys=1 で取得すると 1 件と next_marker が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .build_request(now())
+        .unwrap();
+    let first = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let first_contents = first.contents.expect("contents が存在すること");
+    assert_eq!(first_contents.len(), 1);
+    assert_eq!(first.is_truncated, Some(true));
+    let next_marker = first.next_marker.expect("next_marker が存在すること");
+
+    // marker に next_marker を渡すと次の 1 件が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .marker(next_marker.clone())
+        .build_request(now())
+        .unwrap();
+    let second = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let second_contents = second.contents.expect("contents が存在すること");
+    assert_eq!(second_contents.len(), 1);
+    // 次のキー (file1.txt) が返ること
+    assert_eq!(second_contents[0].key.as_deref(), Some("file1.txt"));
+    // marker がレスポンスにエコーされること
+    assert_eq!(second.marker.as_deref(), Some(next_marker.as_str()));
+    // まだ 1 件残っているため切り詰められていること
+    assert_eq!(second.is_truncated, Some(true));
+
+    // 3 ページ目で最後の 1 件が返り、切り詰められていないことを確認する
+    let next_marker = second.next_marker.expect("next_marker が存在すること");
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .marker(next_marker)
+        .build_request(now())
+        .unwrap();
+    let third = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let third_contents = third.contents.expect("contents が存在すること");
+    assert_eq!(third_contents.len(), 1);
+    assert_eq!(third_contents[0].key.as_deref(), Some("file2.txt"));
+    assert_eq!(third.is_truncated, Some(false));
+}
+
+/// ListObjects (v1) の encoding-type=url によるキーの URL エンコードを検証する
+///
+/// ## 検証項目
+/// - encoding_type(Url) を指定するとキーが URL エンコードされて返る
+#[tokio::test]
+async fn test_list_objects_v1_encoding_type() {
+    let (_container, port) = start_minio().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-encoding";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 非 ASCII キーのオブジェクトを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key("日本語.txt")
+        .body(b"content".to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // encoding-type=url で一覧取得するとキーが URL エンコードされて返る
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .encoding_type(shiguredo_s3::types::EncodingType::Url)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(
+        output.encoding_type,
+        Some(shiguredo_s3::types::EncodingType::Url)
+    );
+    let contents = output.contents.expect("contents が存在すること");
+    assert_eq!(contents.len(), 1);
+    // "日本語.txt" の UTF-8 表現が URL エンコードされていること
+    assert_eq!(
+        contents[0].key.as_deref(),
+        Some("%E6%97%A5%E6%9C%AC%E8%AA%9E.txt")
+    );
+}
+
 /// 同一バケット内でのオブジェクトコピーを検証する
 ///
 /// ## 検証項目

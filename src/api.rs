@@ -36,6 +36,7 @@ mod head_object;
 mod list_buckets;
 mod list_multipart_uploads;
 mod list_object_versions;
+mod list_objects_v1;
 mod list_objects_v2;
 mod list_parts;
 mod put_bucket_cors;
@@ -94,6 +95,7 @@ pub use head_object::HeadObjectFluentBuilder;
 pub use list_buckets::ListBucketsFluentBuilder;
 pub use list_multipart_uploads::ListMultipartUploadsFluentBuilder;
 pub use list_object_versions::ListObjectVersionsFluentBuilder;
+pub use list_objects_v1::ListObjectsFluentBuilder;
 pub use list_objects_v2::ListObjectsV2FluentBuilder;
 pub use list_parts::ListPartsFluentBuilder;
 pub use put_bucket_cors::PutBucketCorsFluentBuilder;
@@ -116,8 +118,9 @@ pub use upload_part_copy::UploadPartCopyFluentBuilder;
 
 pub use crate::request::{PresignedRequest, S3Request, S3Response};
 pub(crate) use util::{
-    add_sse_c_headers, base64_md5, check_body_error, head_error_from_status, parse_error_response,
-    required, validate_part_number, validate_presign_expires, xml_body_text,
+    add_sse_c_headers, base64_md5, check_body_error, extract_xml_common_prefixes,
+    extract_xml_objects, head_error_from_status, parse_error_response, required,
+    validate_part_number, validate_presign_expires, xml_body_text,
 };
 
 use crate::client::Client;

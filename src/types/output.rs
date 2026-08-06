@@ -272,6 +272,31 @@ pub struct DeleteError {
     pub message: Option<String>,
 }
 
+/// ListObjects の結果
+///
+/// aws-sdk-rust の `ListObjectsOutput` と同じ構造。
+/// ListObjects v1 は v2 と異なり `Marker` / `NextMarker` でページングする。
+#[derive(Debug)]
+pub struct ListObjectsOutput {
+    pub is_truncated: Option<bool>,
+    /// リクエストで送信した marker のエコー
+    pub marker: Option<String>,
+    /// 次ページの開始位置 (delimiter 指定時のみ返る)
+    ///
+    /// delimiter 未指定で切り詰められた場合は最後の `Key` を marker に使う。
+    pub next_marker: Option<String>,
+    pub contents: Option<Vec<Object>>,
+    pub name: Option<String>,
+    pub prefix: Option<String>,
+    pub delimiter: Option<String>,
+    pub max_keys: Option<i32>,
+    pub common_prefixes: Option<Vec<CommonPrefix>>,
+    /// `<EncodingType>` 要素 (url)
+    pub encoding_type: Option<EncodingType>,
+    /// `x-amz-request-charged` レスポンスヘッダー
+    pub request_charged: Option<String>,
+}
+
 /// ListObjectsV2 の結果
 #[derive(Debug)]
 pub struct ListObjectsV2Output {

@@ -1,31 +1,31 @@
-//! ListObjectsV2 API
+//! ListObjects API (v1)
 //!
 //! バケット内のオブジェクト一覧を取得する。
-//! Prefix や Delimiter によるフィルタリング、ContinuationToken によるページネーションに対応。
+//! Prefix や Delimiter によるフィルタリング、Marker によるページネーションに対応。
+//! v2 (ListObjectsV2) と異なり `list-type` クエリパラメータを送らない。
 //!
-//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html>
+//! <https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html>
 
 use crate::client::Client;
 use crate::error::Error;
-use crate::types::{EncodingType, ListObjectsV2Output};
+use crate::types::{EncodingType, ListObjectsOutput};
 
 use super::{
     S3Request, build_signed_request, extract_xml_common_prefixes, extract_xml_objects,
     parse_error_response, required,
 };
 
-pub struct ListObjectsV2FluentBuilder<'a> {
+pub struct ListObjectsFluentBuilder<'a> {
     client: &'a Client,
     bucket: Option<String>,
     prefix: Option<String>,
     delimiter: Option<String>,
     max_keys: Option<i32>,
-    continuation_token: Option<String>,
-    start_after: Option<String>,
+    marker: Option<String>,
     encoding_type: Option<EncodingType>,
 }
 
-impl<'a> ListObjectsV2FluentBuilder<'a> {
+impl<'a> ListObjectsFluentBuilder<'a> {
     pub(crate) fn new(client: &'a Client) -> Self {
         Self {
             client,
@@ -33,8 +33,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             prefix: None,
             delimiter: None,
             max_keys: None,
-            continuation_token: None,
-            start_after: None,
+            marker: None,
             encoding_type: None,
         }
     }
@@ -59,13 +58,23 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         self
     }
 
-    pub fn continuation_token(mut self, continuation_token: impl Into<String>) -> Self {
-        self.continuation_token = Some(continuation_token.into());
-        self
-    }
-
-    pub fn start_after(mut self, start_after: impl Into<String>) -> Self {
-        self.start_after = Some(start_after.into());
+    /// ページネーションの開始位置を指定する
+    ///
+    /// delimiter 指定時は前回のレスポンスの `next_marker` を渡す。
+    /// delimiter 未指定で切り詰められた場合は、前回のレスポンスの最後の
+    /// `Key` 要素を渡す (NextMarker は delimiter 指定時のみ返る)。
+    ///
+    /// `encoding_type` を指定した場合は、レスポンスの `Key` / `Marker` /
+    /// `NextMarker` が URL エンコードされた値で返る。ページネーションでは
+    /// エンコードされた値をそのまま marker に渡すか、デコードしてから渡すかで
+    /// サーバー実装により挙動が異なるため、対象サーバーの仕様を確認すること。
+    ///
+    /// 仕様: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html
+    /// > This element is returned only if you have the delimiter request parameter specified.
+    /// > If the response does not include the NextMarker element and it is truncated,
+    /// > you can use the value of the last Key element in the response as the marker parameter.
+    pub fn marker(mut self, marker: impl Into<String>) -> Self {
+        self.marker = Some(marker.into());
         self
     }
 
@@ -83,7 +92,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
     pub fn build_request(&self, now: std::time::SystemTime) -> Result<S3Request, Error> {
         let bucket = required(self.bucket.as_deref(), "bucket")?;
 
-        let mut query_params: Vec<(String, String)> = vec![("list-type".into(), "2".into())];
+        let mut query_params: Vec<(String, String)> = Vec::new();
         if let Some(ref prefix) = self.prefix {
             query_params.push(("prefix".into(), prefix.clone()));
         }
@@ -93,11 +102,8 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         if let Some(max_keys) = self.max_keys {
             query_params.push(("max-keys".into(), max_keys.to_string()));
         }
-        if let Some(ref token) = self.continuation_token {
-            query_params.push(("continuation-token".into(), token.clone()));
-        }
-        if let Some(ref start_after) = self.start_after {
-            query_params.push(("start-after".into(), start_after.clone()));
+        if let Some(ref marker) = self.marker {
+            query_params.push(("marker".into(), marker.clone()));
         }
         if let Some(ref encoding_type) = self.encoding_type {
             query_params.push(("encoding-type".into(), encoding_type.as_str().to_string()));
@@ -120,7 +126,7 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         )
     }
 
-    pub fn parse_response(response: &super::S3Response) -> Result<ListObjectsV2Output, Error> {
+    pub fn parse_response(response: &super::S3Response) -> Result<ListObjectsOutput, Error> {
         if !response.is_success() {
             return Err(parse_error_response(response));
         }
@@ -130,10 +136,16 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
         let contents = extract_xml_objects(body_text)?;
         let common_prefixes = extract_xml_common_prefixes(body_text)?;
 
-        Ok(ListObjectsV2Output {
+        Ok(ListObjectsOutput {
             is_truncated: crate::xml::extract_element(body_text, "IsTruncated")?
                 .map(|v| crate::xml::parse_xml_bool(&v))
                 .transpose()?,
+            // Marker / NextMarker は空要素で返ると Some("") になるため None に正規化する。
+            // 空の marker をページネーションに渡すと無限ループの原因になる。
+            // (prefix / name 等の他の文字列フィールドは空要素が意味を持つため正規化しない)
+            marker: crate::xml::extract_element(body_text, "Marker")?.filter(|v| !v.is_empty()),
+            next_marker: crate::xml::extract_element(body_text, "NextMarker")?
+                .filter(|v| !v.is_empty()),
             contents: if contents.is_empty() {
                 None
             } else {
@@ -151,14 +163,9 @@ impl<'a> ListObjectsV2FluentBuilder<'a> {
             },
             encoding_type: crate::xml::extract_element(body_text, "EncodingType")?
                 .map(|v| EncodingType::from(v.as_str())),
-            key_count: crate::xml::extract_element(body_text, "KeyCount")?
-                .and_then(|v| v.parse::<i32>().ok()),
-            continuation_token: crate::xml::extract_element(body_text, "ContinuationToken")?,
-            next_continuation_token: crate::xml::extract_element(
-                body_text,
-                "NextContinuationToken",
-            )?,
-            start_after: crate::xml::extract_element(body_text, "StartAfter")?,
+            request_charged: response
+                .get_header("x-amz-request-charged")
+                .map(String::from),
         })
     }
 }

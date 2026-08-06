@@ -13,8 +13,8 @@ use crate::api::{
     GetObjectLockConfigurationFluentBuilder, GetObjectRetentionFluentBuilder,
     GetObjectTaggingFluentBuilder, GetPublicAccessBlockFluentBuilder, HeadBucketFluentBuilder,
     HeadObjectFluentBuilder, ListBucketsFluentBuilder, ListMultipartUploadsFluentBuilder,
-    ListObjectVersionsFluentBuilder, ListObjectsV2FluentBuilder, ListPartsFluentBuilder,
-    PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
+    ListObjectVersionsFluentBuilder, ListObjectsFluentBuilder, ListObjectsV2FluentBuilder,
+    ListPartsFluentBuilder, PutBucketCorsFluentBuilder, PutBucketEncryptionFluentBuilder,
     PutBucketLifecycleConfigurationFluentBuilder, PutBucketNotificationConfigurationFluentBuilder,
     PutBucketOwnershipControlsFluentBuilder, PutBucketPolicyFluentBuilder,
     PutBucketTaggingFluentBuilder, PutBucketVersioningFluentBuilder, PutBucketWebsiteFluentBuilder,
@@ -229,6 +229,10 @@ impl Client {
 
     pub fn abort_multipart_upload(&self) -> AbortMultipartUploadFluentBuilder<'_> {
         AbortMultipartUploadFluentBuilder::new(self)
+    }
+
+    pub fn list_objects(&self) -> ListObjectsFluentBuilder<'_> {
+        ListObjectsFluentBuilder::new(self)
     }
 
     pub fn list_objects_v2(&self) -> ListObjectsV2FluentBuilder<'_> {
