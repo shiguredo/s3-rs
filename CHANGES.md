@@ -257,3 +257,5 @@
   - @voluntas
 - 統合テスト間で重複していた HTTP/1.1 送信層と Client 構築ヘルパー (`now` / `build_client` / `execute` / `send` 等) を `tests/helpers/` に集約する
   - @voluntas
+- signing.rs の署名キー導出・カノニカルヘッダー構築・スコープ文字列構築の重複ロジックを共通関数 (`derive_signing_key` / `build_canonical_headers` / `build_scope`) に集約する
+  - @voluntas

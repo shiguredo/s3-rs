@@ -116,8 +116,8 @@ use crate::client::Client;
 use crate::credential::Credentials;
 use crate::error::Error;
 use crate::signing::{
-    PresignParams, SigningParams, UtcDateTime, build_canonical_query_string, compute_authorization,
-    compute_presigned_signature, hex_sha256, uri_encode_path,
+    PresignParams, SigningParams, UtcDateTime, build_canonical_query_string, build_scope,
+    compute_authorization, compute_presigned_signature, hex_sha256, uri_encode_path,
 };
 
 // -------------------------------------------------------
@@ -437,7 +437,7 @@ pub(crate) fn build_presigned_url(
     let datetime = UtcDateTime::from_system_time(now)?;
     let date_stamp = datetime.date_stamp();
     let amz_date = datetime.iso8601();
-    let scope = format!("{date_stamp}/{}/s3/aws4_request", config.region);
+    let scope = build_scope(&date_stamp, config.region);
     let credential_value = format!("{}/{scope}", config.credentials.access_key_id);
     let expires_str = expires_in_secs.to_string();
 
