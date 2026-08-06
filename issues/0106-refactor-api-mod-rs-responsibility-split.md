@@ -2,6 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-07-12
+- Completed: 2026-08-06
 - Model: Composer 2.5 Fast
 - Branch: feature/refactor-api-mod-rs-responsibility-split
 - Polished: 2026-08-02
@@ -57,12 +58,15 @@
 
 ## 解決方法
 
-1. `src/api/endpoint.rs` を作成し、`ClientConfig`・ホスト・パス計算関連のコードを移動する（`api/mod.rs` に `mod endpoint;` 宣言を追加し、移動した関数の可視性を `pub(super)` に調整する。`ClientConfig` は `pub(crate)` を維持する）
-2. `src/request.rs` を作成し、`S3Request`, `S3Response`, `PresignedRequest` を移動する（`lib.rs` に `mod request;` 宣言を追加する）
-3. `src/api/util.rs` を作成し、バリデーション・エラー解析・ユーティリティを移動する（`api/mod.rs` に `mod util;` 宣言を追加し、`pub(crate)` 関数は `api/mod.rs` に `pub(crate) use util::{...}` で再エクスポートする）
-4. テストを移動先のモジュールに追従させる
-5. `api/mod.rs` に `pub use crate::request::{S3Request, S3Response, PresignedRequest};` と `pub(crate) use util::{...}` を追加し、サブモジュールの import が再エクスポート経由で解決することを確認する
-6. CHANGES.md の `## develop` の `### misc` にエントリを追加する
+設計方針どおり 3 ファイルに責務を分離した:
+
+1. `src/request.rs` を新設し、ワイヤー型 (`PresignedRequest` / `S3Request` / `S3Response` + `impl S3Response`) を移動した
+2. `src/api/endpoint.rs` を新設し、設定参照 (`ClientConfig`) とホスト・パス計算 (`parse_endpoint_scheme` / `service_host` / `use_path_style_for_bucket` / `host_for_bucket` / `extract_connect_host` / `extract_port` / `parse_port_from_authority` / `path_for_key`) を移動した。`api/mod.rs` から呼ばれる 6 関数は `pub(super)` に引き上げ、内部完結の 2 関数は private のままとした
+3. `src/api/util.rs` を新設し、バリデーション・エラー解析・ユーティリティ (`required` / `validate_presign_expires` / `validate_part_number` / `check_body_error` / `xml_body_text` / `parse_error_response` / `head_error_from_status` / `base64_md5` / `compute_sse_c_key_md5` 等) を移動した。`api/mod.rs` に `pub(crate) use util::{...}` で再エクスポートし、56 個のサブモジュールの `use super::{...}` は無修正で解決することを確認した
+4. テストは `required_tests` を `util.rs` に追従させ、`sans_io_tests` は `api/mod.rs` に残した。分離を機に `endpoint.rs` にホスト・パス計算の単体テスト、`util.rs` に有効期限・パート番号の境界値テストとエラー写像・MD5 計算のテストを追加した
+5. `api/mod.rs` は 884 行から 477 行になり、モジュール宣言・`pub use`・再エクスポート・`impl Client { config_ref }`・リクエスト構築・`sans_io_tests` のみが残った
+
+公開 API パス (`shiguredo_s3::S3Request` / `shiguredo_s3::api::S3Response` 等) は `lib.rs` と `api/mod.rs` の再エクスポートで維持した。CHANGES.md の `## develop` の `### misc` にエントリを追加した。
 
 ## 他 issue との依存関係
 
