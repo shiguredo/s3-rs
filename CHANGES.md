@@ -261,3 +261,5 @@
   - @voluntas
 - api/mod.rs の責務を分離し、ワイヤー型を `src/request.rs`、設定参照とホスト・パス計算を `src/api/endpoint.rs`、バリデーション・エラー解析・ユーティリティを `src/api/util.rs` に移動する (公開 API パスは維持)
   - @voluntas
+- types.rs を責務別に分割し、出力型を `src/types/output.rs`、入力・設定・Builder 型を `src/types/model.rs`、enum 型を `src/types/enums.rs` に移動する (公開 API パスは再エクスポートで維持)
+  - @voluntas
