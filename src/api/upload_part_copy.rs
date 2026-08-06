@@ -192,41 +192,24 @@ impl<'a> UploadPartCopyFluentBuilder<'a> {
         }
 
         // コピー元の SSE-C
-        if let Some(ref v) = self.copy_source_sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        let computed_src_key_md5;
-        if let Some(ref v) = self.copy_source_sse_customer_key {
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-key",
-                v.as_str(),
-            ));
-            computed_src_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-copy-source-server-side-encryption-customer-key-md5",
-                &computed_src_key_md5,
-            ));
-        }
+        let mut computed_src_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.copy_source_sse_customer_algorithm.as_deref(),
+            self.copy_source_sse_customer_key.as_deref(),
+            &mut computed_src_key_md5,
+            true,
+        )?;
 
         // コピー先の SSE-C
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        let computed_dst_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_dst_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_dst_key_md5,
-            ));
-        }
+        let mut computed_dst_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_dst_key_md5,
+            false,
+        )?;
 
         let part_number_str = part_number.to_string();
         let query_params = [

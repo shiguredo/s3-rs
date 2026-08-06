@@ -316,22 +316,14 @@ impl<'a> UploadPartFluentBuilder<'a> {
             extra_headers.push((header_name, &computed_checksum_default));
         }
 
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_key_md5,
-            ));
-        }
+        let mut computed_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_key_md5,
+            false,
+        )?;
 
         build_signed_request(
             &self.client.config_ref(),
@@ -414,22 +406,14 @@ impl<'a> UploadPartFluentBuilder<'a> {
             content_length_str = cl.to_string();
             extra_headers.push(("content-length", content_length_str.as_str()));
         }
-        if let Some(ref v) = self.sse_customer_algorithm {
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-algorithm",
-                v.as_str(),
-            ));
-        }
-        // SSE-C キーが指定されている場合、MD5 を自動計算する
-        let computed_key_md5;
-        if let Some(ref v) = self.sse_customer_key {
-            extra_headers.push(("x-amz-server-side-encryption-customer-key", v.as_str()));
-            computed_key_md5 = super::compute_sse_c_key_md5(v)?;
-            extra_headers.push((
-                "x-amz-server-side-encryption-customer-key-md5",
-                &computed_key_md5,
-            ));
-        }
+        let mut computed_key_md5 = None;
+        super::add_sse_c_headers(
+            &mut extra_headers,
+            self.sse_customer_algorithm.as_deref(),
+            self.sse_customer_key.as_deref(),
+            &mut computed_key_md5,
+            false,
+        )?;
         // チェックサムの処理 (presigned はボディがないため自動計算しない):
         // 個別フィールドが指定されていれば該当ヘッダーをすべて設定する。
         // checksum_algorithm は個別指定が無いときのみ x-amz-sdk-checksum-algorithm として送信する
