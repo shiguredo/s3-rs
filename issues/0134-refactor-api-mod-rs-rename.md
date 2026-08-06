@@ -2,7 +2,7 @@
 
 - Priority: Medium
 - Created: 2026-08-06
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-08-06
 - Branch: feature/refactor-api-mod-rs
 - Polished: {YYYY-MM-DD}
 
@@ -26,3 +26,7 @@
 - 公開 API パス (`shiguredo_s3::api::*`) が変更されていないこと
 - 既存のテストが全て通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
+
+## 解決方法
+
+`git mv src/api/mod.rs src/api.rs` でリネームした。`src/lib.rs` の `pub mod api;` は変更不要で、`src/api.rs` + `src/api/` ディレクトリ構成で `api` モジュールが解決されることを確認した。サブモジュールの `use super::{...}` 参照と `shiguredo_s3::api::*` パスは影響を受けない。全テスト (59 件)・fmt・clippy が通過することを確認した。develop ブランチに直接コミットした（issue 化せず即時対応の指示による）。
