@@ -259,3 +259,5 @@
   - @voluntas
 - signing.rs の署名キー導出・カノニカルヘッダー構築・スコープ文字列構築の重複ロジックを共通関数 (`derive_signing_key` / `build_canonical_headers` / `build_scope`) に集約する
   - @voluntas
+- api/mod.rs の責務を分離し、ワイヤー型を `src/request.rs`、設定参照とホスト・パス計算を `src/api/endpoint.rs`、バリデーション・エラー解析・ユーティリティを `src/api/util.rs` に移動する (公開 API パスは維持)
+  - @voluntas

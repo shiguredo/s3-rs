@@ -8,6 +8,7 @@ mod client;
 mod credential;
 mod datetime;
 mod error;
+mod request;
 mod signing;
 pub mod types;
 mod xml;
