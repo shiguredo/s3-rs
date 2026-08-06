@@ -19,9 +19,9 @@ pub use credential::Credentials;
 pub use error::{Error, s3_error_code};
 pub use types::{
     ChecksumAlgorithm, ChecksumMode, CopyObjectResult, CreateBucketConfiguration, Delete,
-    DeleteBuilder, EncodingType, MetadataDirective, ObjectCannedAcl, ObjectIdentifier, Owner,
-    RestoreStatus, ServerSideEncryption, ServerSideEncryptionByDefault, ServerSideEncryptionRule,
-    StorageClass, TaggingDirective, validate_imf_fixdate,
+    DeleteBuilder, EncodingType, ListObjectsOutput, MetadataDirective, ObjectCannedAcl,
+    ObjectIdentifier, Owner, RestoreStatus, ServerSideEncryption, ServerSideEncryptionByDefault,
+    ServerSideEncryptionRule, StorageClass, TaggingDirective, validate_imf_fixdate,
 };
 
 /// `unix_timestamp_from_civil` → `civil_from_unix_timestamp` のラウンドトリップ (PBT 用)

@@ -2,7 +2,7 @@
 
 - Priority: High
 - Created: 2026-07-31
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-08-06
 - Branch: feature/add-list-objects-v1
 - Polished: 2026-08-02
 - Model: GPT-5
@@ -55,3 +55,14 @@ src/api/ には ListObjectsV2 は存在するが、ListObjects v1 に対応す�
 - 0057（pending: expected_bucket_owner / request_payer）は全 API 横断で管理。本 issue では対応しない
 - 0126（operation specific input fields）は `optional_object_attributes` を ListObjectsV2 / ListObjectVersions に追加する。本 issue では対応しない
 - 0129（remaining output fields）は `ListObjectsV2Output` の `request_charged` 等を追加する。本 issue の `ListObjectsOutput.request_charged` は独立に追加する
+
+## 解決方法
+
+1. `src/api/list_objects_v1.rs` を新規作成し、`ListObjectsFluentBuilder` を実装した。v2 の builder パターン（`build_request` / `parse_response` の分離、`required()` による必須検証、`build_signed_request` の呼び出し）を踏襲した。クエリパラメータは `prefix` / `delimiter` / `max-keys` / `marker` / `encoding-type` で、v2 と異なり `list-type` を送らない
+2. `src/types/output.rs` に `ListObjectsOutput` を追加した（`is_truncated` / `marker` / `next_marker` / `contents` / `name` / `prefix` / `delimiter` / `max_keys` / `common_prefixes` / `encoding_type` / `request_charged`。aws-sdk-rust の `ListObjectsOutput` と同じフィールド名・順序）。`request_charged` は `x-amz-request-charged` レスポンスヘッダーから取得する
+3. XML パースヘルパー（`extract_xml_objects` / `extract_xml_common_prefixes`）は v1 → v2 の依存を避けるため `src/api/util.rs` に移動し、v1 / v2 で共有した
+4. `Marker` / `NextMarker` は空要素で返ると `Some("")` になるため `None` に正規化した（空 marker によるページネーション無限ループの防止）
+5. `src/client.rs` に `list_objects()` メソッド、`src/api.rs` にモジュール宣言と `ListObjectsFluentBuilder` の公開、`src/lib.rs` / `src/types.rs` に `ListObjectsOutput` の公開を追加した
+6. `tests/minio.rs` に統合テスト 4 件を追加した（一覧取得と prefix / delimiter 検証、delimiter なしページネーション（最後の Key を marker に使用）、delimiter 付き NextMarker ページネーション、encoding-type=url によるキーの URL エンコード）。完了条件の変更対象ファイル記載（`tests/test_list_objects_v1.rs`）は実装時点の既存構成（`tests/minio.rs` への統合テスト追加）に合わせた
+
+CHANGES.md の `## develop` に `[ADD]` エントリを追加した。

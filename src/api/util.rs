@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::request::S3Response;
+use crate::types::{ChecksumAlgorithm, CommonPrefix, Object, Owner, RestoreStatus, StorageClass};
 
 // -------------------------------------------------------
 // バリデーション
@@ -227,6 +228,73 @@ pub(crate) fn add_sse_c_headers<'a>(
         ));
     }
     Ok(())
+}
+
+// -------------------------------------------------------
+// XML レスポンスパース (ListObjects / ListObjectsV2 共通)
+// -------------------------------------------------------
+
+/// ListBucketResult の `<Contents>` 要素をオブジェクト一覧としてパースする
+pub(crate) fn extract_xml_objects(text: &str) -> Result<Vec<Object>, Error> {
+    let mut objects = Vec::new();
+    crate::xml::for_each_element(text, "Contents", |elem| {
+        let owner = if elem.has("Owner") {
+            Some(Owner {
+                display_name: elem.get_nested(&["Owner", "DisplayName"]).map(String::from),
+                id: elem.get_nested(&["Owner", "ID"]).map(String::from),
+            })
+        } else {
+            None
+        };
+        let restore_status = if elem.has("RestoreStatus") {
+            Some(RestoreStatus {
+                is_restore_in_progress: elem
+                    .get_nested(&["RestoreStatus", "IsRestoreInProgress"])
+                    .map(crate::xml::parse_xml_bool)
+                    .transpose()?,
+                restore_expiry_date: elem
+                    .get_nested(&["RestoreStatus", "RestoreExpiryDate"])
+                    .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
+            })
+        } else {
+            None
+        };
+        let checksum_algorithm = {
+            let all = elem.get_all("ChecksumAlgorithm");
+            if all.is_empty() {
+                None
+            } else {
+                Some(all.into_iter().map(ChecksumAlgorithm::from).collect())
+            }
+        };
+        objects.push(Object {
+            key: elem.get("Key").map(String::from),
+            last_modified: elem
+                .get("LastModified")
+                .and_then(|s| crate::datetime::parse_iso8601(s).ok()),
+            e_tag: elem.get("ETag").map(String::from),
+            size: elem.get_parsed::<i64>("Size"),
+            storage_class: elem.get("StorageClass").map(StorageClass::from),
+            owner,
+            restore_status,
+            checksum_algorithm,
+            checksum_type: elem.get("ChecksumType").map(String::from),
+        });
+        Ok(())
+    })?;
+    Ok(objects)
+}
+
+/// ListBucketResult の `<CommonPrefixes>` 要素を共通プレフィックス一覧としてパースする
+pub(crate) fn extract_xml_common_prefixes(text: &str) -> Result<Vec<CommonPrefix>, Error> {
+    let mut prefixes = Vec::new();
+    crate::xml::for_each_element(text, "CommonPrefixes", |elem| {
+        prefixes.push(CommonPrefix {
+            prefix: elem.get("Prefix").map(String::from),
+        });
+        Ok(())
+    })?;
+    Ok(prefixes)
 }
 
 #[cfg(test)]
