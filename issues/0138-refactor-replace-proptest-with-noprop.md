@@ -1,7 +1,7 @@
 # proptest を noprop に置き換える
 
 - Created: 2026-08-17
-- Completed: {YYYY-MM-DD}
+- Completed: 2026-08-17
 - Branch: feature/refactor-replace-proptest-with-noprop
 - Polished: {YYYY-MM-DD}
 
@@ -33,3 +33,9 @@ proptest を使っている箇所は以下に限られる:
 - `pbt/tests/prop_datetime.rs` が noprop で書き直され、ラウンドトリッププロパティがカバレッジゲート付きで検証されていること
 - `cargo test -p pbt --test prop_datetime` が通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
+
+## 解決方法
+
+- `pbt/Cargo.toml` の `proptest` 依存を `noprop = "0.2"` に置き換える
+- `pbt/tests/prop_datetime.rs` を `noprop::Runner` の命令型スタイルで書き直し、各フィールドの境界値に `sample_with_boundaries` で確率を与え、ラウンドトリップ成功ケースをカウントするカバレッジゲートを追加する
+- 実装に伴い `shiguredo_container` を `2026.1.0-canary.8` から `2026.1.0-canary.10` に更新する (CI でのコンテナ統合テストのため)
