@@ -243,6 +243,10 @@
   - @voluntas
 - examples/s3cli の依存を更新する (`shiguredo_http11` 2026.1 → 2026.6、`rustls-platform-verifier` 0.6 → 0.7、`noargs` 0.3 → 0.4)
   - @voluntas
+- PBT 基盤を proptest から noprop に置き換える (`pbt/` Cargo.toml、`pbt/tests/prop_datetime.rs`)
+  - @voluntas
+- 統合テストの `shiguredo_container` を `2026.1.0-canary.8` から `2026.1.0-canary.10` に更新する
+  - @voluntas
 - Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
   - @voluntas
 - docs/AWS_SDK_RUST.md の対応方針表を再分類する (「未対応 (互換性のため対応予定)」「入力は対応予定無し、出力は対応」「対応予定無し」維持の 3 カテゴリに整理)
