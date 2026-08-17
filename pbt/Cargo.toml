@@ -6,6 +6,6 @@ rust-version = "1.93"
 publish = false
 
 [dev-dependencies]
-# Property-Based Testing (proptest)
-proptest = "1.6"
+# Property-Based Testing (noprop)
+noprop = "0.2"
 shiguredo_s3 = { path = ".." }
