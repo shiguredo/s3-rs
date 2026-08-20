@@ -245,7 +245,7 @@
   - @voluntas
 - PBT 基盤を proptest から noprop に置き換える (`pbt/` Cargo.toml、`pbt/tests/prop_datetime.rs`)
   - @voluntas
-- 統合テストの `shiguredo_container` を `2026.1.0-canary.8` から `2026.1.0-canary.10` に更新する
+- 統合テストの `shiguredo_container` を `2026.1.0-canary.10` から `2026.1.0` に更新する
   - @voluntas
 - Base64 エンコード/デコードの依存を `base64` から `base64ct` に変更する
   - @voluntas
