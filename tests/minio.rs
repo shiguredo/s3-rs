@@ -57,7 +57,8 @@ const SECRET_KEY: &str = "minioadmin";
 /// この文字列は MinIO の S3 API が起動完了したことを示す。
 /// コンテナは呼び出し側が保持し、Drop で削除する。
 async fn start_minio() -> (ContainerAsync<GenericImage>, u16) {
-    let container = GenericImage::new("minio/minio", "latest")
+    // Docker Hub の minio/minio は削除されたため quay.io の公式イメージを使う
+    let container = GenericImage::new("quay.io/minio/minio", "latest")
         .with_exposed_port(9000.tcp())
         // MinIO が S3 API の起動完了を示すログを待つ
         .with_wait_for(WaitFor::message_on_either_std("API:"))
