@@ -1,13 +1,13 @@
 //! 統合テスト共通ヘルパー
 //!
-//! MinIO / RustFS / kikyo-local の各統合テストで共有する HTTP/1.1 送信層と
+//! RustFS / kikyo-local の各統合テストで共有する HTTP/1.1 送信層と
 //! テスト用 Client 構築ヘルパーを提供する。
 //!
 //! コンテナ固有の起動処理 (`start_rustfs` 等) とアクセスキー / シークレットキーは
 //! 各テストファイルに置き、このモジュールにはサーバーに依存しない共通処理のみを置く。
 
 use shiguredo_http11::{HeaderName, HttpHead, Method, ResponseDecoder};
-use shiguredo_s3::{Client, Config, Credentials, S3Request, S3Response};
+use shiguredo_s3::{Client, Config, Credentials, PresignedRequest, S3Request, S3Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// `SystemTime::now()` をテスト本体から呼び出すためのヘルパ
@@ -56,6 +56,44 @@ pub async fn send<T>(
 ) -> T {
     let response = execute(request).await;
     parse(&response).expect("failed to parse response")
+}
+
+/// PresignedRequest を HTTP/1.1 で送信して S3Response を返す
+///
+/// presigned URL をパースして S3Request に変換し、共通の execute() で送信する。
+/// presigned リクエストは署名済みのため、そのままの method / uri / headers を使う。
+pub async fn execute_presigned(presigned: &PresignedRequest) -> S3Response {
+    // "http://127.0.0.1:PORT/path?query" をパースする
+    let url = &presigned.url;
+    let without_scheme = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .expect("presigned URL が http(s) スキームを持つこと");
+    let (authority, path_and_query) = without_scheme
+        .split_once('/')
+        .expect("presigned URL がパスを持つこと");
+    let (host, port) = authority
+        .rsplit_once(':')
+        .expect("presigned URL が host:port を持つこと");
+    let uri = format!("/{path_and_query}");
+
+    // Host ヘッダーを presigned ヘッダーの先頭に追加する
+    // (execute は S3Request の headers をそのまま送信する)
+    let mut headers = vec![("host".to_string(), authority.to_string())];
+    headers.extend(presigned.headers.iter().cloned());
+
+    let request = S3Request {
+        method: presigned.method.clone(),
+        uri,
+        headers,
+        body: presigned.body.clone(),
+        host: host.to_string(),
+        port: port.parse().expect("presigned のポートが数値であること"),
+        https: false,
+        ignore_cert_check: false,
+        expect_no_body: false,
+    };
+    execute(request).await
 }
 
 /// S3Request を shiguredo_http11 の Request に変換してエンコードする

@@ -24,8 +24,6 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace --lib
-      - name: MinIO integration tests
-        run: cargo test --test minio
       - name: RustFS integration tests
         run: cargo test --test rustfs
       - name: kikyo-local integration tests

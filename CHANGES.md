@@ -271,3 +271,5 @@
   - @voluntas
 - 9 ファイル 17 箇所に重複していた SSE-C ヘッダー構築ロジックを `add_sse_c_headers` ヘルパー関数に集約する (コピー元 SSE-C 対応を含む)
   - @voluntas
+- 統合テストから MinIO を削除し、MinIO にしかなかったテストを RustFS と kikyo-local に移植する
+  - @voluntas
