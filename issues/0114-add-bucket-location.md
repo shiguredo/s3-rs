@@ -34,13 +34,13 @@ src/api/ に GetBucketLocation がなく、LocationConstraint のレスポンス
 - `src/client.rs` (`get_bucket_location()` メソッド追加)
 - `src/lib.rs` (`BucketLocationConstraint` enum の crate ルート再エクスポート追加。`GetBucketLocationOutput` は既存パターンどおりルート再エクスポートしない)
 - `tests/test_get_bucket_location.rs` (新規作成)
-- `tests/minio.rs` / `tests/rustfs.rs` / `tests/kikyo.rs` (統合テストを追加。`?location` サブリソースに未対応のサーバーは完了条件のとおり統合テスト対象外)
+- `tests/rustfs.rs` / `tests/kikyo.rs` (統合テストを追加。`?location` サブリソースに未対応のサーバーは完了条件のとおり統合テスト対象外)
 
 ## 完了条件
 
 - `GET /?location` のリクエストを正しい URI、ヘッダーで構築できる
 - XML の LocationConstraint を正しくパースし、空ボディ / 空 XML は `None`、リージョン名・`EU` 値は対応する `BucketLocationConstraint` に変換できる（未知の値は `Unknown(String)` になるパースも検証する）
-- 実際の S3 互換サーバー（MinIO / RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?location` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
+- 実際の S3 互換サーバー（RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?location` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
 - 既存のテストが全て通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
 - CHANGES.md の `## develop` に `[ADD]` エントリを追加すること
