@@ -43,7 +43,7 @@ src/api/ に accelerate サブリソース用の operation と AccelerateConfigu
 
 - `GET /?accelerate` と `PUT /?accelerate` のリクエストを正しい URI、ヘッダー、XML で構築できる
 - `Enabled`、`Suspended` のレスポンスを正しくパースできる（`Unknown(String)` のパースも検証する）
-- 実際の S3 互換サーバー（MinIO / RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?accelerate` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
+- 実際の S3 互換サーバー（RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?accelerate` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
 - 既存のテストが全て通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
 - CHANGES.md の `## develop` に `[ADD]` エントリを追加すること
