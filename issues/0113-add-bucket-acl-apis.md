@@ -64,14 +64,14 @@ CreateBucket / PutObject / CopyObject / CreateMultipartUpload に canned ACL（`
 - `src/client.rs` (`get_bucket_acl()` / `put_bucket_acl()` / `get_object_acl()` / `put_object_acl()` メソッド追加)
 - `src/lib.rs` (新しいモデル型の crate ルート再エクスポート追加。Output 型は既存パターンどおりルート再エクスポートしない)
 - `tests/test_acl.rs` (新規作成。4 operation のリクエスト構築・レスポンスパースのテスト)
-- `tests/minio.rs` / `tests/rustfs.rs` (ACL の統合テストを追加。kikyo-local は ACL 非対応のため `tests/kikyo.rs` には追加しない)
+- `tests/rustfs.rs` (ACL の統合テストを追加。kikyo-local は ACL 非対応のため `tests/kikyo.rs` には追加しない)
 
 ## 完了条件
 
 - `GET /?acl` / `PUT /?acl`（bucket）と `GET /{Key}?acl` / `PUT /{Key}?acl`（object、`versionId` 付きを含む）のリクエストを正しい URI、ヘッダー、XML で構築できる
 - `xsi:type` 属性付きの AccessControlPolicy レスポンス（CanonicalUser / Group / AmazonCustomerByEmail）を正しくパースできる（未知の Permission / Type の値は `Unknown(String)` としてパースされることも検証する）
 - canned ACL、`grant_*` ヘッダー、AccessControlPolicy XML ボディの 3 モードの入力を扱え、同時指定は `Error::InvalidInput` となる
-- 実際の S3 互換サーバー（MinIO / RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。kikyo-local は ACL 非対応（`tests/kikyo.rs` に明記済み）のため、対応しているサーバーでのみ統合テストを行う。その他のサーバーで `?acl` サブリソースに未対応がある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
+- 実際の S3 互換サーバー（RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。kikyo-local は ACL 非対応（`tests/kikyo.rs` に明記済み）のため、対応しているサーバーでのみ統合テストを行う。その他のサーバーで `?acl` サブリソースに未対応がある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
 - 既存のテストが全て通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
 - CHANGES.md の `## develop` に `[ADD]` エントリを追加すること

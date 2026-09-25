@@ -1490,3 +1490,2052 @@ async fn test_bucket_cors() {
         response.status_code
     );
 }
+/// ListObjects (v1) でオブジェクト一覧を取得できることを検証する
+///
+/// ## 検証項目
+/// - prefix でフィルタリングした一覧が返る
+/// - delimiter で仮想的なディレクトリ構造が表現できる
+#[tokio::test]
+async fn test_list_objects_v1() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // "dir/" プレフィックスを持つオブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("dir/file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // prefix="dir/" で一覧取得すると 3 件が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .prefix("dir/")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let contents = output.contents.expect("contents が存在すること");
+    assert_eq!(contents.len(), 3);
+    // 基本フィールドがパースされていること
+    assert_eq!(output.name.as_deref(), Some(bucket));
+    assert_eq!(output.is_truncated, Some(false));
+    assert_eq!(output.prefix.as_deref(), Some("dir/"));
+    // prefix フィルタが機能し、対象キーのみが返ること
+    let mut keys: Vec<&str> = contents
+        .iter()
+        .map(|o| o.key.as_deref().expect("key が存在すること"))
+        .collect();
+    keys.sort();
+    assert_eq!(
+        keys,
+        vec!["dir/file0.txt", "dir/file1.txt", "dir/file2.txt"]
+    );
+
+    // delimiter="/" で取得すると "dir/" が CommonPrefixes に含まれることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let prefixes = output
+        .common_prefixes
+        .expect("common_prefixes が存在すること");
+    assert!(prefixes.iter().any(|p| p.prefix.as_deref() == Some("dir/")));
+    // delimiter で丸められた結果、contents は空になること
+    assert!(output.contents.is_none());
+}
+
+/// ListObjects (v1) のページネーションを検証する
+///
+/// delimiter 未指定では AWS 仕様により NextMarker は返らないため、
+/// 前ページの最後の Key を marker に渡してページングする。
+///
+/// ## 検証項目
+/// - max_keys で 1 件ずつ取得できる
+/// - 最後の Key を marker に渡して次ページを取得できる
+/// - 最終ページで is_truncated が false になる
+/// - 全ページの合計が全件数と一致する
+#[tokio::test]
+async fn test_list_objects_v1_pagination() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-pagination";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // 全ページを走査して 3 件すべて取得できることを確認する
+    let mut all_keys = Vec::new();
+    let mut marker: Option<String> = None;
+    loop {
+        let mut builder = client.list_objects().bucket(bucket).max_keys(1);
+        if let Some(ref m) = marker {
+            builder = builder.marker(m.clone());
+        }
+        let request = builder.build_request(now()).unwrap();
+        let output = send(
+            request,
+            shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+        )
+        .await;
+        let contents = output.contents.expect("contents が存在すること");
+        for object in &contents {
+            all_keys.push(object.key.clone().expect("key が存在すること"));
+        }
+        // marker がレスポンスにエコーされること
+        if let Some(ref m) = marker {
+            assert_eq!(output.marker.as_deref(), Some(m.as_str()));
+        }
+        if output.is_truncated == Some(true) {
+            // delimiter 未指定なので前ページの最後の Key を marker に使う
+            marker = contents.last().and_then(|o| o.key.clone());
+            // 切り詰められたのに contents が空のレスポンスは異常なので打ち切る
+            if marker.is_none() {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    assert_eq!(all_keys.len(), 3);
+    assert_eq!(
+        all_keys,
+        vec![
+            "file0.txt".to_string(),
+            "file1.txt".to_string(),
+            "file2.txt".to_string()
+        ]
+    );
+}
+
+/// ListObjects (v1) の delimiter 指定時の NextMarker ページネーションを検証する
+///
+/// AWS 仕様では NextMarker は delimiter 指定時のみ返る。
+///
+/// ## 検証項目
+/// - delimiter 指定時に NextMarker が返る
+/// - NextMarker を marker に渡して次ページを取得できる
+#[tokio::test]
+async fn test_list_objects_v1_next_marker() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-next-marker";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを 3 つ作成する
+    for i in 0..3 {
+        let key = format!("file{i}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("content-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // delimiter 付き max_keys=1 で取得すると 1 件と next_marker が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .build_request(now())
+        .unwrap();
+    let first = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let first_contents = first.contents.expect("contents が存在すること");
+    assert_eq!(first_contents.len(), 1);
+    assert_eq!(first.is_truncated, Some(true));
+    let next_marker = first.next_marker.expect("next_marker が存在すること");
+
+    // marker に next_marker を渡すと次の 1 件が返ることを確認する
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .marker(next_marker.clone())
+        .build_request(now())
+        .unwrap();
+    let second = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let second_contents = second.contents.expect("contents が存在すること");
+    assert_eq!(second_contents.len(), 1);
+    // 次のキー (file1.txt) が返ること
+    assert_eq!(second_contents[0].key.as_deref(), Some("file1.txt"));
+    // marker がレスポンスにエコーされること
+    assert_eq!(second.marker.as_deref(), Some(next_marker.as_str()));
+    // まだ 1 件残っているため切り詰められていること
+    assert_eq!(second.is_truncated, Some(true));
+
+    // 3 ページ目で最後の 1 件が返り、切り詰められていないことを確認する
+    let next_marker = second.next_marker.expect("next_marker が存在すること");
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .delimiter("/")
+        .max_keys(1)
+        .marker(next_marker)
+        .build_request(now())
+        .unwrap();
+    let third = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    let third_contents = third.contents.expect("contents が存在すること");
+    assert_eq!(third_contents.len(), 1);
+    assert_eq!(third_contents[0].key.as_deref(), Some("file2.txt"));
+    assert_eq!(third.is_truncated, Some(false));
+}
+
+/// ListObjects (v1) の encoding-type=url によるキーの URL エンコードを検証する
+///
+/// ## 検証項目
+/// - encoding_type(Url) を指定するとキーが URL エンコードされて返る
+#[tokio::test]
+async fn test_list_objects_v1_encoding_type() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-objects-v1-encoding";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 非 ASCII キーのオブジェクトを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key("日本語.txt")
+        .body(b"content".to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // encoding-type=url で一覧取得するとキーが URL エンコードされて返る
+    let request = client
+        .list_objects()
+        .bucket(bucket)
+        .encoding_type(shiguredo_s3::types::EncodingType::Url)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(
+        output.encoding_type,
+        Some(shiguredo_s3::types::EncodingType::Url)
+    );
+    let contents = output.contents.expect("contents が存在すること");
+    assert_eq!(contents.len(), 1);
+    // "日本語.txt" の UTF-8 表現が URL エンコードされていること
+    assert_eq!(
+        contents[0].key.as_deref(),
+        Some("%E6%97%A5%E6%9C%AC%E8%AA%9E.txt")
+    );
+}
+
+/// Presigned URL による PutObject / GetObject / HeadObject / DeleteObject のラウンドトリップを検証する
+///
+/// 署名済み URL を使うことで、S3 クレデンシャルを持たないクライアントが
+/// 一時的にオブジェクト操作を実行できる。
+///
+/// ## 検証項目
+/// - PutObject の presigned URL でオブジェクトをアップロードできる
+/// - GetObject の presigned URL でボディを取得できる
+/// - HeadObject の presigned URL で Content-Length を取得できる
+/// - DeleteObject の presigned URL でオブジェクトを削除できる
+/// - 削除後に GetObject で 404 が返る
+#[tokio::test]
+async fn test_presigned_put_get_head_delete() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-presigned-crud";
+    let key = "presigned.txt";
+    let body = b"Hello, Presigned!";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // PutObject の presigned URL でアップロードする
+    let presigned = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .content_type("text/plain")
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "PUT");
+    // presigned URL にボディを付けて送信する
+    let mut put_presigned = presigned;
+    put_presigned.body = body.to_vec();
+    let response = execute_presigned(&put_presigned).await;
+    assert!(
+        response.is_success(),
+        "presigned PutObject failed: {}",
+        response.status_code
+    );
+
+    // GetObject の presigned URL でダウンロードする
+    let presigned = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "GET");
+    let response = execute_presigned(&presigned).await;
+    assert!(response.is_success());
+    assert_eq!(response.body, body);
+
+    // HeadObject の presigned URL でメタデータを取得する
+    let presigned = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "HEAD");
+    let response = execute_presigned(&presigned).await;
+    assert!(response.is_success());
+    assert_eq!(response.content_length(), Some(body.len() as u64));
+
+    // DeleteObject の presigned URL でオブジェクトを削除する
+    let presigned = client
+        .delete_object()
+        .bucket(bucket)
+        .key(key)
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "DELETE");
+    let response = execute_presigned(&presigned).await;
+    assert!(response.is_success());
+
+    // 削除後に通常の GetObject で 404 が返ることを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 404);
+}
+
+/// Presigned URL によるマルチパートアップロードのフローを検証する
+///
+/// ## 検証項目
+/// - CreateMultipartUpload の presigned URL で upload_id を取得できる
+/// - UploadPart の presigned URL でパートをアップロードできる
+/// - CompleteMultipartUpload の presigned URL でアップロードを完了できる
+/// - 完了後に GetObject で結合されたボディを取得できる
+#[tokio::test]
+async fn test_presigned_multipart_upload() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-presigned-mpu";
+    let key = "presigned-multipart.bin";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 通常の CreateMultipartUpload で upload_id を取得する
+    // (presigned CreateMultipartUpload のレスポンスパースも検証する)
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id が存在すること");
+
+    // 各パートを 5 MB に設定する (S3 の最小パートサイズ)
+    let part_size = 5 * 1024 * 1024;
+    let part1_data: Vec<u8> = vec![0xCC; part_size];
+    let part2_data: Vec<u8> = vec![0xDD; part_size];
+
+    // UploadPart の presigned URL でパート 1 をアップロードする
+    let presigned = client
+        .upload_part()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .part_number(1)
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "PUT");
+    let mut part1_presigned = presigned;
+    part1_presigned.body = part1_data.clone();
+    let response = execute_presigned(&part1_presigned).await;
+    assert!(
+        response.is_success(),
+        "presigned UploadPart 1 failed: {}",
+        response.status_code
+    );
+    let part1_etag = response.get_header("etag").map(String::from);
+
+    // UploadPart の presigned URL でパート 2 をアップロードする
+    let presigned = client
+        .upload_part()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .part_number(2)
+        .presigned(3600, now())
+        .unwrap();
+    let mut part2_presigned = presigned;
+    part2_presigned.body = part2_data.clone();
+    let response = execute_presigned(&part2_presigned).await;
+    assert!(
+        response.is_success(),
+        "presigned UploadPart 2 failed: {}",
+        response.status_code
+    );
+    let part2_etag = response.get_header("etag").map(String::from);
+
+    // CompleteMultipartUpload の presigned URL でアップロードを完了する
+    let presigned = client
+        .complete_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .multipart_upload(CompletedMultipartUpload {
+            parts: Some(vec![
+                CompletedPart {
+                    e_tag: part1_etag,
+                    part_number: Some(1),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+                CompletedPart {
+                    e_tag: part2_etag,
+                    part_number: Some(2),
+                    checksum_crc32: None,
+                    checksum_crc32_c: None,
+                    checksum_crc64_nvme: None,
+                    checksum_sha1: None,
+                    checksum_sha256: None,
+                },
+            ]),
+        })
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "POST");
+    // CompleteMultipartUpload の presigned URL はボディに XML を含む
+    assert!(!presigned.body.is_empty());
+    let response = execute_presigned(&presigned).await;
+    assert!(
+        response.is_success(),
+        "presigned CompleteMultipartUpload failed: {}",
+        response.status_code
+    );
+
+    // GetObject で結合されたオブジェクトのボディを取得して確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let get_output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(get_output.body.len(), part_size * 2);
+    assert_eq!(&get_output.body[..part_size], &part1_data[..]);
+    assert_eq!(&get_output.body[part_size..], &part2_data[..]);
+}
+
+/// Presigned URL の有効期限バリデーションを検証する
+///
+/// ## 検証項目
+/// - 0 秒は InvalidInput エラーになる
+/// - 604801 秒 (7 日 + 1 秒) は InvalidInput エラーになる
+/// - 1 秒と 604800 秒 (境界値) は成功する
+#[tokio::test]
+async fn test_presigned_expires_validation() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-presigned-expires";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 0 秒はエラーになる
+    let result = client
+        .get_object()
+        .bucket(bucket)
+        .key("test.txt")
+        .presigned(0, now());
+    assert!(result.is_err());
+
+    // 604801 秒 (7 日 + 1 秒) はエラーになる
+    let result = client
+        .get_object()
+        .bucket(bucket)
+        .key("test.txt")
+        .presigned(604801, now());
+    assert!(result.is_err());
+
+    // 1 秒 (最小値) は成功する
+    let result = client
+        .get_object()
+        .bucket(bucket)
+        .key("test.txt")
+        .presigned(1, now());
+    assert!(result.is_ok());
+
+    // 604800 秒 (7 日 = 最大値) は成功する
+    let result = client
+        .get_object()
+        .bucket(bucket)
+        .key("test.txt")
+        .presigned(604800, now());
+    assert!(result.is_ok());
+}
+
+/// Presigned URL によるマルチパートアップロードの中断を検証する
+///
+/// ## 検証項目
+/// - AbortMultipartUpload の presigned URL でアップロードを中断できる
+/// - 中断後にオブジェクトが存在しないことを確認する
+#[tokio::test]
+async fn test_presigned_abort_multipart_upload() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-presigned-abort";
+    let key = "presigned-abort.bin";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // マルチパートアップロードを開始する
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id が存在すること");
+
+    // AbortMultipartUpload の presigned URL でアップロードを中断する
+    let presigned = client
+        .abort_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .presigned(3600, now())
+        .unwrap();
+    assert_eq!(presigned.method, "DELETE");
+    let response = execute_presigned(&presigned).await;
+    assert!(
+        response.is_success(),
+        "presigned AbortMultipartUpload failed: {}",
+        response.status_code
+    );
+
+    // 中断後はオブジェクトが存在しないことを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 404);
+}
+
+/// 条件付きリクエストヘッダー (If-Match / If-None-Match) を検証する
+///
+/// ## 検証項目
+/// - If-Match に正しい ETag を指定すると 200 が返る
+/// - If-Match に不正な ETag を指定すると 412 Precondition Failed が返る
+/// - If-None-Match に同じ ETag を指定すると 304 Not Modified が返る
+/// - If-None-Match に異なる ETag を指定すると 200 が返る
+#[tokio::test]
+async fn test_conditional_headers_etag() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-conditional-etag";
+    let key = "cond.txt";
+
+    // テスト用バケットとオブジェクトを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"conditional".to_vec())
+        .build_request(now())
+        .unwrap();
+    let put_output = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let etag = put_output.e_tag.expect("ETag が存在すること");
+
+    // If-Match に正しい ETag を指定すると 200 が返る
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_match(&etag)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+
+    // If-Match に不正な ETag を指定すると 412 が返る
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_match("\"invalid-etag\"")
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 412);
+
+    // If-None-Match に同じ ETag を指定すると 304 が返る
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_none_match(&etag)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 304);
+
+    // If-None-Match に異なる ETag を指定すると 200 が返る
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_none_match("\"different-etag\"")
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+}
+
+/// 条件付きリクエストヘッダー (If-Modified-Since / If-Unmodified-Since) を検証する
+///
+/// ## 検証項目
+/// - If-Modified-Since に古い日時を指定すると 200 が返る
+/// - If-Unmodified-Since に古い日時を指定すると 412 が返る
+#[tokio::test]
+async fn test_conditional_headers_date() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-conditional-date";
+    let key = "cond-date.txt";
+
+    // テスト用バケットとオブジェクトを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"date-conditional".to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // If-Modified-Since に十分古い日時を指定すると 200 が返る
+    // (オブジェクトはその日時より後に作成されている)
+    let old_date = std::time::SystemTime::UNIX_EPOCH;
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_modified_since(old_date)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+
+    // If-Unmodified-Since に十分古い日時を指定すると 412 が返る
+    // (オブジェクトはその日時より後に変更されている)
+    let old_date = std::time::SystemTime::UNIX_EPOCH;
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .if_unmodified_since(old_date)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 412);
+}
+
+/// HeadObject の条件付きヘッダーを検証する
+///
+/// ## 検証項目
+/// - HeadObject + If-Match で 200 / 412 が正しく返る
+/// - HeadObject + If-None-Match で 304 が正しく返る
+#[tokio::test]
+async fn test_head_object_conditional_headers() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-head-conditional";
+    let key = "head-cond.txt";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"head-conditional".to_vec())
+        .build_request(now())
+        .unwrap();
+    let put_output = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let etag = put_output.e_tag.expect("ETag が存在すること");
+
+    // If-Match に正しい ETag を指定すると 200 が返る
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .if_match(&etag)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+
+    // If-None-Match に同じ ETag を指定すると 304 が返る
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .if_none_match(&etag)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 304);
+}
+
+/// Range リクエストによる部分取得を検証する
+///
+/// ## 検証項目
+/// - Range ヘッダーで先頭 5 バイトのみ取得できる
+/// - レスポンスステータスが 206 Partial Content である
+/// - ボディが指定範囲のバイト列と一致する
+#[tokio::test]
+async fn test_range_request() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-range";
+    let key = "range.txt";
+    let body = b"0123456789ABCDEF";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(body.to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // bytes=0-4 で先頭 5 バイトを取得する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .range("bytes=0-4")
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 206);
+    assert_eq!(response.body, b"01234");
+
+    // bytes=10-15 で末尾付近 6 バイトを取得する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .range("bytes=10-15")
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 206);
+    assert_eq!(response.body, b"ABCDEF");
+}
+
+/// カスタムメタデータ (x-amz-meta-*) のラウンドトリップを検証する
+///
+/// ## 検証項目
+/// - PutObject で設定したカスタムメタデータが GetObject / HeadObject で取得できる
+/// - メタデータのキーと値が正しく往復する
+#[tokio::test]
+async fn test_custom_metadata() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-metadata";
+    let key = "meta.txt";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // カスタムメタデータを 2 つ設定してオブジェクトをアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"with metadata".to_vec())
+        .metadata("author", "test-user")
+        .metadata("version", "42")
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // GetObject でメタデータを取得して確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let metadata = output.metadata.expect("metadata が存在すること");
+    assert_eq!(
+        metadata.get("author").map(String::as_str),
+        Some("test-user")
+    );
+    assert_eq!(metadata.get("version").map(String::as_str), Some("42"));
+
+    // HeadObject でもメタデータを取得して確認する
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::HeadObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let metadata = output.metadata.expect("metadata が存在すること");
+    assert_eq!(
+        metadata.get("author").map(String::as_str),
+        Some("test-user")
+    );
+    assert_eq!(metadata.get("version").map(String::as_str), Some("42"));
+}
+
+/// System Metadata (Content-Encoding / Content-Disposition / Cache-Control / Expires) のラウンドトリップを検証する
+///
+/// ## 検証項目
+/// - PutObject で設定した System Metadata が HeadObject で取得できる
+#[tokio::test]
+async fn test_system_metadata() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-sys-metadata";
+    let key = "sys-meta.txt";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // System Metadata を設定してオブジェクトをアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"system metadata test".to_vec())
+        .content_type("application/json")
+        .content_disposition("attachment; filename=\"test.json\"")
+        .cache_control("max-age=3600")
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // HeadObject でレスポンスヘッダーを確認する
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+    assert_eq!(
+        response.get_header("content-type"),
+        Some("application/json")
+    );
+    assert_eq!(
+        response.get_header("content-disposition"),
+        Some("attachment; filename=\"test.json\"")
+    );
+    assert_eq!(response.get_header("cache-control"), Some("max-age=3600"));
+}
+
+/// CopyObject の metadata_directive=REPLACE によるメタデータ置換を検証する
+///
+/// ## 検証項目
+/// - REPLACE ディレクティブでコピー先のメタデータを上書きできる
+/// - コピー先の Content-Type とカスタムメタデータがコピー元と異なる
+#[tokio::test]
+async fn test_copy_object_metadata_replace() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-copy-meta-replace";
+    let src_key = "original.txt";
+    let dst_key = "replaced.txt";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // コピー元を text/plain + メタデータ付きで作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(src_key)
+        .body(b"copy with replace".to_vec())
+        .content_type("text/plain")
+        .metadata("env", "original")
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // metadata_directive=REPLACE でコピーし、メタデータを上書きする
+    let copy_source = format!("{bucket}/{src_key}");
+    let request = client
+        .copy_object()
+        .bucket(bucket)
+        .key(dst_key)
+        .copy_source(&copy_source)
+        .metadata_directive(shiguredo_s3::MetadataDirective::Replace)
+        .content_type("application/octet-stream")
+        .metadata("env", "replaced")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::CopyObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(
+        output
+            .copy_object_result
+            .as_ref()
+            .and_then(|r| r.e_tag.as_ref())
+            .is_some()
+    );
+
+    // コピー先のメタデータが上書きされていることを確認する
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(dst_key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::HeadObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(
+        output.content_type.as_deref(),
+        Some("application/octet-stream")
+    );
+    let metadata = output.metadata.expect("metadata が存在すること");
+    assert_eq!(metadata.get("env").map(String::as_str), Some("replaced"));
+}
+
+/// ListObjectsV2 のページネーション (max_keys / continuation_token) を検証する
+///
+/// ## 検証項目
+/// - max_keys で 1 ページあたりの件数を制限できる
+/// - is_truncated が true のときに next_continuation_token が返る
+/// - continuation_token を使って次のページを取得できる
+/// - 全ページを結合すると全件取得できる
+#[tokio::test]
+async fn test_list_objects_v2_pagination() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-pagination";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 5 つのオブジェクトを作成する
+    for i in 0..5 {
+        let key = format!("page-{i:02}.txt");
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(format!("data-{i}").into_bytes())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // max_keys=2 で 1 ページ目を取得する
+    let request = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .max_keys(2)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsV2FluentBuilder::parse_response,
+    )
+    .await;
+    let page1 = output.contents.expect("contents が存在すること");
+    assert_eq!(page1.len(), 2);
+    assert_eq!(output.is_truncated, Some(true));
+    let token = output
+        .next_continuation_token
+        .expect("next_continuation_token が存在すること");
+
+    // continuation_token で 2 ページ目を取得する
+    let request = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .max_keys(2)
+        .continuation_token(&token)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsV2FluentBuilder::parse_response,
+    )
+    .await;
+    let page2 = output.contents.expect("contents が存在すること");
+    assert_eq!(page2.len(), 2);
+    assert_eq!(output.is_truncated, Some(true));
+    let token = output
+        .next_continuation_token
+        .expect("next_continuation_token が存在すること");
+
+    // 3 ページ目 (最終ページ) を取得する
+    let request = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .max_keys(2)
+        .continuation_token(&token)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsV2FluentBuilder::parse_response,
+    )
+    .await;
+    let page3 = output.contents.expect("contents が存在すること");
+    assert_eq!(page3.len(), 1);
+    assert_eq!(output.is_truncated, Some(false));
+
+    // 全ページを合わせると 5 件になることを確認する
+    assert_eq!(page1.len() + page2.len() + page3.len(), 5);
+}
+
+/// ListObjectsV2 の start_after パラメータを検証する
+///
+/// ## 検証項目
+/// - start_after で指定したキーより後のオブジェクトのみ返る
+#[tokio::test]
+async fn test_list_objects_v2_start_after() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-start-after";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // a.txt, b.txt, c.txt を作成する
+    for key in ["a.txt", "b.txt", "c.txt"] {
+        let request = client
+            .put_object()
+            .bucket(bucket)
+            .key(key)
+            .body(b"data".to_vec())
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // start_after="a.txt" で b.txt, c.txt のみ返ることを確認する
+    let request = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .start_after("a.txt")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectsV2FluentBuilder::parse_response,
+    )
+    .await;
+    let contents = output.contents.expect("contents が存在すること");
+    assert_eq!(contents.len(), 2);
+    assert_eq!(contents[0].key.as_deref(), Some("b.txt"));
+    assert_eq!(contents[1].key.as_deref(), Some("c.txt"));
+}
+
+/// バージョニング有効時のオブジェクト操作を検証する
+///
+/// ## 検証項目
+/// - バージョニング有効化後に PutObject すると version_id が返る
+/// - 同一キーに上書きすると別の version_id が返る
+/// - version_id を指定して GetObject で特定バージョンを取得できる
+/// - version_id を指定して HeadObject で特定バージョンのメタデータを取得できる
+/// - version_id を指定して DeleteObject で特定バージョンを削除できる
+#[tokio::test]
+async fn test_versioned_object_operations() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-versioned-ops";
+    let key = "versioned.txt";
+
+    // バケットを作成してバージョニングを有効化する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_bucket_versioning()
+        .bucket(bucket)
+        .status("Enabled")
+        .build_request(now())
+        .unwrap();
+    send(request, PutBucketVersioningFluentBuilder::parse_response).await;
+
+    // バージョン 1 をアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"version-1".to_vec())
+        .build_request(now())
+        .unwrap();
+    let put1 = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let version_id_1 = put1.version_id.expect("version_id should exist");
+
+    // バージョン 2 をアップロードする (上書き)
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"version-2".to_vec())
+        .build_request(now())
+        .unwrap();
+    let put2 = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    let version_id_2 = put2.version_id.expect("version_id should exist");
+
+    // version_id が異なることを確認する
+    assert_ne!(version_id_1, version_id_2);
+
+    // version_id を指定してバージョン 1 を取得する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .version_id(&version_id_1)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"version-1");
+
+    // version_id なしで取得すると最新バージョン (version-2) が返る
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"version-2");
+
+    // version_id を指定して HeadObject でバージョン 1 のメタデータを取得する
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .version_id(&version_id_1)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::HeadObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.content_length, Some(b"version-1".len() as i64));
+
+    // version_id を指定してバージョン 1 を削除する
+    let request = client
+        .delete_object()
+        .bucket(bucket)
+        .key(key)
+        .version_id(&version_id_1)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // バージョン 1 が取得できなくなることを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .version_id(&version_id_1)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert_eq!(response.status_code, 404);
+
+    // バージョン 2 はまだ取得できることを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"version-2");
+}
+
+/// チェックサムアルゴリズム指定によるアップロードを検証する
+///
+/// ## 検証項目
+/// - CRC32C を指定して PutObject が成功する
+/// - SHA256 を指定して PutObject が成功する
+/// - デフォルト (CRC32) と同じくオブジェクトが正しく保存される
+#[tokio::test]
+async fn test_checksum_algorithm() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-checksum-algo";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // CRC32C アルゴリズムを指定してアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key("crc32c.txt")
+        .body(b"crc32c-data".to_vec())
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Crc32C)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(output.e_tag.is_some());
+
+    // SHA256 アルゴリズムを指定してアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key("sha256.txt")
+        .body(b"sha256-data".to_vec())
+        .checksum_algorithm(shiguredo_s3::ChecksumAlgorithm::Sha256)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(output.e_tag.is_some());
+
+    // 保存されたオブジェクトを取得してボディが正しいことを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key("crc32c.txt")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"crc32c-data");
+
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key("sha256.txt")
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"sha256-data");
+}
+
+/// ListMultipartUploads の prefix / max_uploads パラメータ付きリクエストを検証する
+///
+/// パラメータ付きでリクエストしてもエラーにならないことを確認する。
+///
+/// ## 検証項目
+/// - max_uploads を指定してもエラーにならない
+/// - prefix を指定してもエラーにならない
+#[tokio::test]
+async fn test_list_multipart_uploads_filter_params() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-mpu-filter";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // マルチパートアップロードを 2 つ開始する
+    let keys = ["file1.bin", "file2.bin"];
+    let mut upload_ids = Vec::new();
+    for key in &keys {
+        let request = client
+            .create_multipart_upload()
+            .bucket(bucket)
+            .key(*key)
+            .build_request(now())
+            .unwrap();
+        let output = send(
+            request,
+            shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+        )
+        .await;
+        upload_ids.push(output.upload_id.expect("upload_id が存在すること"));
+    }
+
+    // max_uploads / prefix 付きでリクエストしてもエラーにならないことを確認する
+    let request = client
+        .list_multipart_uploads()
+        .bucket(bucket)
+        .max_uploads(1)
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+
+    let request = client
+        .list_multipart_uploads()
+        .bucket(bucket)
+        .prefix("file")
+        .build_request(now())
+        .unwrap();
+    let response = execute(request).await;
+    assert!(response.is_success());
+
+    // クリーンアップ
+    for (key, upload_id) in keys.iter().zip(upload_ids.iter()) {
+        let request = client
+            .abort_multipart_upload()
+            .bucket(bucket)
+            .key(*key)
+            .upload_id(upload_id)
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::AbortMultipartUploadFluentBuilder::parse_response,
+        )
+        .await;
+    }
+}
+
+/// ListParts のページネーション (max_parts / part_number_marker) を検証する
+///
+/// ## 検証項目
+/// - max_parts で取得件数を制限できる
+/// - part_number_marker で指定したパート番号以降を取得できる
+#[tokio::test]
+async fn test_list_parts_pagination() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-parts-page";
+    let key = "parts-page.bin";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // マルチパートアップロードを開始する
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id が存在すること");
+
+    // 3 つのパート (各 5 MB) をアップロードする
+    let part_size = 5 * 1024 * 1024;
+    for part_number in 1..=3i32 {
+        let data: Vec<u8> = vec![part_number as u8; part_size];
+        let request = client
+            .upload_part()
+            .bucket(bucket)
+            .key(key)
+            .upload_id(&upload_id)
+            .part_number(part_number)
+            .body(data)
+            .build_request(now())
+            .unwrap();
+        send(
+            request,
+            shiguredo_s3::api::UploadPartFluentBuilder::parse_response,
+        )
+        .await;
+    }
+
+    // max_parts=1 で 1 件のみ取得する
+    let request = client
+        .list_parts()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .max_parts(1)
+        .build_request(now())
+        .unwrap();
+    let output = send(request, ListPartsFluentBuilder::parse_response).await;
+    let parts = output.parts.expect("parts が存在すること");
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].part_number, Some(1));
+
+    // part_number_marker=1 でパート 2 以降を取得する
+    let request = client
+        .list_parts()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .part_number_marker(1)
+        .build_request(now())
+        .unwrap();
+    let output = send(request, ListPartsFluentBuilder::parse_response).await;
+    let parts = output.parts.expect("parts が存在すること");
+    assert_eq!(parts.len(), 2);
+    assert_eq!(parts[0].part_number, Some(2));
+    assert_eq!(parts[1].part_number, Some(3));
+
+    // クリーンアップ
+    let request = client
+        .abort_multipart_upload()
+        .bucket(bucket)
+        .key(key)
+        .upload_id(&upload_id)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::AbortMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+}
+
+/// Storage Class 指定によるオブジェクトアップロードを検証する
+///
+/// ## 検証項目
+/// - storage_class="STANDARD" を指定して PutObject が成功する
+#[tokio::test]
+async fn test_put_object_storage_class() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-storage-class";
+    let key = "standard.txt";
+
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // storage_class=STANDARD を指定してアップロードする
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"standard class data".to_vec())
+        .storage_class(shiguredo_s3::StorageClass::Standard)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(output.e_tag.is_some());
+
+    // オブジェクトが正しく保存されていることを確認する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, b"standard class data");
+
+    // HEAD の x-amz-storage-class (STANDARD では省略されうる)
+    let request = client
+        .head_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    let head_output = send(
+        request,
+        shiguredo_s3::api::HeadObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(
+        matches!(
+            head_output.storage_class.as_ref().map(|sc| sc.as_str()),
+            None | Some("STANDARD")
+        ),
+        "unexpected storage_class: {:?}",
+        head_output.storage_class
+    );
+}
+
+/// UploadPartCopy でサーバー側コピーを検証する
+///
+/// ## 検証項目
+/// - UploadPartCopy でコピー元オブジェクトの全範囲をパートとしてコピーできる
+/// - CompleteMultipartUpload で結合したオブジェクトの内容がコピー元と一致する
+#[tokio::test]
+async fn test_upload_part_copy() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-upload-part-copy";
+    let src_key = "source.txt";
+    let dst_key = "destination.txt";
+    let body = b"upload part copy test data";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // コピー元オブジェクトを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(src_key)
+        .body(body.to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // マルチパートアップロードを開始する
+    let request = client
+        .create_multipart_upload()
+        .bucket(bucket)
+        .key(dst_key)
+        .build_request(now())
+        .unwrap();
+    let create_output = send(
+        request,
+        shiguredo_s3::api::CreateMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+    let upload_id = create_output.upload_id.expect("upload_id が存在すること");
+
+    // UploadPartCopy でコピー元からパートをコピーする
+    let request = client
+        .upload_part_copy()
+        .bucket(bucket)
+        .key(dst_key)
+        .upload_id(&upload_id)
+        .part_number(1)
+        .copy_source(format!("{bucket}/{src_key}"))
+        .build_request(now())
+        .unwrap();
+    let copy_output = send(
+        request,
+        shiguredo_s3::api::UploadPartCopyFluentBuilder::parse_response,
+    )
+    .await;
+    assert!(copy_output.e_tag.is_some());
+
+    // マルチパートアップロードを完了する
+    let request = client
+        .complete_multipart_upload()
+        .bucket(bucket)
+        .key(dst_key)
+        .upload_id(&upload_id)
+        .multipart_upload(shiguredo_s3::types::CompletedMultipartUpload {
+            parts: Some(vec![shiguredo_s3::types::CompletedPart {
+                e_tag: copy_output.e_tag,
+                part_number: Some(1),
+                checksum_crc32: None,
+                checksum_crc32_c: None,
+                checksum_crc64_nvme: None,
+                checksum_sha1: None,
+                checksum_sha256: None,
+            }]),
+        })
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CompleteMultipartUploadFluentBuilder::parse_response,
+    )
+    .await;
+
+    // コピー先オブジェクトの内容を検証する
+    let request = client
+        .get_object()
+        .bucket(bucket)
+        .key(dst_key)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::GetObjectFluentBuilder::parse_response,
+    )
+    .await;
+    assert_eq!(output.body, body);
+}
+
+/// ListObjectVersions でバージョン一覧を取得する
+///
+/// ## 検証項目
+/// - バージョニング有効バケットで複数バージョンが返る
+/// - 削除後に削除マーカーが返る
+#[tokio::test]
+async fn test_list_object_versions() {
+    let (_container, port) = start_kikyo().await;
+    let client = build_client(port, ACCESS_KEY, SECRET_KEY);
+    let bucket = "test-list-object-versions";
+    let key = "versioned.txt";
+
+    // テスト用バケットを作成する
+    let request = client
+        .create_bucket()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::CreateBucketFluentBuilder::parse_response,
+    )
+    .await;
+
+    // バージョニングを有効にする
+    let request = client
+        .put_bucket_versioning()
+        .bucket(bucket)
+        .status("Enabled")
+        .build_request(now())
+        .unwrap();
+    send(request, PutBucketVersioningFluentBuilder::parse_response).await;
+
+    // 2 つのバージョンを作成する
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"v1".to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    let request = client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(b"v2".to_vec())
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::PutObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // オブジェクトを削除する (削除マーカーが作成される)
+    let request = client
+        .delete_object()
+        .bucket(bucket)
+        .key(key)
+        .build_request(now())
+        .unwrap();
+    send(
+        request,
+        shiguredo_s3::api::DeleteObjectFluentBuilder::parse_response,
+    )
+    .await;
+
+    // ListObjectVersions で全バージョンと削除マーカーを取得する
+    let request = client
+        .list_object_versions()
+        .bucket(bucket)
+        .build_request(now())
+        .unwrap();
+    let output = send(
+        request,
+        shiguredo_s3::api::ListObjectVersionsFluentBuilder::parse_response,
+    )
+    .await;
+
+    // 2 つのバージョンが返る
+    let versions = output.versions.expect("versions が存在すること");
+    assert_eq!(versions.len(), 2);
+
+    // 削除マーカーが返る
+    let delete_markers = output
+        .delete_markers
+        .expect("delete_markers が存在すること");
+    assert_eq!(delete_markers.len(), 1);
+    assert_eq!(delete_markers[0].key.as_deref(), Some(key));
+}

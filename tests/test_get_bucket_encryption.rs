@@ -41,3 +41,36 @@ fn test_non_utf8_body() {
     let result = GetBucketEncryptionFluentBuilder::parse_response(&response);
     assert!(matches!(result, Err(Error::InvalidResponse(_))));
 }
+
+/// BucketKeyEnabled を含む正常系のケース
+#[test]
+fn test_bucket_key_enabled_true() {
+    let response = S3Response {
+        status_code: 200,
+        headers: vec![],
+        body: br#"<?xml version="1.0" encoding="UTF-8"?>
+<ServerSideEncryptionConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Rule>
+    <ApplyServerSideEncryptionByDefault>
+      <SSEAlgorithm>AES256</SSEAlgorithm>
+    </ApplyServerSideEncryptionByDefault>
+    <BucketKeyEnabled>true</BucketKeyEnabled>
+  </Rule>
+</ServerSideEncryptionConfiguration>"#
+            .to_vec(),
+    };
+    let output =
+        GetBucketEncryptionFluentBuilder::parse_response(&response).expect("パースに成功すること");
+    let config = output
+        .server_side_encryption_configuration
+        .expect("config が存在すること");
+    assert_eq!(config.rules.len(), 1);
+    let rule = &config.rules[0];
+    let default = rule
+        .apply_server_side_encryption_by_default
+        .as_ref()
+        .expect("default encryption が存在すること");
+    assert_eq!(default.sse_algorithm, "AES256");
+    assert!(default.kms_master_key_id.is_none());
+    assert_eq!(rule.bucket_key_enabled, Some(true));
+}

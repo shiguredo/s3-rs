@@ -50,13 +50,13 @@ src/api/ に logging サブリソース用の operation と BucketLoggingStatus�
 - `src/client.rs` (`get_bucket_logging()` / `put_bucket_logging()` メソッド追加)
 - `src/lib.rs` (新しいモデル型の crate ルート再エクスポート追加。Output 型は既存パターンどおりルート再エクスポートしない)
 - `tests/test_bucket_logging.rs` (新規作成)
-- `tests/minio.rs` / `tests/rustfs.rs` / `tests/kikyo.rs` (統合テストを追加。`?logging` サブリソースに未対応のサーバーは完了条件のとおり統合テスト対象外)
+- `tests/rustfs.rs` / `tests/kikyo.rs` (統合テストを追加。`?logging` サブリソースに未対応のサーバーは完了条件のとおり統合テスト対象外)
 
 ## 完了条件
 
 - `GET /?logging` のリクエストを正しい URI、ヘッダーで構築でき、`PUT /?logging` のリクエストを正しい URI、ヘッダー（Content-MD5 含む）、XML ボディで構築できる。checksum_algorithm 指定時は x-amz-sdk-checksum-algorithm と対応するチェックサムヘッダーが付与される
 - logging 有効時（target bucket / target prefix / target grants / target object key format）と無効時（空の `<BucketLoggingStatus/>`）のレスポンスを正しくパースし、無効時は `logging_enabled: None` になる（未知の値は `Unknown(String)` としてパースされることも検証する。`TargetObjectKeyFormat` / `PartitionedPrefix` / `SimplePrefix` / `PartitionDateSource` の往復も検証する）
-- 実際の S3 互換サーバー（MinIO / RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?logging` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
+- 実際の S3 互換サーバー（RustFS / kikyo-local）を `shiguredo_container` で起動した統合テストで検証する。`?logging` サブリソースに未対応のサーバーがある場合は、そのサーバー名と未対応の根拠を issue に追記した上で、対応しているサーバーでのみ統合テストを行う
 - 既存のテストが全て通過すること
 - `cargo clippy --workspace --all-targets -- -D warnings` が通過すること
 - CHANGES.md の `## develop` に `[ADD]` エントリを追加すること
